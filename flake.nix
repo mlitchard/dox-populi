@@ -196,7 +196,6 @@
           pkgs.nodejs
           pkgs.typescript
           pkgs.esbuild
-          pkgs.age
           pkgs.jq
           pkgs.curl
           pkgs.nixpkgs-fmt
@@ -434,9 +433,15 @@
 
             signin
             if [ -z "$TOKEN" ]; then
-              # Self-heal: push the secrix password into the account via the
-              # server CLI (plain line protocol on 21026), then retry once.
-              echo "signin failed — setting account password via CLI $CLI_HOST:$CLI_PORT" >&2
+              # Self-provision (CI-friendly): register the account outright —
+              # screepsmod-auth's /api/register/submit creates user+password
+              # with no Steam involvement. If the account already exists,
+              # push the password via the server CLI instead. Retry once.
+              echo "signin failed — provisioning account '$SCREEPS_LOCAL_EMAIL'" >&2
+              $CURL -sS -X POST "$URL/api/register/submit" \
+                -H "Content-Type: application/json" \
+                --data "$($JQ -n --arg u "$SCREEPS_LOCAL_EMAIL" --arg p "$SCREEPS_LOCAL_PASSWORD" \
+                  '{username: $u, password: $p}')" >/dev/null 2>&1 || true
               $JQ -rn --arg u "$SCREEPS_LOCAL_EMAIL" --arg p "$SCREEPS_LOCAL_PASSWORD" \
                 '"auth.setPassword(\($u|@json), \($p|@json))"' \
                 | ${pkgs.netcat-openbsd}/bin/nc -q 2 "$CLI_HOST" "$CLI_PORT" >/dev/null 2>&1 || true
@@ -456,37 +461,59 @@
             echo
             echo "deployed main.js to $URL (branch 'default')"
 
-            # Auto-spawn: if the account owns nothing yet, place Spawn1 in
-            # SCREEPS_LOCAL_ROOM (default: the server's suggested start room)
-            # on the first open tile scanning outward from the room center.
+            # Auto-spawn: if the account owns nothing yet, place Spawn1.
+            # Get the room id first: place-spawn demands a room that exists in
+            # db.rooms AND contains an unowned controller (the server's own
+            # world-start-room falls back to hardcoded W5N5, a controller-less
+            # center room — useless). No HTTP endpoint distinguishes "unowned
+            # controller" from "no controller", so read candidates from the
+            # world db and try them in order.
             STATUS=$($CURL -sS -H "X-Token: $TOKEN" "$URL/api/user/world-status" \
               | $JQ -r '.status // empty')
             if [ "$STATUS" = "empty" ]; then
-              ROOM="''${SCREEPS_LOCAL_ROOM:-$($CURL -sS -H "X-Token: $TOKEN" \
-                "$URL/api/user/world-start-room" | $JQ -r '.room[0]')}"
-              TERRAIN=$($CURL -sS "$URL/api/game/room-terrain?room=$ROOM&encoded=true" \
-                | $JQ -r '.terrain[0].terrain')
-              IDX=$(${pkgs.gawk}/bin/awk -v s="$TERRAIN" 'BEGIN {
-                for (d = 0; d <= 1250; d++) for (k = 1; k >= -1; k -= 2) {
-                  i = 1275 + d * k
-                  if (i < 0 || i >= 2500) continue
-                  ch = substr(s, i + 1, 1); x = i % 50; y = int(i / 50)
-                  # 0 = plain, 2 = swamp (buildable); keep off the room edges
-                  if ((ch == "0" || ch == "2") && x > 2 && x < 47 && y > 2 && y < 47) {
-                    print i; exit
+              if [ -n "''${SCREEPS_LOCAL_ROOM:-}" ]; then
+                CANDIDATES="$SCREEPS_LOCAL_ROOM"
+              else
+                DATA="''${SCREEPS_DATA_DIR:-$(${pkgs.git}/bin/git rev-parse --show-toplevel)/.server-data}"
+                CANDIDATES=$($JQ -r '.collections[] | select(.name == "rooms.objects")
+                  | .data[]
+                  | select(.type == "controller"
+                           and ((.user // "") == "")
+                           and ((.reservation // null) == null))
+                  | .room' "$DATA/db.json")
+              fi
+              PLACED=
+              for ROOM in $CANDIDATES; do
+                TERRAIN=$($CURL -sS "$URL/api/game/room-terrain?room=$ROOM&encoded=true" \
+                  | $JQ -r '.terrain[0].terrain')
+                IDX=$(${pkgs.gawk}/bin/awk -v s="$TERRAIN" 'BEGIN {
+                  for (d = 0; d <= 1250; d++) for (k = 1; k >= -1; k -= 2) {
+                    i = 1275 + d * k
+                    if (i < 0 || i >= 2500) continue
+                    ch = substr(s, i + 1, 1); x = i % 50; y = int(i / 50)
+                    # 0 = plain, 2 = swamp (buildable); keep off the room edges
+                    if ((ch == "0" || ch == "2") && x > 2 && x < 47 && y > 2 && y < 47) {
+                      print i; exit
+                    }
                   }
-                }
-              }')
-              if [ -z "$IDX" ]; then
-                echo "error: no open tile found in $ROOM for auto-spawn" >&2
+                }')
+                [ -z "$IDX" ] && continue
+                X=$((IDX % 50)); Y=$((IDX / 50))
+                RESULT=$($CURL -sS -X POST "$URL/api/game/place-spawn" \
+                  -H "X-Token: $TOKEN" -H "Content-Type: application/json" \
+                  --data "$($JQ -n --arg r "$ROOM" --argjson x "$X" --argjson y "$Y" \
+                    '{room: $r, x: $x, y: $y, name: "Spawn1"}')")
+                if [ "$(printf '%s' "$RESULT" | $JQ -r '.ok // empty')" = "1" ]; then
+                  echo "auto-placed Spawn1 in $ROOM at ($X,$Y)"
+                  PLACED=1
+                  break
+                fi
+                echo "place-spawn in $ROOM refused: $RESULT — trying next room" >&2
+              done
+              if [ -z "$PLACED" ]; then
+                echo "error: auto-spawn failed — no candidate room accepted a spawn" >&2
                 exit 1
               fi
-              X=$((IDX % 50)); Y=$((IDX / 50))
-              RESULT=$($CURL -sS -X POST "$URL/api/game/place-spawn" \
-                -H "X-Token: $TOKEN" -H "Content-Type: application/json" \
-                --data "$($JQ -n --arg r "$ROOM" --argjson x "$X" --argjson y "$Y" \
-                  '{room: $r, x: $x, y: $y, name: "Spawn1"}')")
-              echo "auto-placed Spawn1 in $ROOM at ($X,$Y): $RESULT"
             fi
           '');
         };
