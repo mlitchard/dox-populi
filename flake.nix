@@ -215,11 +215,33 @@
           echo "  nix run .#cli                 — connect to the private server CLI (21026)"
           echo "  nix run .#deploy-local        — push main.js to the private server (self-provisioning)"
           echo "  nix run .#reset-local         — stop server + wipe the private world"
+          echo "  nix run .#itest               — VM integration test: deploy + spawn + harvest"
           echo "  nix flake check               — run all checks"
         '';
       };
 
-      checks.${system} = {
+      checks.${system} = let
+        # The integration test needs the Steam-bundled server tree copied
+        # into the store — host state, so impure eval only. builtins.getEnv
+        # yields "" under pure eval, which cleanly omits the check from
+        # plain `nix flake check`; run it via `nix run .#itest`.
+        steamScreepsDir =
+          let env = builtins.getEnv "STEAM_SCREEPS_DIR";
+              home = builtins.getEnv "HOME";
+          in if env != "" then env
+             else if home != "" then "${home}/.local/share/Steam/steamapps/common/Screeps/server"
+             else "";
+      in
+      pkgs.lib.optionalAttrs (steamScreepsDir != "") {
+        itest = pkgs.callPackage ./tests/integration.nix {
+          steamScreeps = builtins.path {
+            path = /. + steamScreepsDir;
+            name = "steam-screeps-server";
+          };
+          serverProgram = self.apps.${system}.server.program;
+          deployProgram = self.apps.${system}.deploy-local.program;
+        };
+      } // {
         paradox-check = pkgs.runCommand "paradox-check"
           {
             nativeBuildInputs = [ paradoxBin pkgs.z3 ];
@@ -287,7 +309,8 @@
             # Anchor to the repo root regardless of launch cwd — a stray
             # $PWD/.server-data means a parallel world with its own db.
             DATA="''${SCREEPS_DATA_DIR:-$(${pkgs.git}/bin/git rev-parse --show-toplevel)/.server-data}"
-            IDENTITY="''${SCREEPS_IDENTITY:-$HOME/.ssh/gitlab}"
+            # HOME is unset under systemd (the VM test) — guard for set -u.
+            IDENTITY="''${SCREEPS_IDENTITY:-''${HOME:-/root}/.ssh/gitlab}"
 
             if [ ! -x "$STEAM_SCREEPS/resources/node" ]; then
               echo "error: bundled node not found at $STEAM_SCREEPS/resources/node" >&2
@@ -295,11 +318,15 @@
               exit 1
             fi
 
-            STEAM_API_KEY=""
-            if [ -f secrets/STEAM_TOKEN ]; then
+            # Env override first (the VM test passes a dummy key: any
+            # non-empty STEAM_KEY disables greenworks/native Steam auth),
+            # then secrix.
+            STEAM_API_KEY="''${STEAM_API_KEY:-}"
+            if [ -z "$STEAM_API_KEY" ] && [ -f secrets/STEAM_TOKEN ]; then
               STEAM_API_KEY=$(${secrixCli}/bin/secrix decrypt secrets/STEAM_TOKEN -i "$IDENTITY")
-            else
-              echo "note: secrets/STEAM_TOKEN not found; starting without Steam auth" >&2
+            fi
+            if [ -z "$STEAM_API_KEY" ]; then
+              echo "note: no Steam Web API key; starting without Steam auth" >&2
               echo "      create it with:" >&2
               echo "      echo -n 'KEY' | nix run .#secrix encrypt ./secrets/STEAM_TOKEN -- --all-users" >&2
             fi
@@ -407,7 +434,8 @@
           program = toString (pkgs.writeShellScript "deploy-local" ''
             set -euo pipefail
             URL="''${SCREEPS_LOCAL_URL:-http://127.0.0.1:21025}"
-            IDENTITY="''${SCREEPS_IDENTITY:-$HOME/.ssh/gitlab}"
+            # HOME is unset in the VM test's root shell — guard for set -u.
+            IDENTITY="''${SCREEPS_IDENTITY:-''${HOME:-/root}/.ssh/gitlab}"
 
             if { [ -z "''${SCREEPS_LOCAL_EMAIL:-}" ] || [ -z "''${SCREEPS_LOCAL_PASSWORD:-}" ]; } \
                && [ -f secrets/SCREEPS_LOCAL_CREDS ]; then
@@ -515,6 +543,19 @@
                 exit 1
               fi
             fi
+          '');
+        };
+
+        # Integration test: VM boots the private server, deploy-local
+        # provisions account + code + spawn, then the harness polls
+        # Memory.stats.energy until the colony acquires energy. Needs
+        # --impure (reads the Steam install path from the environment).
+        itest = {
+          type = "app";
+          program = toString (pkgs.writeShellScript "itest" ''
+            set -euo pipefail
+            exec nix build --impure -L --no-link \
+              "$(${pkgs.git}/bin/git rev-parse --show-toplevel)#checks.${system}.itest" "$@"
           '');
         };
 

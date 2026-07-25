@@ -38,4 +38,8 @@ export const loop = (): void => {
       }
     }
   }
+
+  // Telemetry, observable via GET /api/user/memory?path=stats.spawnEnergy
+  // — the integration test polls it until the spawn acquires energy.
+  Memory.stats = { spawnEnergy: spawn ? spawn.store[RESOURCE_ENERGY] : 0 };
 };
