@@ -12,9 +12,15 @@
     };
 
     secrix.url = "github:Platonic-Systems/secrix";
+
+    # Builds the qcow2 dev VM (packages.vm-image) for people without nix.
+    nixos-generators = {
+      url = "github:nix-community/nixos-generators";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
-  outputs = { self, nixpkgs, paradox, typed-screeps, secrix }:
+  outputs = { self, nixpkgs, paradox, typed-screeps, secrix, nixos-generators }:
     let
       system = "x86_64-linux";
       pkgs = import nixpkgs {
@@ -186,6 +192,14 @@
         inherit generated main;
         secrix = secrixCli;
         default = main;
+        # NixOS dev VM for hosts without nix: qcow2 image launched by
+        # ./run-vm.sh (plain qemu). See vm/module.nix.
+        vm-image = nixos-generators.nixosGenerate {
+          inherit system;
+          format = "qcow";
+          specialArgs = { inherit self; };
+          modules = [ ./vm/module.nix ];
+        };
       };
 
       devShells.${system}.default = pkgs.mkShell {
@@ -216,6 +230,7 @@
           echo "  nix run .#deploy-local        — push main.js to the private server (self-provisioning)"
           echo "  nix run .#reset-local         — stop server + wipe the private world"
           echo "  nix run .#itest               — VM integration test: deploy + spawn + harvest"
+          echo "  nix build .#vm-image          — qcow2 dev VM for non-nix users (./run-vm.sh)"
           echo "  nix flake check               — run all checks"
         '';
       };
