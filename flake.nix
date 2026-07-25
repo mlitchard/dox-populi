@@ -263,7 +263,7 @@
           type = "app";
           program = toString (pkgs.writeShellScript "deploy" ''
             set -euo pipefail
-            TOKEN=$(${pkgs.age}/bin/age -d -i "$HOME/.ssh/gitlab" secrets/SCREEPS_TOKEN)
+            TOKEN=$(${secrixCli}/bin/secrix decrypt secrets/SCREEPS_TOKEN -i "$HOME/.ssh/gitlab")
             ${pkgs.jq}/bin/jq -n --arg code "$(cat ${main}/main.js)" \
               '{branch: "default", modules: {main: $code}}' \
             | ${pkgs.curl}/bin/curl --fail-with-body -X POST \
@@ -298,7 +298,7 @@
 
             STEAM_API_KEY=""
             if [ -f secrets/STEAM_TOKEN ]; then
-              STEAM_API_KEY=$(${pkgs.age}/bin/age -d -i "$IDENTITY" secrets/STEAM_TOKEN)
+              STEAM_API_KEY=$(${secrixCli}/bin/secrix decrypt secrets/STEAM_TOKEN -i "$IDENTITY")
             else
               echo "note: secrets/STEAM_TOKEN not found; starting without Steam auth" >&2
               echo "      create it with:" >&2
@@ -318,6 +318,12 @@
             if [ ! -s "$DATA/db.json" ]; then
               cp "$STEAM_SCREEPS/package/node_modules/@screeps/launcher/init_dist/db.json" "$DATA/db.json"
               chmod u+w "$DATA/db.json"
+              # Give the NPC Invader user (id 2) an empty script in the seed:
+              # without one, engine_runner spams "Unknown module 'main'"
+              # every tick. Patched offline so no runtime step is needed.
+              ${pkgs.jq}/bin/jq '(.collections[] | select(.name == "users.code")) |= (.data += [{_id: "InvaderCode", user: "2", branch: "default", activeWorld: true, modules: {main: "module.exports.loop = function(){};"}, meta: {revision: 0, created: 0, version: 0}, "$loki": (.maxId + 1)}] | .maxId += 1)' \
+                "$DATA/db.json" > "$DATA/db.json.tmp"
+              mv -f "$DATA/db.json.tmp" "$DATA/db.json"
             fi
             # greenworks.initAPI() runs before anything else and requires
             # steam_appid.txt in the launch cwd when Steam isn't running.
@@ -406,7 +412,7 @@
 
             if { [ -z "''${SCREEPS_LOCAL_EMAIL:-}" ] || [ -z "''${SCREEPS_LOCAL_PASSWORD:-}" ]; } \
                && [ -f secrets/SCREEPS_LOCAL_CREDS ]; then
-              CREDS=$(${pkgs.age}/bin/age -d -i "$IDENTITY" secrets/SCREEPS_LOCAL_CREDS)
+              CREDS=$(${secrixCli}/bin/secrix decrypt secrets/SCREEPS_LOCAL_CREDS -i "$IDENTITY")
               SCREEPS_LOCAL_EMAIL="''${SCREEPS_LOCAL_EMAIL:-''${CREDS%%:*}}"
               SCREEPS_LOCAL_PASSWORD="''${SCREEPS_LOCAL_PASSWORD:-''${CREDS#*:}}"
             fi
