@@ -1,0 +1,9 @@
+# Build artifacts — never committed (Option B: generated/ is a pure artifact)
+/generated/
+/vendor/
+/dox/.dox/
+/main.js
+/result
+/result-*
+/.direnv/
+node_modules/

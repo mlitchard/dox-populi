@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "target": "ES2019",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "skipLibCheck": false,
+    "types": []
+  },
+  "include": [
+    "shell/**/*.ts",
+    "generated/**/*.ts",
+    "vendor/screeps.d.ts"
+  ]
+}

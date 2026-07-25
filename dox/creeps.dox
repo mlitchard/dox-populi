@@ -1,0 +1,14 @@
+import std
+
+union CreepRole
+  harvester
+  upgrader
+  builder
+
+union BodyPart
+  work
+  carry
+  move
+
+harvesterBody: [BodyPart]
+  [BodyPart.work, BodyPart.carry, BodyPart.move]
