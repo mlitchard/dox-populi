@@ -7,3 +7,4 @@
 /result-*
 /.direnv/
 node_modules/
+/.server-data/

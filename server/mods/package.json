@@ -1,0 +1,9 @@
+{
+  "name": "dox-populi-server-mods",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Private-server mods, vendored via nix (buildNpmPackage over the committed lockfile)",
+  "dependencies": {
+    "screepsmod-auth": "2.9.0"
+  }
+}

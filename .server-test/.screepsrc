@@ -1,0 +1,26 @@
+; Private server config — launched standalone (no Steam client),
+; so a Steam Web API key is needed for user authentication.
+; Obtain at http://steamcommunity.com/dev/apikey
+steam_api_key =
+
+port = 21025
+host = 127.0.0.1
+password =
+
+cli_port = 21026
+cli_host = 127.0.0.1
+
+runners_cnt = 1
+runner_threads = 4
+processors_cnt = 2
+
+logdir = logs
+modfile = mods.json
+; Absolute path to the asset dir shipped with the Steam install.
+assetdir = /home/mlitchard/.local/share/Steam/steamapps/common/Screeps/server/assets
+db = db.json
+
+log_console = true
+log_rotate_keep = 5
+storage_disabled = false
+restart_interval = 3600
