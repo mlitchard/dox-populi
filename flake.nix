@@ -12,15 +12,9 @@
     };
 
     secrix.url = "github:Platonic-Systems/secrix";
-
-    # Builds the qcow2 dev VM (packages.vm-image) for people without nix.
-    nixos-generators = {
-      url = "github:nix-community/nixos-generators";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
   };
 
-  outputs = { self, nixpkgs, paradox, typed-screeps, secrix, nixos-generators }:
+  outputs = { self, nixpkgs, paradox, typed-screeps, secrix }:
     let
       system = "x86_64-linux";
       pkgs = import nixpkgs {
@@ -188,18 +182,28 @@
         ];
       };
 
+      # Dev VM for hosts without nix. Never built on the host: run-vm.sh
+      # (qemu only) boots the auto-installing ISO (vm/installer.nix,
+      # dubai installer-auto-dd pattern), whose boot service runs
+      # `nixos-install --flake <embedded repo>#vm` — the guest's nix
+      # builds everything. See vm/module.nix for the installed system.
+      nixosConfigurations.vm = nixpkgs.lib.nixosSystem {
+        inherit system;
+        specialArgs = { inherit self; };
+        modules = [ ./vm/module.nix ];
+      };
+      nixosConfigurations.installer = nixpkgs.lib.nixosSystem {
+        inherit system;
+        specialArgs = { inherit self; };
+        modules = [ ./vm/installer.nix ];
+      };
+
       packages.${system} = {
         inherit generated main;
         secrix = secrixCli;
         default = main;
-        # NixOS dev VM for hosts without nix: qcow2 image launched by
-        # ./run-vm.sh (plain qemu). See vm/module.nix.
-        vm-image = nixos-generators.nixosGenerate {
-          inherit system;
-          format = "qcow";
-          specialArgs = { inherit self; };
-          modules = [ ./vm/module.nix ];
-        };
+        installer-iso =
+          self.nixosConfigurations.installer.config.system.build.isoImage;
       };
 
       devShells.${system}.default = pkgs.mkShell {
@@ -230,7 +234,7 @@
           echo "  nix run .#deploy-local        — push main.js to the private server (self-provisioning)"
           echo "  nix run .#reset-local         — stop server + wipe the private world"
           echo "  nix run .#itest               — VM integration test: deploy + spawn + harvest"
-          echo "  nix build .#vm-image          — qcow2 dev VM for non-nix users (./run-vm.sh)"
+          echo "  ./run-vm.sh                   — dev VM for non-nix users (self-installs via qemu)"
           echo "  nix flake check               — run all checks"
         '';
       };
@@ -299,7 +303,13 @@
           type = "app";
           program = toString (pkgs.writeShellScript "deploy" ''
             set -euo pipefail
-            TOKEN=$(${secrixCli}/bin/secrix decrypt secrets/SCREEPS_TOKEN -i "$HOME/.ssh/gitlab")
+            IDENTITY="''${SCREEPS_IDENTITY:-''${WORKDIR:-''${HOME:-/root}/work}/identity}"
+            if [ ! -f "$IDENTITY" ]; then
+              echo "error: no identity key at $IDENTITY (needed to decrypt secrets/SCREEPS_TOKEN)" >&2
+              echo "place YOUR key there, or set SCREEPS_IDENTITY=/path/to/your/key" >&2
+              exit 1
+            fi
+            TOKEN=$(${secrixCli}/bin/secrix decrypt secrets/SCREEPS_TOKEN -i "$IDENTITY")
             ${pkgs.jq}/bin/jq -n --arg code "$(cat ${main}/main.js)" \
               '{branch: "default", modules: {main: $code}}' \
             | ${pkgs.curl}/bin/curl --fail-with-body -X POST \
@@ -324,8 +334,11 @@
             # Anchor to the repo root regardless of launch cwd — a stray
             # $PWD/.server-data means a parallel world with its own db.
             DATA="''${SCREEPS_DATA_DIR:-$(${pkgs.git}/bin/git rev-parse --show-toplevel)/.server-data}"
-            # HOME is unset under systemd (the VM test) — guard for set -u.
-            IDENTITY="''${SCREEPS_IDENTITY:-''${HOME:-/root}/.ssh/gitlab}"
+            # Identity for secrix decryption: SCREEPS_IDENTITY override,
+            # else the conventional location of the USER-PROVIDED key —
+            # "identity" in the shared work dir (the VM's run-vm.sh
+            # WORKDIR share). No particular key is shipped or assumed.
+            IDENTITY="''${SCREEPS_IDENTITY:-''${WORKDIR:-''${HOME:-/root}/work}/identity}"
 
             if [ ! -x "$STEAM_SCREEPS/resources/node" ]; then
               echo "error: bundled node not found at $STEAM_SCREEPS/resources/node" >&2
@@ -338,6 +351,11 @@
             # then secrix.
             STEAM_API_KEY="''${STEAM_API_KEY:-}"
             if [ -z "$STEAM_API_KEY" ] && [ -f secrets/STEAM_TOKEN ]; then
+              if [ ! -f "$IDENTITY" ]; then
+                echo "error: secrets/STEAM_TOKEN exists but no identity key at $IDENTITY" >&2
+                echo "place YOUR key there, or set SCREEPS_IDENTITY=/path/to/your/key" >&2
+                exit 1
+              fi
               STEAM_API_KEY=$(${secrixCli}/bin/secrix decrypt secrets/STEAM_TOKEN -i "$IDENTITY")
             fi
             if [ -z "$STEAM_API_KEY" ]; then
@@ -370,10 +388,16 @@
             # steam_appid.txt in the launch cwd when Steam isn't running.
             [ -f "$DATA/steam_appid.txt" ] || echo "464350" > "$DATA/steam_appid.txt"
 
-            ${pkgs.gnused}/bin/sed "s|^steam_api_key =.*|steam_api_key = $STEAM_API_KEY|" \
+            # Bind address knob: loopback by default; the VM sets
+            # SCREEPS_HOST=0.0.0.0 so qemu's port forwards can reach it.
+            SCREEPS_HOST="''${SCREEPS_HOST:-127.0.0.1}"
+            ${pkgs.gnused}/bin/sed \
+              -e "s|^steam_api_key =.*|steam_api_key = $STEAM_API_KEY|" \
+              -e "s|^host =.*|host = $SCREEPS_HOST|" \
+              -e "s|^cli_host =.*|cli_host = $SCREEPS_HOST|" \
               ${./server/screepsrc} > "$DATA/.screepsrc"
 
-            echo "screeps private server: http://127.0.0.1:21025 (cli on 127.0.0.1:21026)"
+            echo "screeps private server: http://$SCREEPS_HOST:21025 (cli on $SCREEPS_HOST:21026)"
             echo "data dir: $DATA"
             cd "$DATA"
             export SteamAppId=464350
@@ -443,17 +467,23 @@
         # (once per world, in the Steam client — binds your Steam identity).
         # Credentials come from env vars, or from age-encrypted
         # secrets/SCREEPS_LOCAL_CREDS containing one line "username:password":
-        #   secrix create secrets/SCREEPS_LOCAL_CREDS -i ~/.ssh/gitlab -r "$(cat ~/.ssh/gitlab.pub)"
+        #   secrix create secrets/SCREEPS_LOCAL_CREDS -i <your-key> -r "$(cat <your-key>.pub)"
         deploy-local = {
           type = "app";
           program = toString (pkgs.writeShellScript "deploy-local" ''
             set -euo pipefail
             URL="''${SCREEPS_LOCAL_URL:-http://127.0.0.1:21025}"
-            # HOME is unset in the VM test's root shell — guard for set -u.
-            IDENTITY="''${SCREEPS_IDENTITY:-''${HOME:-/root}/.ssh/gitlab}"
+            # Identity for secrix decryption: SCREEPS_IDENTITY override,
+            # else the conventional location of the USER-PROVIDED key.
+            IDENTITY="''${SCREEPS_IDENTITY:-''${WORKDIR:-''${HOME:-/root}/work}/identity}"
 
             if { [ -z "''${SCREEPS_LOCAL_EMAIL:-}" ] || [ -z "''${SCREEPS_LOCAL_PASSWORD:-}" ]; } \
                && [ -f secrets/SCREEPS_LOCAL_CREDS ]; then
+              if [ ! -f "$IDENTITY" ]; then
+                echo "error: secrets/SCREEPS_LOCAL_CREDS exists but no identity key at $IDENTITY" >&2
+                echo "place YOUR key there, or set SCREEPS_IDENTITY=/path/to/your/key" >&2
+                exit 1
+              fi
               CREDS=$(${secrixCli}/bin/secrix decrypt secrets/SCREEPS_LOCAL_CREDS -i "$IDENTITY")
               SCREEPS_LOCAL_EMAIL="''${SCREEPS_LOCAL_EMAIL:-''${CREDS%%:*}}"
               SCREEPS_LOCAL_PASSWORD="''${SCREEPS_LOCAL_PASSWORD:-''${CREDS#*:}}"

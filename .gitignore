@@ -8,3 +8,5 @@
 /.direnv/
 node_modules/
 /.server-data/
+/dox-populi.qcow2
+/dox-populi-installer.iso

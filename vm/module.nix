@@ -1,24 +1,29 @@
-# NixOS dev VM for people WITHOUT nix on their host. Built by
-# `nix build .#vm-image` (qcow2, see run-vm.sh for the qemu wrapper).
+# NixOS dev VM for people WITHOUT nix on their host. Nothing is built
+# on the host: run-vm.sh boots the official NixOS installer ISO in
+# qemu, and vm/install.sh (run inside the live installer) installs this
+# configuration (flake output nixosConfigurations.vm) onto the virtual
+# disk — the guest's own nix does all the building.
 #
 # The guest is the real dev environment: nix + flakes, the repo seeded
-# at ~/dox-populi, the store pre-warmed with the devshell and app
-# closures. The Steam-bundled Screeps server is proprietary and is NOT
+# at ~/dox-populi; everything (devshell, apps) is downloaded and built
+# inside the VM. The Steam-bundled Screeps server is proprietary and is NOT
 # shipped — users run fetch-screeps-server (their own Steam account,
 # they must own the game) to install it where apps.server expects it.
-{ pkgs, lib, self, ... }:
+{ pkgs, lib, self, modulesPath, ... }:
 let
   fetchScreepsServer = pkgs.writeShellApplication {
     name = "fetch-screeps-server";
     runtimeInputs = [ pkgs.steamcmd ];
     text = ''
       # Downloads Screeps (appid 464350) with YOUR Steam account — you
-      # must own the game. Installs to the path `nix run .#server`
-      # expects by default.
+      # must own the game. Installs to ~/screeps: force_install_dir is
+      # silently IGNORED for paths inside steamcmd's own Steam root
+      # (~/.local/share/Steam), so it must live outside it. The system
+      # sets STEAM_SCREEPS_DIR so `nix run .#server` finds it.
       read -rp "Steam username: " STEAM_USER
       exec steamcmd \
         +@sSteamCmdForcePlatformType linux \
-        +force_install_dir "$HOME/.local/share/Steam/steamapps/common/Screeps" \
+        +force_install_dir "$HOME/screeps" \
         +login "$STEAM_USER" \
         +app_update 464350 validate \
         +quit
@@ -26,6 +31,9 @@ let
   };
 in
 {
+  # Virtio drivers in the initrd (disk, net, 9p).
+  imports = [ (modulesPath + "/profiles/qemu-guest.nix") ];
+
   system.stateVersion = "25.05";
   networking.hostName = "dox-populi";
   networking.firewall.enable = false;
@@ -42,8 +50,13 @@ in
   # run-vm.sh launches qemu -nographic: serial console is the terminal.
   boot.kernelParams = [ "console=ttyS0" ];
 
-  # Room for in-VM builds; the image is sparse so this costs little.
-  virtualisation.diskSize = 40 * 1024;
+  # Grub in the MBR of the virtual disk (partitioned by vm/install.sh).
+  boot.loader.grub.device = "/dev/vda";
+
+  fileSystems."/" = {
+    device = "/dev/disk/by-label/nixos";
+    fsType = "ext4";
+  };
 
   users.users.dev = {
     isNormalUser = true;
@@ -66,6 +79,21 @@ in
     options = [ "trans=virtio" "version=9p2000.L" "msize=524288" "rw" "nofail" ];
   };
 
+  # Where fetch-screeps-server installs the game; apps.server honors it
+  # (must point at the `server` subdir — it runs $STEAM_SCREEPS_DIR/resources/node).
+  environment.variables.STEAM_SCREEPS_DIR = "/home/dev/screeps/server";
+  # Bind the Screeps server on all guest interfaces: qemu's hostfwd
+  # delivers to the guest NIC, which loopback-bound services never see.
+  environment.variables.SCREEPS_HOST = "0.0.0.0";
+  # Guest mount point of the host directory shared by run-vm.sh
+  # (WORKDIR= on the host; 9p tag "workdir").
+  environment.variables.WORKDIR = "/home/dev/work";
+  # Convention: users place THEIR OWN secrix identity key in the shared
+  # dir as "identity" (no particular key is shipped or assumed). Apps
+  # fail with instructions if the file is absent when a secret needs
+  # decrypting; override per-shell by re-exporting SCREEPS_IDENTITY.
+  environment.variables.SCREEPS_IDENTITY = "/home/dev/work/identity";
+
   programs.direnv = {
     enable = true;
     nix-direnv.enable = true;
@@ -78,19 +106,6 @@ in
     pkgs.jq
     fetchScreepsServer
   ];
-
-  # Pre-warm the nix store: referencing the devshell and app programs
-  # here roots their closures (paradox, z3, node toolchain, steam-run,
-  # curl/jq plumbing) in the image, so first use inside the VM needs no
-  # rebuilds — only flake-input source downloads at eval time.
-  environment.etc."dox-populi/prewarmed-closures".text =
-    lib.concatStringsSep "\n" [
-      "${self.devShells.x86_64-linux.default}"
-      "${self.packages.x86_64-linux.main}"
-      self.apps.x86_64-linux.server.program
-      self.apps.x86_64-linux.deploy-local.program
-      self.apps.x86_64-linux.cli.program
-    ];
 
   # Seed the repo on first boot. The flake source has no .git, but the
   # apps anchor themselves with `git rev-parse --show-toplevel`, so make
@@ -113,7 +128,7 @@ in
         git config user.name dev
         git config user.email dev@dox-populi.local
         git add -A
-        git commit -qm "seed from vm-image"
+        git commit -qm "seed from installed flake source"
       fi
     '';
   };
@@ -127,10 +142,17 @@ in
                                        account; you must own the game)
       2. cd ~/dox-populi
       3. nix develop                 — the dev shell (first run downloads
-                                       flake inputs; everything else is
-                                       pre-warmed)
+                                       and builds everything in the VM)
       4. nix run .#server            — private server on host port 21025
       5. nix run .#deploy-local      — push main.js, place Spawn1
+
+    Secrets (REQUIRED — secrix, same workflow as native nix):
+      Apps decrypt secrets with YOUR key. Place it in the host dir you
+      share via run-vm.sh (WORKDIR=...) named "identity" — it appears
+      here as ~/work/identity, which SCREEPS_IDENTITY already points to.
+      (Or export SCREEPS_IDENTITY=/path/to/your/key yourself.)
+      Encrypt your own secrets to it (from the dev shell), e.g.:
+        secrix create secrets/STEAM_TOKEN -i "$SCREEPS_IDENTITY" -r "$(cat $SCREEPS_IDENTITY.pub)"
 
     Play: point the Steam client ON THE HOST at localhost:21025
     (Private server — ports 21025/21026 are forwarded by run-vm.sh).
