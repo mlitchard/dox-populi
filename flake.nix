@@ -12,9 +12,14 @@
     };
 
     secrix.url = "github:Platonic-Systems/secrix";
+
+    gitlab-ci = {
+      url = "git+ssh://git@gitlab.platonic.systems/platonic/gitlab-ci.nix.git";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
-  outputs = { self, nixpkgs, paradox, typed-screeps, secrix }:
+  outputs = { self, nixpkgs, paradox, typed-screeps, secrix, gitlab-ci }:
     let
       system = "x86_64-linux";
       pkgs = import nixpkgs {
@@ -610,6 +615,21 @@
         };
 
         secrix = secrix.secrix self;
+
+        # Regenerate CI config: nix run .#gitlab-ci > .gitlab-ci.yml
+        gitlab-ci = gitlab-ci.apps.${system}.gitlab-ci;
+      };
+
+      # gitlab-ci.nix overlay: prune jobs that don't belong in this repo's
+      # CI. Deployment lives in ../deploys. nixosConfigurations:dox-populi
+      # stays: secrix derives its users/keys from it, so CI must prove it
+      # evaluates and builds. vm/installer are the non-nix dev VM path —
+      # exercised by run-vm.sh, too heavy for CI.
+      gitlab = prev: prev // {
+        "nixosConfigurations:vm" = null;
+        "nixosConfigurations:installer" = null;
+        # Full ISO build — dev-VM artifact, too heavy for CI.
+        "packages:installer-iso" = null;
       };
     };
 }

@@ -15,6 +15,11 @@
   # output on the serial console.
   boot.kernelParams = [ "console=ttyS0,115200" ];
 
+  # installation-cd enables ZFS support, which pulls in this option's
+  # deprecated default (true). Nothing here roots on ZFS; false is the
+  # 26.11 default and avoids force-importing a possibly-live pool.
+  boot.zfs.forceImportRoot = false;
+
   # The ISO file is named "<image.baseName>.iso" (isoImage.isoName is a
   # dead alias since 25.05); mkForce beats installation-cd-base's value.
   image.baseName = lib.mkForce "dox-populi-installer";

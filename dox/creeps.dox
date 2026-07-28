@@ -12,3 +12,186 @@ union BodyPart
 
 harvesterBody: [BodyPart]
   [BodyPart.work, BodyPart.carry, BodyPart.move]
+
+upgraderBody: [BodyPart]
+  [BodyPart.work, BodyPart.carry, BodyPart.move]
+
+desiredHarvesters: Integer
+  1
+
+desiredUpgraders: Integer
+  1
+
+| Per-creep FSMs. The shell observes the world and emits exactly one
+| CreepEvent per creep per tick (priority: storeEmpty > storeFull >
+| spawnFull > tick); the generated transition functions are the brain.
+
+union HarvesterState
+  harvesting
+  delivering
+
+union UpgraderState
+  collecting
+  upgrading
+
+union CreepEvent
+  storeEmpty
+  storeFull
+  spawnFull
+  tick
+
+type CreepContext
+  role: CreepRole
+  body: [BodyPart]
+
+harvesterContext: CreepContext
+  role: CreepRole.harvester
+  body: harvesterBody
+
+upgraderContext: CreepContext
+  role: CreepRole.upgrader
+  body: upgraderBody
+
+harvesterInitialState: HarvesterState
+  HarvesterState.harvesting
+
+upgraderInitialState: UpgraderState
+  UpgraderState.collecting
+
+| Harvester machine: harvest until full, deliver until empty, fall back
+| to harvesting when the spawn is full.
+
+harvestingStoreEmpty: Transition HarvesterState CreepEvent CreepContext
+  Transition:
+    event: CreepEvent.storeEmpty
+    target: HarvesterState.harvesting
+    guard: ()
+
+harvestingStoreFull: Transition HarvesterState CreepEvent CreepContext
+  Transition:
+    event: CreepEvent.storeFull
+    target: HarvesterState.delivering
+    guard: ()
+
+harvestingSpawnFull: Transition HarvesterState CreepEvent CreepContext
+  Transition:
+    event: CreepEvent.spawnFull
+    target: HarvesterState.harvesting
+    guard: ()
+
+harvestingTick: Transition HarvesterState CreepEvent CreepContext
+  Transition:
+    event: CreepEvent.tick
+    target: HarvesterState.harvesting
+    guard: ()
+
+harvestingConfig: StateConfig HarvesterState CreepEvent CreepContext
+  StateConfig:
+    transitions: [harvestingStoreEmpty, harvestingStoreFull, harvestingSpawnFull, harvestingTick]
+    label: "Harvesting"
+
+deliveringStoreEmpty: Transition HarvesterState CreepEvent CreepContext
+  Transition:
+    event: CreepEvent.storeEmpty
+    target: HarvesterState.harvesting
+    guard: ()
+
+deliveringStoreFull: Transition HarvesterState CreepEvent CreepContext
+  Transition:
+    event: CreepEvent.storeFull
+    target: HarvesterState.delivering
+    guard: ()
+
+deliveringSpawnFull: Transition HarvesterState CreepEvent CreepContext
+  Transition:
+    event: CreepEvent.spawnFull
+    target: HarvesterState.harvesting
+    guard: ()
+
+deliveringTick: Transition HarvesterState CreepEvent CreepContext
+  Transition:
+    event: CreepEvent.tick
+    target: HarvesterState.delivering
+    guard: ()
+
+deliveringConfig: StateConfig HarvesterState CreepEvent CreepContext
+  StateConfig:
+    transitions: [deliveringStoreEmpty, deliveringStoreFull, deliveringSpawnFull, deliveringTick]
+    label: "Delivering"
+
+harvesterMachine: Machine HarvesterState CreepEvent CreepContext
+  Machine:
+    name: "harvester"
+    initial: HarvesterState.harvesting
+    context: harvesterContext
+    finals: {}
+    states: {HarvesterState.harvesting: harvestingConfig, HarvesterState.delivering: deliveringConfig}
+
+| Upgrader machine: collect until full, upgrade until empty. spawnFull
+| is irrelevant to an upgrader: explicit self-loops.
+
+collectingStoreEmpty: Transition UpgraderState CreepEvent CreepContext
+  Transition:
+    event: CreepEvent.storeEmpty
+    target: UpgraderState.collecting
+    guard: ()
+
+collectingStoreFull: Transition UpgraderState CreepEvent CreepContext
+  Transition:
+    event: CreepEvent.storeFull
+    target: UpgraderState.upgrading
+    guard: ()
+
+collectingSpawnFull: Transition UpgraderState CreepEvent CreepContext
+  Transition:
+    event: CreepEvent.spawnFull
+    target: UpgraderState.collecting
+    guard: ()
+
+collectingTick: Transition UpgraderState CreepEvent CreepContext
+  Transition:
+    event: CreepEvent.tick
+    target: UpgraderState.collecting
+    guard: ()
+
+collectingConfig: StateConfig UpgraderState CreepEvent CreepContext
+  StateConfig:
+    transitions: [collectingStoreEmpty, collectingStoreFull, collectingSpawnFull, collectingTick]
+    label: "Collecting"
+
+upgradingStoreEmpty: Transition UpgraderState CreepEvent CreepContext
+  Transition:
+    event: CreepEvent.storeEmpty
+    target: UpgraderState.collecting
+    guard: ()
+
+upgradingStoreFull: Transition UpgraderState CreepEvent CreepContext
+  Transition:
+    event: CreepEvent.storeFull
+    target: UpgraderState.upgrading
+    guard: ()
+
+upgradingSpawnFull: Transition UpgraderState CreepEvent CreepContext
+  Transition:
+    event: CreepEvent.spawnFull
+    target: UpgraderState.upgrading
+    guard: ()
+
+upgradingTick: Transition UpgraderState CreepEvent CreepContext
+  Transition:
+    event: CreepEvent.tick
+    target: UpgraderState.upgrading
+    guard: ()
+
+upgradingConfig: StateConfig UpgraderState CreepEvent CreepContext
+  StateConfig:
+    transitions: [upgradingStoreEmpty, upgradingStoreFull, upgradingSpawnFull, upgradingTick]
+    label: "Upgrading"
+
+upgraderMachine: Machine UpgraderState CreepEvent CreepContext
+  Machine:
+    name: "upgrader"
+    initial: UpgraderState.collecting
+    context: upgraderContext
+    finals: {}
+    states: {UpgraderState.collecting: collectingConfig, UpgraderState.upgrading: upgradingConfig}
