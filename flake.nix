@@ -236,6 +236,14 @@
           deployProgram = self.apps.${system}.deploy-local.program;
         };
 
+        # Boots the dev VM system (vm/module.nix) in the NixOS test
+        # harness (dubai nix-workstation-image pattern) and asserts the
+        # first-boot contract: seeded repo, sshd, flakes, dev env vars.
+        vm-boot = pkgs.callPackage ./tests/vm.nix {
+          nixosModule = ./vm/module.nix;
+          inherit self;
+        };
+
         paradox-check = pkgs.runCommand "paradox-check"
           {
             nativeBuildInputs = [ paradoxBin pkgs.z3 ];
@@ -673,16 +681,5 @@
         gitlab-ci = gitlab-ci.apps.${system}.gitlab-ci;
       };
 
-      # gitlab-ci.nix overlay: prune jobs that don't belong in this repo's
-      # CI. Deployment lives in ../deploys. nixosConfigurations:dox-populi
-      # stays: secrix derives its users/keys from it, so CI must prove it
-      # evaluates and builds. vm/installer are the non-nix dev VM path —
-      # exercised by run-vm.sh, too heavy for CI.
-      gitlab = prev: prev // {
-        "nixosConfigurations:vm" = null;
-        "nixosConfigurations:installer" = null;
-        # Full ISO build — dev-VM artifact, too heavy for CI.
-        "packages:installer-iso" = null;
-      };
     };
 }
