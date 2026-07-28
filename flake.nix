@@ -22,12 +22,7 @@
   outputs = { self, nixpkgs, paradox, typed-screeps, secrix, gitlab-ci }:
     let
       system = "x86_64-linux";
-      pkgs = import nixpkgs {
-        inherit system;
-        # steam-run (unfree) launches the private Screeps server.
-        config.allowUnfreePredicate =
-          pkg: nixpkgs.lib.hasPrefix "steam" (nixpkgs.lib.getName pkg);
-      };
+      pkgs = import nixpkgs { inherit system; };
       paradoxBin = paradox.packages.${system}.paradox;
       # Atlas lives in the paradox *source* (the flake input), not the
       # installed package output.
@@ -82,74 +77,55 @@
         '';
       };
 
-      # NW.js runtime libraries needed by the Steam-bundled screeps_server
-      # binary. Mirrors nwjs-env from nixpkgs' nwjs package.
-      screepsNwEnv = pkgs.buildEnv {
-        name = "screeps-nw-env";
-        paths = with pkgs; [
-          alsa-lib
-          at-spi2-core
-          atk
-          cairo
-          cups
-          dbus
-          expat
-          fontconfig
-          freetype
-          gdk-pixbuf
-          glib
-          gtk3
-          libcap
-          libdrm
-          libGL
-          libnotify
-          libxkbcommon
-          libgbm
-          nspr
-          nss
-          pango
-          libx11
-          libxscrnsaver
-          libxcomposite
-          libxcursor
-          libxdamage
-          libxext
-          libxfixes
-          libxi
-          libxrandr
-          libxrender
-          libxtst
-          libxshmfence
-          ffmpeg
-          libxcb
-          libuuid
-          sqlite
-          udev
-        ];
-        extraOutputsToInstall = [ "lib" "out" ];
+      # The Screeps server itself, nix-vendored from the open-source npm
+      # package (`screeps` = the launcher; it pulls in @screeps/backend,
+      # engine, storage, driver...). Replaces the Steam-bundled tree: no
+      # steam-run, no bundled node, pure eval. isolated-vm and friends are
+      # native modules — node-gyp needs python + the matching node headers.
+      serverNode = pkgs.nodejs_22; # screeps@4.3.0 wants node >=22.9
+      screepsServer = pkgs.buildNpmPackage {
+        pname = "dox-populi-screeps-server";
+        version = "4.3.0";
+        src = ./server/npm;
+        nodejs = serverNode;
+        # Pinned by `nix run .#lock-server` (writes package-lock.json + this
+        # hash file); rerun it whenever server/npm/package.json changes.
+        npmDepsHash = pkgs.lib.trim (builtins.readFile ./server/npm/npm-deps-hash);
+        # Lifecycle scripts invoke node_modules/.bin shims whose
+        # `#!/usr/bin/env node` shebangs don't resolve in the sandbox:
+        # install with scripts off, patch shebangs, then `npm rebuild`
+        # runs them all (isolated-vm node-gyp, screeps postinstall webpack).
+        npmFlags = [ "--ignore-scripts" ];
+        preBuild = ''
+          patchShebangs node_modules
+          npm rebuild
+        '';
+        nativeBuildInputs = [ pkgs.python3 pkgs.pkg-config ];
+        # screeps pins isolated-vm as a git dep (install scripts, no lockfile).
+        forceGitDeps = true;
+        makeCacheWritable = true;
+        dontNpmBuild = true;
+        installPhase = ''
+          mkdir -p $out
+          cp -r node_modules $out/
+        '';
       };
 
-      # steam-run FHS env extended with the NW.js libraries — the launcher
-      # for screeps_server. Same pattern as NixOS-Configuration's steamcmd
-      # game servers (dragonwilds/terratech run servers via pkgs.steam-run).
-      screepsServerRun = (pkgs.steam.override {
-        extraPkgs = _: [ screepsNwEnv ];
-      }).run;
-
-      # The launcher UI does require('npm') for mod management. npm 6 is the
-      # last release with the programmatic API it expects; hash-pinned (quux
-      # pattern: nix owns npm deps). npm ships its own deps bundled, so
-      # unpacking the tarball is the complete installation.
-      npm6 = pkgs.stdenv.mkDerivation {
-        name = "npm-6.14.18-module";
-        src = pkgs.fetchurl {
-          url = "https://registry.npmjs.org/npm/-/npm-6.14.18.tgz";
-          hash = "sha256-ybFfJ34qCxtX4FutBFBClqJwJFVdVsKqln+GLpV60u0=";
-        };
-        dontBuild = true;
+      # Browser client bridge: screeps-steamless-client serves the official
+      # client assets (from a Steam install of the GAME — proprietary, not
+      # shipped) to a web browser, proxied to any private server. Pure-JS
+      # deps, so plain vendoring.
+      screepsClient = pkgs.buildNpmPackage {
+        pname = "dox-populi-screeps-client";
+        version = "1.2.1";
+        src = ./client/npm;
+        nodejs = serverNode;
+        # Pinned by `nix run .#lock-client`.
+        npmDepsHash = pkgs.lib.trim (builtins.readFile ./client/npm/npm-deps-hash);
+        dontNpmBuild = true;
         installPhase = ''
-          mkdir -p $out/lib/node_modules/npm
-          cp -r . $out/lib/node_modules/npm/
+          mkdir -p $out
+          cp -r node_modules $out/
         '';
       };
 
@@ -210,6 +186,7 @@
 
       packages.${system} = {
         inherit generated main;
+        screeps-server = screepsServer;
         secrix = secrixCli;
         default = main;
         installer-iso =
@@ -242,6 +219,8 @@
           echo "  nix run .#lock-mods           — re-pin server/mods (after editing its package.json)"
           echo "  nix run .#cli                 — connect to the private server CLI (21026)"
           echo "  nix run .#deploy-local        — push main.js to the private server (self-provisioning)"
+          echo "  nix run .#client              — browser client on :8080 (needs Steam game files)"
+          echo "  nix run .#stop                — stop server + client (world kept)"
           echo "  nix run .#reset-local         — stop server + wipe the private world"
           echo "  nix run .#itest               — VM integration test: deploy + spawn + harvest"
           echo "  ./run-vm.sh                   — dev VM for non-nix users (self-installs via qemu)"
@@ -249,28 +228,14 @@
         '';
       };
 
-      checks.${system} = let
-        # The integration test needs the Steam-bundled server tree copied
-        # into the store — host state, so impure eval only. builtins.getEnv
-        # yields "" under pure eval, which cleanly omits the check from
-        # plain `nix flake check`; run it via `nix run .#itest`.
-        steamScreepsDir =
-          let env = builtins.getEnv "STEAM_SCREEPS_DIR";
-              home = builtins.getEnv "HOME";
-          in if env != "" then env
-             else if home != "" then "${home}/.local/share/Steam/steamapps/common/Screeps/server"
-             else "";
-      in
-      pkgs.lib.optionalAttrs (steamScreepsDir != "") {
+      checks.${system} = {
+        # End-to-end VM test — pure now that the server is the nix-vendored
+        # npm package (no Steam tree, no --impure).
         itest = pkgs.callPackage ./tests/integration.nix {
-          steamScreeps = builtins.path {
-            path = /. + steamScreepsDir;
-            name = "steam-screeps-server";
-          };
           serverProgram = self.apps.${system}.server.program;
           deployProgram = self.apps.${system}.deploy-local.program;
         };
-      } // {
+
         paradox-check = pkgs.runCommand "paradox-check"
           {
             nativeBuildInputs = [ paradoxBin pkgs.z3 ];
@@ -332,15 +297,17 @@
           '');
         };
 
-        # Run the private Screeps server bundled with the local Steam
-        # install. Game state lives in ./.server-data/ (gitignored);
-        # .screepsrc is regenerated each launch from server/screepsrc with
-        # the Steam Web API key injected from secrets/steam-api-key.
+        # Run the private Screeps server (nix-vendored open-source npm
+        # package — no Steam install needed). Game state lives in
+        # ./.server-data/ (gitignored); .screepsrc is regenerated each
+        # launch from server/screepsrc with the Steam Web API key injected
+        # from secrets/STEAM_TOKEN (used only to authenticate Steam-client
+        # players — the server itself runs without Steam).
         server = {
           type = "app";
           program = toString (pkgs.writeShellScript "screeps-server" ''
             set -euo pipefail
-            STEAM_SCREEPS="''${STEAM_SCREEPS_DIR:-$HOME/.local/share/Steam/steamapps/common/Screeps/server}"
+            LAUNCHER="${screepsServer}/node_modules/@screeps/launcher"
             # Anchor to the repo root regardless of launch cwd — a stray
             # $PWD/.server-data means a parallel world with its own db.
             DATA="''${SCREEPS_DATA_DIR:-$(${pkgs.git}/bin/git rev-parse --show-toplevel)/.server-data}"
@@ -349,12 +316,6 @@
             # "identity" in the shared work dir (the VM's run-vm.sh
             # WORKDIR share). No particular key is shipped or assumed.
             IDENTITY="''${SCREEPS_IDENTITY:-''${WORKDIR:-''${HOME:-/root}/work}/identity}"
-
-            if [ ! -x "$STEAM_SCREEPS/resources/node" ]; then
-              echo "error: bundled node not found at $STEAM_SCREEPS/resources/node" >&2
-              echo "install Screeps via Steam, or set STEAM_SCREEPS_DIR" >&2
-              exit 1
-            fi
 
             # Env override first (the VM test passes a dummy key: any
             # non-empty STEAM_KEY disables greenworks/native Steam auth),
@@ -375,8 +336,8 @@
             fi
 
             mkdir -p "$DATA/logs"
-            [ -e "$DATA/assets" ]       || ln -s "$STEAM_SCREEPS/assets" "$DATA/assets"
-            [ -e "$DATA/node_modules" ] || ln -s "$STEAM_SCREEPS/node_modules" "$DATA/node_modules"
+            [ -e "$DATA/assets" ]       || ln -s "$LAUNCHER/init_dist/assets" "$DATA/assets"
+            [ -e "$DATA/node_modules" ] || ln -s "$LAUNCHER/init_dist/node_modules" "$DATA/node_modules"
             # mods.json is regenerated every launch (like .screepsrc): the
             # versioned template plus nix-vendored mod entry paths.
             ${pkgs.jq}/bin/jq --arg auth "${serverMods}/node_modules/screepsmod-auth/index.js" \
@@ -385,7 +346,7 @@
             # Seed the world database on first run (screeps init's job).
             # -s: also replace a 0-byte stub left by a failed GUI launch.
             if [ ! -s "$DATA/db.json" ]; then
-              cp "$STEAM_SCREEPS/package/node_modules/@screeps/launcher/init_dist/db.json" "$DATA/db.json"
+              cp "$LAUNCHER/init_dist/db.json" "$DATA/db.json"
               chmod u+w "$DATA/db.json"
               # Give the NPC Invader user (id 2) an empty script in the seed:
               # without one, engine_runner spams "Unknown module 'main'"
@@ -394,10 +355,6 @@
                 "$DATA/db.json" > "$DATA/db.json.tmp"
               mv -f "$DATA/db.json.tmp" "$DATA/db.json"
             fi
-            # greenworks.initAPI() runs before anything else and requires
-            # steam_appid.txt in the launch cwd when Steam isn't running.
-            [ -f "$DATA/steam_appid.txt" ] || echo "464350" > "$DATA/steam_appid.txt"
-
             # Bind address knob: loopback by default; the VM sets
             # SCREEPS_HOST=0.0.0.0 so qemu's port forwards can reach it.
             SCREEPS_HOST="''${SCREEPS_HOST:-127.0.0.1}"
@@ -410,20 +367,25 @@
             echo "screeps private server: http://$SCREEPS_HOST:21025 (cli on $SCREEPS_HOST:21026)"
             echo "data dir: $DATA"
             cd "$DATA"
-            export SteamAppId=464350
-            export SteamGameId=464350
             # Mods live in the nix store, but require() the server's own
-            # @screeps/* packages. Plain node (unlike NW.js) honors NODE_PATH,
-            # and the launcher passes its env to every child process.
-            export NODE_PATH="$STEAM_SCREEPS/package/node_modules"
-            # Headless launch, same pattern as NixOS-Configuration's steamcmd
-            # game servers: skip the NW.js GUI (screeps_server) and run the
-            # backend directly. The Steam bundle ships a plain node
-            # (resources/node) exactly for this: the launcher CLI's `start`
-            # reads ./.screepsrc from cwd and spawns storage/backend/engine
-            # children via process.execPath.
-            exec ${screepsServerRun}/bin/steam-run "$STEAM_SCREEPS/resources/node" \
-              "$STEAM_SCREEPS/package/node_modules/@screeps/launcher/bin/screeps.js" start "$@"
+            # @screeps/* packages. Node honors NODE_PATH, and the launcher
+            # passes its env to every child process.
+            export NODE_PATH="${screepsServer}/node_modules"
+            # Headless launch: the launcher CLI's `start` reads ./.screepsrc
+            # from cwd and spawns storage/backend/engine children via
+            # process.execPath. The children survive the launcher's death,
+            # leaving 21025/21026 bound — so run the launcher in the
+            # background and sweep the whole tree (every process has the
+            # vendored server's store path in its argv) on ANY exit,
+            # including Ctrl-C.
+            cleanup() {
+              ${pkgs.procps}/bin/pkill -TERM -f '${screepsServer}/node_modules' 2>/dev/null || true
+              sleep 2
+              ${pkgs.procps}/bin/pkill -9 -f '${screepsServer}/node_modules' 2>/dev/null || true
+            }
+            trap cleanup EXIT
+            ${serverNode}/bin/node "$LAUNCHER/bin/screeps.js" start "$@" &
+            wait $! || true
           '');
         };
 
@@ -445,6 +407,83 @@
           '');
         };
 
+        # Same pinning flow for the server package itself. Rerun after
+        # editing server/npm/package.json.
+        lock-server = {
+          type = "app";
+          program = toString (pkgs.writeShellScript "lock-server" ''
+            set -euo pipefail
+            cd "$(${pkgs.git}/bin/git rev-parse --show-toplevel)/server/npm"
+            ${serverNode}/bin/npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+            # isolated-vm is a git dep with install scripts; see forceGitDeps
+            # on the screepsServer derivation.
+            FORCE_GIT_DEPS=1 ${pkgs.prefetch-npm-deps}/bin/prefetch-npm-deps package-lock.json > npm-deps-hash
+            ${pkgs.git}/bin/git add package.json package-lock.json npm-deps-hash
+            echo "pinned: server/npm/package-lock.json + npm-deps-hash (staged; commit when ready)"
+          '');
+        };
+
+        # Same pinning flow for the browser-client bridge. Rerun after
+        # editing client/npm/package.json.
+        lock-client = {
+          type = "app";
+          program = toString (pkgs.writeShellScript "lock-client" ''
+            set -euo pipefail
+            cd "$(${pkgs.git}/bin/git rev-parse --show-toplevel)/client/npm"
+            ${serverNode}/bin/npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+            ${pkgs.prefetch-npm-deps}/bin/prefetch-npm-deps package-lock.json > npm-deps-hash
+            ${pkgs.git}/bin/git add package.json package-lock.json npm-deps-hash
+            echo "pinned: client/npm/package-lock.json + npm-deps-hash (staged; commit when ready)"
+          '');
+        };
+
+        # Browser client: serve the official client assets from the local
+        # Steam install of the game (package.nw — you must own Screeps) and
+        # proxy to the private server. Open
+        #   http://127.0.0.1:8080/(http://127.0.0.1:21025)/
+        # and sign in with your deploy-local credentials (screepsmod-auth).
+        client = {
+          type = "app";
+          program = toString (pkgs.writeShellScript "screeps-client" ''
+            set -euo pipefail
+            NW="''${SCREEPS_CLIENT_NW:-$HOME/.local/share/Steam/steamapps/common/Screeps/package.nw}"
+            if [ ! -f "$NW" ]; then
+              echo "error: client assets not found at $NW" >&2
+              echo "install the Screeps game via Steam, or set SCREEPS_CLIENT_NW=/path/to/package.nw" >&2
+              exit 1
+            fi
+            echo "browser client: http://127.0.0.1:8080/(http://127.0.0.1:21025)/"
+            # Explicit IPv4 host: bare "localhost" resolves to ::1 only,
+            # which browsers hitting 127.0.0.1 can't reach.
+            exec ${serverNode}/bin/node \
+              "${screepsClient}/node_modules/screeps-steamless-client/dist/index.js" \
+              --package "$NW" --host 127.0.0.1 "$@"
+          '');
+        };
+
+        # Stop the private server (launcher + all its storage/backend/engine
+        # children — every one has the vendored server's store path in its
+        # argv) and the browser client. World data is left intact.
+        stop = {
+          type = "app";
+          program = toString (pkgs.writeShellScript "screeps-stop" ''
+            set -euo pipefail
+            PKILL=${pkgs.procps}/bin/pkill
+            if $PKILL -f '${screepsServer}/node_modules'; then
+              sleep 2
+              $PKILL -9 -f '${screepsServer}/node_modules' 2>/dev/null || true
+              echo "server stopped"
+            else
+              echo "no server running"
+            fi
+            if $PKILL -f screeps-steamless-client; then
+              echo "client stopped"
+            else
+              echo "no client running"
+            fi
+          '');
+        };
+
         # Wipe the private-server world. The data dir regenerates from the
         # seed database on the next `nix run .#server`.
         reset-local = {
@@ -452,7 +491,12 @@
           program = toString (pkgs.writeShellScript "reset-local" ''
             set -euo pipefail
             DATA="''${SCREEPS_DATA_DIR:-$(${pkgs.git}/bin/git rev-parse --show-toplevel)/.server-data}"
-            ${pkgs.procps}/bin/pkill -f 'screeps.js start' 2>/dev/null || true
+            # Same kill handle as apps.stop: catches the launcher AND its
+            # children (the old 'screeps.js start' pattern orphaned them,
+            # leaving 21025/21026 bound).
+            ${pkgs.procps}/bin/pkill -f '${screepsServer}/node_modules' 2>/dev/null || true
+            sleep 2
+            ${pkgs.procps}/bin/pkill -9 -f '${screepsServer}/node_modules' 2>/dev/null || true
             rm -rf "$DATA"
             echo "world reset: $DATA removed (fresh world on next nix run .#server)"
           '');
@@ -464,9 +508,8 @@
           type = "app";
           program = toString (pkgs.writeShellScript "screeps-cli" ''
             set -euo pipefail
-            STEAM_SCREEPS="''${STEAM_SCREEPS_DIR:-$HOME/.local/share/Steam/steamapps/common/Screeps/server}"
-            exec ${screepsServerRun}/bin/steam-run "$STEAM_SCREEPS/resources/node" \
-              "$STEAM_SCREEPS/package/node_modules/@screeps/launcher/bin/screeps.js" cli "$@"
+            exec ${serverNode}/bin/node \
+              "${screepsServer}/node_modules/@screeps/launcher/bin/screeps.js" cli "$@"
           '');
         };
 
@@ -553,6 +596,16 @@
             # world db and try them in order.
             STATUS=$($CURL -sS -H "X-Token: $TOKEN" "$URL/api/user/world-status" \
               | $JQ -r '.status // empty')
+            echo "world-status: $STATUS"
+            if [ "$STATUS" = "lost" ]; then
+              # Owns objects but no spawn+controller pair (spawn destroyed,
+              # or leftovers from an earlier session). Respawn releases the
+              # old objects and resets the account to "empty".
+              $CURL -sS -X POST -H "X-Token: $TOKEN" "$URL/api/user/respawn" >/dev/null
+              STATUS=$($CURL -sS -H "X-Token: $TOKEN" "$URL/api/user/world-status" \
+                | $JQ -r '.status // empty')
+              echo "respawned — world-status now: $STATUS"
+            fi
             if [ "$STATUS" = "empty" ]; then
               if [ -n "''${SCREEPS_LOCAL_ROOM:-}" ]; then
                 CANDIDATES="$SCREEPS_LOCAL_ROOM"
@@ -603,13 +656,13 @@
 
         # Integration test: VM boots the private server, deploy-local
         # provisions account + code + spawn, then the harness polls
-        # Memory.stats.energy until the colony acquires energy. Needs
-        # --impure (reads the Steam install path from the environment).
+        # Memory.stats.energy until the colony acquires energy. Pure —
+        # also runs as part of `nix flake check`.
         itest = {
           type = "app";
           program = toString (pkgs.writeShellScript "itest" ''
             set -euo pipefail
-            exec nix build --impure -L --no-link \
+            exec nix build -L --no-link \
               "$(${pkgs.git}/bin/git rev-parse --show-toplevel)#checks.${system}.itest" "$@"
           '');
         };

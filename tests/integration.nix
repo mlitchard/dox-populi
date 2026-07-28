@@ -1,10 +1,8 @@
 # Integration test : boot a VM, start the
-# private Screeps server, provision an account + push main.js + place
-# Spawn1 (the production deploy-local script, unchanged), then poll the
-# memory endpoint until the spawn acquires energy.
-#
-# steamScreeps is a store copy of the Steam-bundled server tree, so this
-# is only buildable with --impure eval (see checks.itest in flake.nix).
+# private Screeps server (nix-vendored npm package), provision an
+# account + push main.js + place Spawn1 (the production deploy-local
+# script, unchanged), then poll the memory endpoint until the spawn
+# acquires energy. Fully pure — runs in plain `nix flake check`.
 {
   testers,
   writeShellScript,
@@ -12,8 +10,6 @@
   jq,
   gzip,
   coreutils,
-  # store copy of $STEAM/steamapps/common/Screeps/server
-  steamScreeps,
   # self.apps.*.program — the exact scripts users run
   serverProgram,
   deployProgram,
@@ -67,11 +63,10 @@ testers.runNixOSTest {
       description = "dox-populi private Screeps server (headless)";
       wantedBy = [ "multi-user.target" ];
       environment = {
-        STEAM_SCREEPS_DIR = "${steamScreeps}";
         SCREEPS_DATA_DIR = "/var/lib/screeps";
-        # Any non-empty STEAM_KEY disables greenworks/native Steam auth
-        # (backend server.js); the account is provisioned over HTTP by
-        # deploy-local, so the key is never actually used.
+        # Any non-empty key disables Steam-native auth in the backend; the
+        # account is provisioned over HTTP by deploy-local, so the key is
+        # never actually used.
         STEAM_API_KEY = "itest-dummy";
       };
       serviceConfig = {
