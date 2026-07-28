@@ -178,6 +178,11 @@
             secrix.defaultEncryptKeys.mlitchard = [
               (builtins.readFile ./secrets/public_keys/mlitchard.pub)
             ];
+            # Stub-only config for secrix key discovery; deploys is the real
+            # deploy target. Dummy fs/bootloader satisfy flake-check asserts.
+            fileSystems."/" = { device = "none"; fsType = "tmpfs"; };
+            boot.loader.grub.enable = false;
+            system.stateVersion = "26.05";
           }
         ];
       };

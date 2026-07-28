@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//home/mlitchard/github/tutorial-scripts/**)",
+      "mcp__claude_ai_Figma__get_figma_skill",
+      "mcp__claude_ai_Figma__whoami",
+      "mcp__claude_ai_Figma__use_figma",
+      "Bash(find /home/mlitchard/gitlab/paradox -name \"*.dox\" -exec grep -l \"Machine\\\\|machine\" {})",
+      "Bash(ls /home/mlitchard/gitlab/paradox/lib/src /home/mlitchard/gitlab/paradox/lib/src/*/)",
+      "Bash(grep -rl \"export interface\\\\|export type .* = {\" /home/mlitchard/gitlab/paradox/lib/test/golden --include=*.ts)"
+    ]
+  }
+}
