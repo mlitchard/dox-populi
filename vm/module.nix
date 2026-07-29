@@ -5,31 +5,11 @@
 # disk — the guest's own nix does all the building.
 #
 # The guest is the real dev environment: nix + flakes, the repo seeded
-# at ~/dox-populi; everything (devshell, apps) is downloaded and built
-# inside the VM. The Steam-bundled Screeps server is proprietary and is NOT
-# shipped — users run fetch-screeps-server (their own Steam account,
-# they must own the game) to install it where apps.server expects it.
-{ pkgs, lib, self, modulesPath, ... }:
-let
-  fetchScreepsServer = pkgs.writeShellApplication {
-    name = "fetch-screeps-server";
-    runtimeInputs = [ pkgs.steamcmd ];
-    text = ''
-      # Downloads Screeps (appid 464350) with YOUR Steam account — you
-      # must own the game. Installs to ~/screeps: force_install_dir is
-      # silently IGNORED for paths inside steamcmd's own Steam root
-      # (~/.local/share/Steam), so it must live outside it. The system
-      # sets STEAM_SCREEPS_DIR so `nix run .#server` finds it.
-      read -rp "Steam username: " STEAM_USER
-      exec steamcmd \
-        +@sSteamCmdForcePlatformType linux \
-        +force_install_dir "$HOME/screeps" \
-        +login "$STEAM_USER" \
-        +app_update 464350 validate \
-        +quit
-    '';
-  };
-in
+# at ~/dox-populi; everything (devshell, apps, the nix-vendored Screeps
+# server) is downloaded and built inside the VM. Nothing proprietary is
+# shipped or fetched — watching the game happens on the HOST (Steam
+# client or browser client bridge, both need the user's own game copy).
+{ pkgs, self, modulesPath, ... }:
 {
   # Virtio drivers in the initrd (disk, net, 9p).
   imports = [ (modulesPath + "/profiles/qemu-guest.nix") ];
@@ -37,10 +17,6 @@ in
   system.stateVersion = "25.05";
   networking.hostName = "dox-populi";
   networking.firewall.enable = false;
-
-  # steam-run / steamcmd (unfree) — same predicate as the flake.
-  nixpkgs.config.allowUnfreePredicate =
-    pkg: lib.hasPrefix "steam" (lib.getName pkg);
 
   nix.settings = {
     experimental-features = [ "nix-command" "flakes" ];
@@ -79,9 +55,6 @@ in
     options = [ "trans=virtio" "version=9p2000.L" "msize=524288" "rw" "nofail" ];
   };
 
-  # Where fetch-screeps-server installs the game; apps.server honors it
-  # (must point at the `server` subdir — it runs $STEAM_SCREEPS_DIR/resources/node).
-  environment.variables.STEAM_SCREEPS_DIR = "/home/dev/screeps/server";
   # Bind the Screeps server on all guest interfaces: qemu's hostfwd
   # delivers to the guest NIC, which loopback-bound services never see.
   environment.variables.SCREEPS_HOST = "0.0.0.0";
@@ -104,7 +77,6 @@ in
     pkgs.vim
     pkgs.curl
     pkgs.jq
-    fetchScreepsServer
   ];
 
   # Seed the repo on first boot. The flake source has no .git, but the
@@ -138,21 +110,23 @@ in
     dox-populi dev VM
     =================
     Quickstart:
-      1. fetch-screeps-server        — install the Screeps server (your Steam
-                                       account; you must own the game)
-      2. cd ~/dox-populi
-      3. nix develop                 — the dev shell (first run downloads
+      1. cd ~/dox-populi
+      2. nix develop                 — the dev shell (first run downloads
                                        and builds everything in the VM)
-      4. nix run .#server            — private server on host port 21025
-      5. nix run .#deploy-local      — push main.js, place Spawn1
+      3. nix run .#server            — private server on host port 21025
+                                       (nix-vendored — no Steam needed)
+      4. nix run .#deploy-local      — provision account, push main.js,
+                                       place Spawn1
 
-    Secrets (REQUIRED — secrix, same workflow as native nix):
+    Secrets (secrix, same workflow as native nix):
       Apps decrypt secrets with YOUR key. Place it in the host dir you
       share via run-vm.sh (WORKDIR=...) named "identity" — it appears
       here as ~/work/identity, which SCREEPS_IDENTITY already points to.
       (Or export SCREEPS_IDENTITY=/path/to/your/key yourself.)
+      deploy-local reads secrets/SCREEPS_LOCAL_CREDS ("username:password"),
+      or set SCREEPS_LOCAL_EMAIL / SCREEPS_LOCAL_PASSWORD instead.
       Encrypt your own secrets to it (from the dev shell), e.g.:
-        secrix create secrets/STEAM_TOKEN -i "$SCREEPS_IDENTITY" -r "$(cat $SCREEPS_IDENTITY.pub)"
+        secrix create secrets/SCREEPS_LOCAL_CREDS -i "$SCREEPS_IDENTITY" -r "$(cat $SCREEPS_IDENTITY.pub)"
 
     Play: point the Steam client ON THE HOST at localhost:21025
     (Private server — ports 21025/21026 are forwarded by run-vm.sh).

@@ -1,0 +1,8 @@
+{
+  "name": "dox-populi-screeps-client",
+  "private": true,
+  "description": "screeps-steamless-client, nix-vendored — serves the official (Steam-installed) client assets to a web browser, proxied to the private server.",
+  "dependencies": {
+    "screeps-steamless-client": "1.2.1"
+  }
+}
