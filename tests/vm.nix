@@ -12,11 +12,6 @@
 testers.runNixOSTest {
   name = testName;
 
-  # vm/module.nix sets nixpkgs.config (allowUnfreePredicate for steam*),
-  # which conflicts with the test framework's read-only nixpkgs module.
-  # Same situation as dubai's helpers.nix.
-  node.pkgsReadOnly = false;
-
   globalTimeout = 10 * 60;
 
   nodes.machine = {
@@ -46,12 +41,12 @@ testers.runNixOSTest {
             "grep -E 'experimental-features.*flakes' /etc/nix/nix.conf"
         )
 
-    with subtest("dev login environment points at the Screeps install"):
-        machine.succeed(
-            "su - dev -c 'printenv STEAM_SCREEPS_DIR' | grep -qx /home/dev/screeps/server"
-        )
+    with subtest("dev login environment is wired for the private server"):
         machine.succeed(
             "su - dev -c 'printenv SCREEPS_HOST' | grep -qx 0.0.0.0"
+        )
+        machine.succeed(
+            "su - dev -c 'printenv SCREEPS_IDENTITY' | grep -qx /home/dev/work/identity"
         )
 
     machine.shutdown()
