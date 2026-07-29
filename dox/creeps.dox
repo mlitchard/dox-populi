@@ -23,8 +23,23 @@ desiredUpgraders: Integer
   1
 
 | Per-creep FSMs. The shell observes the world and emits exactly one
-| CreepEvent per creep per tick (priority: storeEmpty > storeFull >
-| spawnFull > tick); the generated transition functions are the brain.
+| CreepEvent per creep per tick; the generated transition functions are
+| the brain.
+|
+| Event logic:
+|   storeEmpty  — creep has zero energy (highest priority)
+|   spawnFull   — creep store is full AND spawn is full (compound)
+|   storeFull   — creep store is full, spawn has room
+|   tick        — none of the above
+|
+| spawnFull is a compound observation: "ready to deliver but can't."
+| It only fires when the store is ALSO full. This prevents premature
+| transitions (e.g. the upgrader switching to upgrading with 2 energy
+| just because the spawn is full). When both are full, the harvester
+| FSM goes back to harvesting (nowhere to deliver), and the upgrader
+| FSM goes to upgrading (it delivers to the controller, not the spawn).
+| Without this, storeFull fires first, the harvester stays in delivering,
+| transfer() returns ERR_FULL, and the creep is stuck forever.
 
 union HarvesterState
   harvesting
@@ -128,7 +143,9 @@ harvesterMachine: Machine HarvesterState CreepEvent CreepContext
     states: {HarvesterState.harvesting: harvestingConfig, HarvesterState.delivering: deliveringConfig}
 
 | Upgrader machine: collect until full, upgrade until empty. spawnFull
-| is irrelevant to an upgrader: explicit self-loops.
+| transitions to upgrading (not self-loop) because the upgrader delivers
+| to the controller, not the spawn — a full spawn is the signal to stop
+| waiting and go upgrade with whatever energy you have.
 
 collectingStoreEmpty: Transition UpgraderState CreepEvent CreepContext
   Transition:
@@ -145,7 +162,7 @@ collectingStoreFull: Transition UpgraderState CreepEvent CreepContext
 collectingSpawnFull: Transition UpgraderState CreepEvent CreepContext
   Transition:
     event: CreepEvent.spawnFull
-    target: UpgraderState.collecting
+    target: UpgraderState.upgrading
     guard: ()
 
 collectingTick: Transition UpgraderState CreepEvent CreepContext

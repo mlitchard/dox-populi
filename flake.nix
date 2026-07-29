@@ -263,6 +263,35 @@
           touch $out
         '';
 
+        # FSM behavioral tests: exercise the generated transition functions
+        # against critical scenarios (e.g. the spawnFull event-priority bug).
+        fsm-behavior = pkgs.runCommand "fsm-behavior"
+          { nativeBuildInputs = [ pkgs.typescript pkgs.nodejs_22 ]; } ''
+          cp -r ${tsSrc}/. .
+          mkdir -p tests
+          cp ${./tests/fsm-behavior.ts} tests/fsm-behavior.ts
+          cat > tsconfig.test.json <<'CONF'
+          {
+            "compilerOptions": {
+              "target": "ES2019",
+              "module": "commonjs",
+              "moduleResolution": "node",
+              "strict": true,
+              "esModuleInterop": true,
+              "skipLibCheck": true,
+              "outDir": "out"
+            },
+            "include": [
+              "generated/**/*.ts",
+              "tests/fsm-behavior.ts"
+            ]
+          }
+          CONF
+          tsc -p tsconfig.test.json
+          node out/tests/fsm-behavior.js
+          touch $out
+        '';
+
         build = main;
       };
 
@@ -454,18 +483,36 @@
           type = "app";
           program = toString (pkgs.writeShellScript "screeps-client" ''
             set -euo pipefail
-            NW="''${SCREEPS_CLIENT_NW:-$HOME/.local/share/Steam/steamapps/common/Screeps/package.nw}"
-            if [ ! -f "$NW" ]; then
-              echo "error: client assets not found at $NW" >&2
-              echo "install the Screeps game via Steam, or set SCREEPS_CLIENT_NW=/path/to/package.nw" >&2
+            # Asset search order: explicit override, then the shared work
+            # dir (VM users copy package.nw there from the host's Steam
+            # install — same convention as the identity key), then the
+            # local Steam install.
+            NW="''${SCREEPS_CLIENT_NW:-}"
+            if [ -z "$NW" ]; then
+              for CAND in "''${WORKDIR:-''${HOME:-/root}/work}/package.nw" \
+                          "$HOME/.local/share/Steam/steamapps/common/Screeps/package.nw"; do
+                if [ -f "$CAND" ]; then NW="$CAND"; break; fi
+              done
+            fi
+            if [ -z "$NW" ] || [ ! -f "$NW" ]; then
+              echo "error: client assets (package.nw) not found; looked at:" >&2
+              echo "  \$SCREEPS_CLIENT_NW (unset or missing)" >&2
+              echo "  ''${WORKDIR:-''${HOME:-/root}/work}/package.nw (the shared work dir)" >&2
+              echo "  $HOME/.local/share/Steam/steamapps/common/Screeps/package.nw" >&2
+              echo "install the Screeps game via Steam, copy its package.nw into the shared work dir, or set SCREEPS_CLIENT_NW=/path/to/package.nw" >&2
               exit 1
             fi
+            # Bind address: explicit override, else follow the server's
+            # knob (the VM sets SCREEPS_HOST=0.0.0.0 so qemu's port
+            # forwards reach it), else explicit IPv4 loopback — bare
+            # "localhost" resolves to ::1 only, which browsers hitting
+            # 127.0.0.1 can't reach.
+            CLIENT_HOST="''${SCREEPS_CLIENT_HOST:-''${SCREEPS_HOST:-127.0.0.1}}"
+            echo "client assets: $NW"
             echo "browser client: http://127.0.0.1:8080/(http://127.0.0.1:21025)/"
-            # Explicit IPv4 host: bare "localhost" resolves to ::1 only,
-            # which browsers hitting 127.0.0.1 can't reach.
             exec ${serverNode}/bin/node \
               "${screepsClient}/node_modules/screeps-steamless-client/dist/index.js" \
-              --package "$NW" --host 127.0.0.1 "$@"
+              --package "$NW" --host "$CLIENT_HOST" "$@"
           '');
         };
 

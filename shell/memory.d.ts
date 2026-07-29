@@ -10,6 +10,7 @@ declare global {
     stats?: {
       spawnEnergy: number;
       controllerProgress: number;
+      creeps: Record<string, { role: string; event: string; fsm: string }>;
     };
   }
 }

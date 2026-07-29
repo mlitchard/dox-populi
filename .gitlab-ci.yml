@@ -96,6 +96,12 @@ checks:build:
   script:
     - nix build .#checks.x86_64-linux.build --no-link --print-build-logs
   stage: test
+checks:fsm-behavior:
+  needs:
+    - packages:generated
+  script:
+    - nix build .#checks.x86_64-linux.fsm-behavior --no-link --print-build-logs
+  stage: test
 checks:itest:
   needs:
     - apps:deploy-local

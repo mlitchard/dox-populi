@@ -49,6 +49,36 @@ let
     exit 1
   '';
 
+  # One-shot probe: read Memory.stats.creeps, a per-creep record of
+  # {role, event, fsm} written by the shell every tick. Succeeds when a
+  # harvester's event is "spawnFull" while its fsm is "harvesting" — proof
+  # that emitEvent correctly emits the compound "store full AND spawn full"
+  # signal in the real game runtime, and the FSM transitions to idle.
+  pollHarvesterSpawnFull = writeShellScript "poll-harvester-spawnfull" ''
+    set -euo pipefail
+    TOKEN=$(${curl}/bin/curl -sS -X POST "${url}/api/auth/signin" \
+      -H "Content-Type: application/json" \
+      --data '{"email":"${email}","password":"${password}"}' \
+      | ${jq}/bin/jq -r '.token // empty')
+    [ -n "$TOKEN" ]
+    DATA=$(${curl}/bin/curl -sS -H "X-Token: $TOKEN" \
+      "${url}/api/user/memory?path=stats.creeps" | ${jq}/bin/jq -r '.data // empty')
+    case "$DATA" in
+      gz:*) ;;
+      *) echo "no stats.creeps in memory yet (got: $DATA)" >&2; exit 1 ;;
+    esac
+    JSON=$(printf '%s' "''${DATA#gz:}" | ${coreutils}/bin/base64 -d | ${gzip}/bin/zcat)
+    echo "creep stats: $JSON"
+    # Succeed if ANY harvester has event=spawnFull and fsm=harvesting.
+    printf '%s' "$JSON" | ${jq}/bin/jq -e '
+      to_entries | map(select(
+        .value.role == "harvester"
+        and .value.event == "spawnFull"
+        and .value.fsm == "harvesting"
+      )) | length > 0
+    ' > /dev/null
+  '';
+
   # One-shot probe: sign in, read Memory.stats.controllerProgress via the
   # memory API. Succeeds as soon as progress > 0, proving the upgrader
   # collected energy and called upgradeController at least once.
@@ -139,6 +169,24 @@ testers.runNixOSTest {
                 print(">>> TIMEOUT — server log tail for diagnosis:")
                 print(machine.succeed("journalctl -u screeps --no-pager | tail -n 100"))
                 raise Exception("timed out waiting for the spawn to acquire energy")
+            time.sleep(2)
+
+    with subtest("harvester emits spawnFull when spawn is full"):
+        # Once the spawn fills to 300 and the harvester's store is full,
+        # emitEvent must emit "spawnFull" (not "storeFull") and the FSM
+        # must land in "harvesting" (idle at source). This is the real
+        # game runtime proving the compound event logic works.
+        deadline = time.time() + 600
+        while True:
+            status, out = machine.execute("${pollHarvesterSpawnFull} 2>&1")
+            print(f">>> poll: {out.strip()}")
+            if status == 0:
+                print(">>> SUCCESS: harvester correctly idles on spawnFull")
+                break
+            if time.time() > deadline:
+                print(">>> TIMEOUT — server log tail for diagnosis:")
+                print(machine.succeed("journalctl -u screeps --no-pager | tail -n 100"))
+                raise Exception("timed out waiting for harvester spawnFull event")
             time.sleep(2)
 
     with subtest("controller progress increases"):

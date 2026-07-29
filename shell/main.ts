@@ -19,8 +19,10 @@ import type { CreepEvent } from "../generated/index";
 
 function emitEvent(creep: Creep, spawn: StructureSpawn | undefined): CreepEvent {
   if (creep.store.getUsedCapacity(RESOURCE_ENERGY) === 0) return "storeEmpty";
-  if (creep.store.getFreeCapacity(RESOURCE_ENERGY) === 0) return "storeFull";
-  if (spawn && spawn.store.getFreeCapacity(RESOURCE_ENERGY) === 0) return "spawnFull";
+  const storeFull = creep.store.getFreeCapacity(RESOURCE_ENERGY) === 0;
+  const spawnFull = spawn ? spawn.store.getFreeCapacity(RESOURCE_ENERGY) === 0 : false;
+  if (storeFull && spawnFull) return "spawnFull";
+  if (storeFull) return "storeFull";
   return "tick";
 }
 
@@ -102,10 +104,20 @@ export const loop = (): void => {
   }
 
   // Telemetry, observable via GET /api/user/memory?path=stats.*
-  // The integration test polls spawnEnergy (harvester works) and
-  // controllerProgress (upgrader works).
+  // The integration test polls spawnEnergy, controllerProgress, and
+  // per-creep event/state for verifying emitEvent in the game runtime.
+  const creepStats: Record<string, { role: string; event: string; fsm: string }> = {};
+  for (const name in Game.creeps) {
+    const c = Game.creeps[name];
+    creepStats[name] = {
+      role: c.memory.role,
+      event: emitEvent(c, spawn),
+      fsm: String(c.memory.fsm),
+    };
+  }
   Memory.stats = {
     spawnEnergy: spawn ? spawn.store[RESOURCE_ENERGY] : 0,
     controllerProgress: spawn?.room?.controller?.progress ?? 0,
+    creeps: creepStats,
   };
 };

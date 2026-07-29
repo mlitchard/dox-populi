@@ -153,6 +153,16 @@ itself. Host prerequisites: `qemu`, `tmux`, `curl`.
 
    ✅ `ls ~/work/identity` shows your key.
 
+   > **Note — `REMOTE HOST IDENTIFICATION HAS CHANGED!`**: every VM
+   > (re)install generates fresh SSH host keys, so after a factory reset
+   > or `INSTALL=1` your `known_hosts` still pins the old VM's key and
+   > ssh refuses to connect. Not an attack — evict the stale entry and
+   > retry:
+   >
+   > ```sh
+   > ssh-keygen -R '[localhost]:2222'
+   > ```
+
 5. **Start the server and deploy** (inside the VM)
 
    ```sh
@@ -168,9 +178,16 @@ itself. Host prerequisites: `qemu`, `tmux`, `curl`.
 
    Then, still in the VM: `nix run .#deploy-local`.
 
-6. **Watch it play** — on the **host**, Steam client → Screeps → *Private
-   server* → `localhost:21025`, or run the browser client bridge from a
-   machine with nix + the Steam game files.
+6. **Watch it play**
+
+   - Steam client on the **host** → Screeps → *Private server* →
+     `localhost:21025`.
+   - Or the browser client: if the game is in the host's default Steam
+     library (or `SCREEPS_CLIENT_NW` points at its `package.nw`),
+     run-vm.sh automatically links it into your `WORKDIR` share. In the
+     VM run `nix run .#client`, then on the host open
+     `http://localhost:8080/(http://127.0.0.1:21025)/` and sign in with
+     your deploy-local credentials.
 
 ### VM management
 
