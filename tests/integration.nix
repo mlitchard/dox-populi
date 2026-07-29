@@ -1,8 +1,9 @@
 # Integration test : boot a VM, start the
 # private Screeps server (nix-vendored npm package), provision an
 # account + push main.js + place Spawn1 (the production deploy-local
-# script, unchanged), then poll the memory endpoint until the spawn
-# acquires energy. Fully pure — runs in plain `nix flake check`.
+# script, unchanged), then poll the memory endpoint until (1) the spawn
+# acquires energy (harvester works) and (2) the controller gains progress
+# (upgrader works). Fully pure — runs in plain `nix flake check`.
 {
   testers,
   writeShellScript,
@@ -46,6 +47,27 @@ let
     fi
     printf '%s\n' "$E" > "$STATE"
     exit 1
+  '';
+
+  # One-shot probe: sign in, read Memory.stats.controllerProgress via the
+  # memory API. Succeeds as soon as progress > 0, proving the upgrader
+  # collected energy and called upgradeController at least once.
+  pollControllerProgress = writeShellScript "poll-controller-progress" ''
+    set -euo pipefail
+    TOKEN=$(${curl}/bin/curl -sS -X POST "${url}/api/auth/signin" \
+      -H "Content-Type: application/json" \
+      --data '{"email":"${email}","password":"${password}"}' \
+      | ${jq}/bin/jq -r '.token // empty')
+    [ -n "$TOKEN" ]
+    DATA=$(${curl}/bin/curl -sS -H "X-Token: $TOKEN" \
+      "${url}/api/user/memory?path=stats.controllerProgress" | ${jq}/bin/jq -r '.data // empty')
+    case "$DATA" in
+      gz:*) ;;
+      *) echo "no stats.controllerProgress in memory yet (got: $DATA)" >&2; exit 1 ;;
+    esac
+    P=$(printf '%s' "''${DATA#gz:}" | ${coreutils}/bin/base64 -d | ${gzip}/bin/zcat)
+    echo "controller progress: $P"
+    [ "$P" -gt 0 ]
   '';
 in
 testers.runNixOSTest {
@@ -117,6 +139,20 @@ testers.runNixOSTest {
                 print(">>> TIMEOUT — server log tail for diagnosis:")
                 print(machine.succeed("journalctl -u screeps --no-pager | tail -n 100"))
                 raise Exception("timed out waiting for the spawn to acquire energy")
+            time.sleep(2)
+
+    with subtest("controller progress increases"):
+        deadline = time.time() + 600
+        while True:
+            status, out = machine.execute("${pollControllerProgress} 2>&1")
+            print(f">>> poll: {out.strip()}")
+            if status == 0:
+                print(">>> SUCCESS: controller is being upgraded")
+                break
+            if time.time() > deadline:
+                print(">>> TIMEOUT — server log tail for diagnosis:")
+                print(machine.succeed("journalctl -u screeps --no-pager | tail -n 100"))
+                raise Exception("timed out waiting for controller progress")
             time.sleep(2)
   '';
 }
