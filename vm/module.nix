@@ -117,6 +117,11 @@
                                        (nix-vendored — no Steam needed)
       4. nix run .#deploy-local      — provision account, push main.js,
                                        place Spawn1
+      5. nix run .#client            — (optional) browser client on host
+                                       port 8080. Uses ~/work/package.nw,
+                                       which run-vm.sh links there
+                                       automatically from the host's
+                                       Steam install of the game
 
     Secrets (secrix, same workflow as native nix):
       Apps decrypt secrets with YOUR key. Place it in the host dir you

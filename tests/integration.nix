@@ -1,8 +1,9 @@
 # Integration test : boot a VM, start the
 # private Screeps server (nix-vendored npm package), provision an
 # account + push main.js + place Spawn1 (the production deploy-local
-# script, unchanged), then poll the memory endpoint until the spawn
-# acquires energy. Fully pure — runs in plain `nix flake check`.
+# script, unchanged), then poll the memory endpoint until (1) the spawn
+# acquires energy (harvester works) and (2) the controller gains progress
+# (upgrader works). Fully pure — runs in plain `nix flake check`.
 {
   testers,
   writeShellScript,
@@ -46,6 +47,80 @@ let
     fi
     printf '%s\n' "$E" > "$STATE"
     exit 1
+  '';
+
+  # One-shot probe: read Memory.stats.creeps, a per-creep record of
+  # {role, event, fsm} written by the shell every tick. Succeeds when a
+  # harvester's event is "spawnFull" while its fsm is "harvesting" — proof
+  # that emitEvent correctly emits the compound "store full AND spawn full"
+  # signal in the real game runtime, and the FSM transitions to idle.
+  pollHarvesterSpawnFull = writeShellScript "poll-harvester-spawnfull" ''
+    set -euo pipefail
+    TOKEN=$(${curl}/bin/curl -sS -X POST "${url}/api/auth/signin" \
+      -H "Content-Type: application/json" \
+      --data '{"email":"${email}","password":"${password}"}' \
+      | ${jq}/bin/jq -r '.token // empty')
+    [ -n "$TOKEN" ]
+    DATA=$(${curl}/bin/curl -sS -H "X-Token: $TOKEN" \
+      "${url}/api/user/memory?path=stats.creeps" | ${jq}/bin/jq -r '.data // empty')
+    case "$DATA" in
+      gz:*) ;;
+      *) echo "no stats.creeps in memory yet (got: $DATA)" >&2; exit 1 ;;
+    esac
+    JSON=$(printf '%s' "''${DATA#gz:}" | ${coreutils}/bin/base64 -d | ${gzip}/bin/zcat)
+    echo "creep stats: $JSON"
+    # Succeed if ANY harvester has event=spawnFull and fsm=harvesting.
+    printf '%s' "$JSON" | ${jq}/bin/jq -e '
+      to_entries | map(select(
+        .value.role == "harvester"
+        and .value.event == "spawnFull"
+        and .value.fsm == "harvesting"
+      )) | length > 0
+    ' > /dev/null
+  '';
+
+  # Regression test for the partial-transfer deadlock: when transfer()
+  # returns ERR_FULL (spawn accepted part of the energy but is now full),
+  # the shell re-evaluates with a spawnFull event so the harvester goes
+  # back to harvesting. Each recovery increments stats.errFullRecoveries.
+  # Succeeds when the counter > 0, proving the code path was exercised.
+  pollErrFullRecovery = writeShellScript "poll-errfull-recovery" ''
+    set -euo pipefail
+    TOKEN=$(${curl}/bin/curl -sS -X POST "${url}/api/auth/signin" \
+      -H "Content-Type: application/json" \
+      --data '{"email":"${email}","password":"${password}"}' \
+      | ${jq}/bin/jq -r '.token // empty')
+    [ -n "$TOKEN" ]
+    DATA=$(${curl}/bin/curl -sS -H "X-Token: $TOKEN" \
+      "${url}/api/user/memory?path=stats.errFullRecoveries" | ${jq}/bin/jq -r '.data // empty')
+    case "$DATA" in
+      gz:*) ;;
+      *) echo "no stats.errFullRecoveries in memory yet (got: $DATA)" >&2; exit 1 ;;
+    esac
+    N=$(printf '%s' "''${DATA#gz:}" | ${coreutils}/bin/base64 -d | ${gzip}/bin/zcat)
+    echo "ERR_FULL recoveries: $N"
+    [ "$N" -gt 0 ]
+  '';
+
+  # One-shot probe: sign in, read Memory.stats.controllerProgress via the
+  # memory API. Succeeds as soon as progress > 0, proving the upgrader
+  # collected energy and called upgradeController at least once.
+  pollControllerProgress = writeShellScript "poll-controller-progress" ''
+    set -euo pipefail
+    TOKEN=$(${curl}/bin/curl -sS -X POST "${url}/api/auth/signin" \
+      -H "Content-Type: application/json" \
+      --data '{"email":"${email}","password":"${password}"}' \
+      | ${jq}/bin/jq -r '.token // empty')
+    [ -n "$TOKEN" ]
+    DATA=$(${curl}/bin/curl -sS -H "X-Token: $TOKEN" \
+      "${url}/api/user/memory?path=stats.controllerProgress" | ${jq}/bin/jq -r '.data // empty')
+    case "$DATA" in
+      gz:*) ;;
+      *) echo "no stats.controllerProgress in memory yet (got: $DATA)" >&2; exit 1 ;;
+    esac
+    P=$(printf '%s' "''${DATA#gz:}" | ${coreutils}/bin/base64 -d | ${gzip}/bin/zcat)
+    echo "controller progress: $P"
+    [ "$P" -gt 0 ]
   '';
 in
 testers.runNixOSTest {
@@ -117,6 +192,56 @@ testers.runNixOSTest {
                 print(">>> TIMEOUT — server log tail for diagnosis:")
                 print(machine.succeed("journalctl -u screeps --no-pager | tail -n 100"))
                 raise Exception("timed out waiting for the spawn to acquire energy")
+            time.sleep(2)
+
+    with subtest("harvester emits spawnFull when spawn is full"):
+        # Once the spawn fills to 300 and the harvester's store is full,
+        # emitEvent must emit "spawnFull" (not "storeFull") and the FSM
+        # must land in "harvesting" (idle at source). This is the real
+        # game runtime proving the compound event logic works.
+        deadline = time.time() + 600
+        while True:
+            status, out = machine.execute("${pollHarvesterSpawnFull} 2>&1")
+            print(f">>> poll: {out.strip()}")
+            if status == 0:
+                print(">>> SUCCESS: harvester correctly idles on spawnFull")
+                break
+            if time.time() > deadline:
+                print(">>> TIMEOUT — server log tail for diagnosis:")
+                print(machine.succeed("journalctl -u screeps --no-pager | tail -n 100"))
+                raise Exception("timed out waiting for harvester spawnFull event")
+            time.sleep(2)
+
+    with subtest("harvester recovers from ERR_FULL partial transfer"):
+        # Regression: when the harvester delivers a partial load and the
+        # spawn fills up, transfer() returns ERR_FULL. The shell feeds
+        # spawnFull back to the FSM, which transitions to harvesting.
+        # Without this fix, the creep is stuck in delivering+tick forever.
+        deadline = time.time() + 600
+        while True:
+            status, out = machine.execute("${pollErrFullRecovery} 2>&1")
+            print(f">>> poll: {out.strip()}")
+            if status == 0:
+                print(">>> SUCCESS: ERR_FULL recovery path exercised")
+                break
+            if time.time() > deadline:
+                print(">>> TIMEOUT — server log tail for diagnosis:")
+                print(machine.succeed("journalctl -u screeps --no-pager | tail -n 100"))
+                raise Exception("timed out waiting for ERR_FULL recovery")
+            time.sleep(2)
+
+    with subtest("controller progress increases"):
+        deadline = time.time() + 600
+        while True:
+            status, out = machine.execute("${pollControllerProgress} 2>&1")
+            print(f">>> poll: {out.strip()}")
+            if status == 0:
+                print(">>> SUCCESS: controller is being upgraded")
+                break
+            if time.time() > deadline:
+                print(">>> TIMEOUT — server log tail for diagnosis:")
+                print(machine.succeed("journalctl -u screeps --no-pager | tail -n 100"))
+                raise Exception("timed out waiting for controller progress")
             time.sleep(2)
   '';
 }

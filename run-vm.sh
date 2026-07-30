@@ -175,6 +175,22 @@ EOF
     SHARE=()
     if [ -n "${WORKDIR:-}" ]; then
       SHARE=(-virtfs "local,path=$WORKDIR,mount_tag=workdir,security_model=mapped-xattr")
+
+      # Browser-client assets: put the game's package.nw in the shared
+      # dir so `nix run .#client` inside the VM finds it (~/work/package.nw).
+      # A symlink would dangle — the guest resolves symlink targets in
+      # its OWN namespace — so hard-link it (same inode, served as a
+      # regular file), falling back to a copy across filesystems.
+      # Re-linked whenever Steam replaces the file (new inode).
+      NW="${SCREEPS_CLIENT_NW:-$HOME/.local/share/Steam/steamapps/common/Screeps/package.nw}"
+      if [ -f "$NW" ]; then
+        NW=$(readlink -f "$NW")
+        if ! [ "$WORKDIR/package.nw" -ef "$NW" ]; then
+          ln -f "$NW" "$WORKDIR/package.nw" 2>/dev/null \
+            || cp -f "$NW" "$WORKDIR/package.nw"
+          echo "linked client assets into $WORKDIR/package.nw"
+        fi
+      fi
     fi
 
     # Installer boot: the auto-installing ISO carries the repo source
@@ -185,12 +201,13 @@ EOF
     fi
 
     # Port forwards: 2222 -> sshd, 21025/21026 -> Screeps server + CLI
-    # (the host Steam client connects to localhost:21025).
+    # (the host Steam client connects to localhost:21025), 8080 -> the
+    # browser client bridge (nix run .#client inside the VM).
     "${QEMU:-qemu-system-x86_64}" \
       "${ACCEL[@]}" \
       -m "$MEM" -smp "$CPUS" \
       -drive "file=$DISK,if=virtio,format=qcow2" \
-      -netdev user,id=net0,hostfwd=tcp::2222-:22,hostfwd=tcp::21025-:21025,hostfwd=tcp::21026-:21026 \
+      -netdev user,id=net0,hostfwd=tcp::2222-:22,hostfwd=tcp::21025-:21025,hostfwd=tcp::21026-:21026,hostfwd=tcp::8080-:8080 \
       -device virtio-net-pci,netdev=net0 \
       "${SHARE[@]}" \
       "${INSTALLER[@]}" \
