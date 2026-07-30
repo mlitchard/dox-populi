@@ -186,35 +186,72 @@ behaviors: StateBehaviors
 | shell walks it front to back and spawns the first role below its
 | desired count. No if/else chain in the shell — this list IS the
 | policy.
+|
+| Capacity-tiered bodies. Part costs: work=100, carry=50, move=50.
+|
+|   heavyWorkerBody = [work, work, carry, move, move]  cost 350
+|   workerBody      = [work, carry, move]              cost 200
+|
+| 350 is exactly the current room energyCapacityAvailable (spawn 300 +
+| 1 extension 50). A tier list is ORDERED, richest first — the order IS
+| the policy: the shell walks bodies front to back and spawns the FIRST
+| tier whose cost fits the afford basis (see spawnAffordBasis below).
+| Mechanical maximization over spec data, same pattern as
+| extensionOffsets: the spec ranks, the world disposes.
 
 workerBody: [BodyPart]
   [BodyPart.work, BodyPart.carry, BodyPart.move]
 
+heavyWorkerBody: [BodyPart]
+  [BodyPart.work, BodyPart.work, BodyPart.carry, BodyPart.move, BodyPart.move]
+
+workerBodyTiers: [[BodyPart]]
+  [heavyWorkerBody, workerBody]
+
+| Afford basis: which Room energy figure a spawn attempt is priced
+| against. The variant names are EXACT Screeps Room property names —
+| the generated string literal indexes directly into the Room type
+| (room[spawnAffordBasis]), no shell switch.
+|
+| Decision: afford against CURRENT energy (energyAvailable), not
+| capacity. Waiting for capacity deadlocks recovery: with all
+| harvesters dead, the extension never refills, so 350 never arrives
+| and nothing ever spawns. At steady state the sinks are full, so the
+| rich tier still spawns — capacity gets spent without risking
+| starvation.
+
+union SpawnAffordBasis
+  energyAvailable
+  energyCapacityAvailable
+
+spawnAffordBasis: SpawnAffordBasis
+  SpawnAffordBasis.energyAvailable
+
 type RoleSpec
   role: CreepRole
   desired: Integer
-  body: [BodyPart]
+  bodies: [[BodyPart]]
   initial: CreepState
 
 harvesterSpec: RoleSpec
   RoleSpec:
     role: CreepRole.harvester
-    desired: 1
-    body: workerBody
+    desired: 2
+    bodies: workerBodyTiers
     initial: CreepState.harvesting
 
 upgraderSpec: RoleSpec
   RoleSpec:
     role: CreepRole.upgrader
     desired: 1
-    body: workerBody
+    bodies: workerBodyTiers
     initial: CreepState.collecting
 
 builderSpec: RoleSpec
   RoleSpec:
     role: CreepRole.builder
     desired: 2
-    body: workerBody
+    bodies: workerBodyTiers
     initial: CreepState.gathering
 
 spawnQueue: [RoleSpec]
@@ -271,21 +308,25 @@ extensionOffsets: [SiteOffset]
 | event, self-loops written out — total and explicit, no implicit
 | fallthrough.
 
+| Context carries the same tier list as RoleSpec.bodies — a machine's
+| context must never contradict the spawn policy, so there is no
+| single-body field anywhere.
+
 type CreepContext
   role: CreepRole
-  body: [BodyPart]
+  bodies: [[BodyPart]]
 
 harvesterContext: CreepContext
   role: CreepRole.harvester
-  body: workerBody
+  bodies: workerBodyTiers
 
 upgraderContext: CreepContext
   role: CreepRole.upgrader
-  body: workerBody
+  bodies: workerBodyTiers
 
 builderContext: CreepContext
   role: CreepRole.builder
-  body: workerBody
+  bodies: workerBodyTiers
 
 | Harvester machine: harvest until full, deliver until empty. sinksFull
 | sends delivering back to harvesting (nowhere to put the energy).
