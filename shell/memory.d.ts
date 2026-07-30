@@ -13,9 +13,19 @@ declare global {
       controllerLevel: number;
       extensionsBuilt: number;
       extensionProgress: number;
+      spawning: string | null;
+      roleCounts: Record<string, number>;
+      births: number;
+      deaths: number;
       creeps: Record<
         string,
-        { role: string; event: string; fsm: string; action: string }
+        {
+          role: string;
+          event: string;
+          fsm: string;
+          action: string;
+          parts: number;
+        }
       >;
     };
   }

@@ -9,6 +9,7 @@
 import {
   behaviors,
   spawnQueue,
+  spawnAffordBasis,
   desiredExtensions,
   extensionOffsets,
   harvesterContext,
@@ -24,6 +25,7 @@ import {
 } from "../generated/index";
 import type {
   Behavior,
+  BodyPart,
   CreepEvent,
   CreepState,
   HarvesterState,
@@ -192,25 +194,41 @@ function initialStateFor(creep: Creep): CreepState | null {
 }
 
 export const loop = (): void => {
-  // Reclaim memory of dead creeps.
+  // Reclaim memory of dead creeps. Each reclaimed name is one observed
+  // death; the cumulative counter is settled in the stats block below.
+  let deathsThisTick = 0;
   for (const name in Memory.creeps) {
     if (!(name in Game.creeps)) {
       delete Memory.creeps[name];
+      deathsThisTick += 1;
     }
   }
 
   const spawn: StructureSpawn | undefined = Game.spawns["Spawn1"];
 
   // Spec-driven population: walk the spawnQueue in order, spawn for the
-  // first role that is under strength. Counts and bodies are brain data.
+  // first role that is under strength. Counts, tier order, and the afford
+  // basis are brain data; BODYPART_COST is an engine constant, so pricing
+  // a tier is observation, not policy. bodies is ordered richest-first —
+  // the first affordable tier wins. If no tier is affordable this tick,
+  // nobody spawns: the first under-strength role holds the spawn slot, and
+  // skipping ahead to a cheaper role would be shell-invented policy.
+  let birthsThisTick = 0;
   if (spawn && !spawn.spawning) {
     const creeps = Object.values(Game.creeps);
+    const affordable = spawn.room[spawnAffordBasis];
+    const tierCost = (body: BodyPart[]): number =>
+      body.reduce((sum, part) => sum + BODYPART_COST[part], 0);
     for (const spec of spawnQueue) {
       const count = creeps.filter((c) => c.memory.role === spec.role).length;
       if (count < spec.desired) {
-        spawn.spawnCreep(spec.body, `${spec.role}-${Game.time}`, {
-          memory: { role: spec.role, fsm: spec.initial },
-        });
+        const body = spec.bodies.find((b) => tierCost(b) <= affordable);
+        if (body) {
+          const result = spawn.spawnCreep(body, `${spec.role}-${Game.time}`, {
+            memory: { role: spec.role, fsm: spec.initial },
+          });
+          if (result === OK) birthsThisTick += 1;
+        }
         break;
       }
     }
@@ -247,11 +265,15 @@ export const loop = (): void => {
   const obsCache = new Map<string, RoomObs>();
   const creepStats: Record<
     string,
-    { role: string; event: string; fsm: string; action: string }
+    { role: string; event: string; fsm: string; action: string; parts: number }
   > = {};
+  const roleCounts: Record<string, number> = {};
 
   for (const name in Game.creeps) {
     const creep = Game.creeps[name];
+    // Mechanical tally of live creeps per role — includes creeps whose fsm
+    // memory is invalid, since they are alive regardless.
+    roleCounts[creep.memory.role] = (roleCounts[creep.memory.role] ?? 0) + 1;
     const obs = observeRoom(creep.room, obsCache);
 
     let state: CreepState;
@@ -273,17 +295,28 @@ export const loop = (): void => {
       event,
       fsm: next,
       action: behaviors[next].action,
+      parts: creep.body.length,
     };
   }
 
   // Telemetry, observable via GET /api/user/memory?path=stats.* — the
   // contract polled by tests/integration.nix. Change them together.
+  // births/deaths are cumulative: seeded from the previous tick's stats
+  // (Memory persists between ticks) before this assignment replaces them.
+  // spawning reads the role from Memory.creeps, which spawnCreep writes
+  // synchronously — Game.creeps may not list a creep mid-spawn yet.
   Memory.stats = {
     spawnEnergy: spawn ? spawn.store[RESOURCE_ENERGY] : 0,
     controllerProgress: spawn?.room.controller?.progress ?? 0,
     controllerLevel: spawn?.room.controller?.level ?? 0,
     extensionsBuilt,
     extensionProgress,
+    spawning: spawn?.spawning
+      ? Memory.creeps[spawn.spawning.name]?.role ?? null
+      : null,
+    roleCounts,
+    births: (Memory.stats?.births ?? 0) + birthsThisTick,
+    deaths: (Memory.stats?.deaths ?? 0) + deathsThisTick,
     creeps: creepStats,
   };
 };

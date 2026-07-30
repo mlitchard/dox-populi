@@ -38,7 +38,7 @@
 # fetch-screeps-server — your own Steam account); play by pointing the
 # Steam client on the HOST at localhost:21025.
 #
-# Env knobs: MEM (default 8G), CPUS (default 4), DISK (default
+# Env knobs: MEM (default 32G), CPUS (default 8), DISK (default
 # ./dox-populi.qcow2), DISK_SIZE (default 40G), WORKDIR (host dir
 # shared into the guest at ~/work; default: ~/vm-keys, skipped if it
 # doesn't exist), INSTALL=1 (force an installer boot without
@@ -111,15 +111,19 @@ case "$CMD" in
     # INSTALL=1 re-enters the installer without recreating the disk
     # (e.g. after aborting a first install).
     INSTALL="${INSTALL:-0}"
-    if [ ! -f "$DISK" ]; then
-      INSTALL=1
-      qemu-img create -f qcow2 "$DISK" "$DISK_SIZE"
-      echo "created $DISK ($DISK_SIZE)"
-    fi
+    [ -f "$DISK" ] || INSTALL=1
+
+    # Resolve the installer ISO BEFORE creating the disk: if resolution
+    # fails we must exit with no disk on the ground, otherwise the next
+    # run sees an existing (empty) disk, keeps INSTALL=0, and boots a
+    # blank drive instead of the installer.
     if [ "$INSTALL" = 1 ] && [ ! -f "$ISO" ]; then
       # Maintainer convenience: pick up a freshly built ISO from
-      # ./result (whatever nix named it).
-      BUILT=$(set -- "$REPO"/result/iso/*.iso; [ -f "$1" ] && echo "$1")
+      # ./result (whatever nix named it). `|| true`: an empty glob makes
+      # the substitution return nonzero, and without the guard set -e
+      # would kill the script here silently — before the error below
+      # ever prints.
+      BUILT=$(set -- "$REPO"/result/iso/*.iso; [ -f "$1" ] && echo "$1") || true
       if [ -n "$BUILT" ]; then
         ISO="$BUILT"
       elif [ -n "$ISO_URL" ]; then
@@ -135,6 +139,12 @@ Maintainers build it with: nix build .#installer-iso
 EOF
         exit 1
       fi
+    fi
+
+    # Disk creation only AFTER the ISO is resolved (see above).
+    if [ ! -f "$DISK" ]; then
+      qemu-img create -f qcow2 "$DISK" "$DISK_SIZE"
+      echo "created $DISK ($DISK_SIZE)"
     fi
 
     tmux new-session -d -s "$SESSION" \
