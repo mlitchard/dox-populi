@@ -54,6 +54,7 @@ export const loop = (): void => {
   }
 
   // FSM-driven creep loop: observe → transition (brain) → execute (hands).
+  let errFullRecoveries = Memory.stats?.errFullRecoveries ?? 0;
   for (const name in Game.creeps) {
     const creep = Game.creeps[name];
     const role = validCreepRole(creep.memory.role);
@@ -73,8 +74,24 @@ export const loop = (): void => {
           break;
         }
         case "delivering": {
-          if (spawn && creep.transfer(spawn, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
-            creep.moveTo(spawn);
+          if (spawn) {
+            const result = creep.transfer(spawn, RESOURCE_ENERGY);
+            if (result === ERR_NOT_IN_RANGE) {
+              creep.moveTo(spawn);
+            } else if (result === ERR_FULL) {
+              // Partial transfer left energy in the store but spawn is
+              // full. Re-evaluate: the brain decides what to do with a
+              // spawnFull event (delivering + spawnFull → harvesting).
+              const { target: revised } = harvesterTransition(target, "spawnFull", harvesterContext);
+              creep.memory.fsm = revised;
+              errFullRecoveries++;
+              if (revised === "harvesting") {
+                const source = creep.pos.findClosestByPath(FIND_SOURCES);
+                if (source && creep.harvest(source) === ERR_NOT_IN_RANGE) {
+                  creep.moveTo(source);
+                }
+              }
+            }
           }
           break;
         }
@@ -119,5 +136,6 @@ export const loop = (): void => {
     spawnEnergy: spawn ? spawn.store[RESOURCE_ENERGY] : 0,
     controllerProgress: spawn?.room?.controller?.progress ?? 0,
     creeps: creepStats,
+    errFullRecoveries,
   };
 };

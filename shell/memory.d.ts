@@ -11,6 +11,7 @@ declare global {
       spawnEnergy: number;
       controllerProgress: number;
       creeps: Record<string, { role: string; event: string; fsm: string }>;
+      errFullRecoveries: number;
     };
   }
 }

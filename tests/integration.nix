@@ -79,6 +79,29 @@ let
     ' > /dev/null
   '';
 
+  # Regression test for the partial-transfer deadlock: when transfer()
+  # returns ERR_FULL (spawn accepted part of the energy but is now full),
+  # the shell re-evaluates with a spawnFull event so the harvester goes
+  # back to harvesting. Each recovery increments stats.errFullRecoveries.
+  # Succeeds when the counter > 0, proving the code path was exercised.
+  pollErrFullRecovery = writeShellScript "poll-errfull-recovery" ''
+    set -euo pipefail
+    TOKEN=$(${curl}/bin/curl -sS -X POST "${url}/api/auth/signin" \
+      -H "Content-Type: application/json" \
+      --data '{"email":"${email}","password":"${password}"}' \
+      | ${jq}/bin/jq -r '.token // empty')
+    [ -n "$TOKEN" ]
+    DATA=$(${curl}/bin/curl -sS -H "X-Token: $TOKEN" \
+      "${url}/api/user/memory?path=stats.errFullRecoveries" | ${jq}/bin/jq -r '.data // empty')
+    case "$DATA" in
+      gz:*) ;;
+      *) echo "no stats.errFullRecoveries in memory yet (got: $DATA)" >&2; exit 1 ;;
+    esac
+    N=$(printf '%s' "''${DATA#gz:}" | ${coreutils}/bin/base64 -d | ${gzip}/bin/zcat)
+    echo "ERR_FULL recoveries: $N"
+    [ "$N" -gt 0 ]
+  '';
+
   # One-shot probe: sign in, read Memory.stats.controllerProgress via the
   # memory API. Succeeds as soon as progress > 0, proving the upgrader
   # collected energy and called upgradeController at least once.
@@ -187,6 +210,24 @@ testers.runNixOSTest {
                 print(">>> TIMEOUT — server log tail for diagnosis:")
                 print(machine.succeed("journalctl -u screeps --no-pager | tail -n 100"))
                 raise Exception("timed out waiting for harvester spawnFull event")
+            time.sleep(2)
+
+    with subtest("harvester recovers from ERR_FULL partial transfer"):
+        # Regression: when the harvester delivers a partial load and the
+        # spawn fills up, transfer() returns ERR_FULL. The shell feeds
+        # spawnFull back to the FSM, which transitions to harvesting.
+        # Without this fix, the creep is stuck in delivering+tick forever.
+        deadline = time.time() + 600
+        while True:
+            status, out = machine.execute("${pollErrFullRecovery} 2>&1")
+            print(f">>> poll: {out.strip()}")
+            if status == 0:
+                print(">>> SUCCESS: ERR_FULL recovery path exercised")
+                break
+            if time.time() > deadline:
+                print(">>> TIMEOUT — server log tail for diagnosis:")
+                print(machine.succeed("journalctl -u screeps --no-pager | tail -n 100"))
+                raise Exception("timed out waiting for ERR_FULL recovery")
             time.sleep(2)
 
     with subtest("controller progress increases"):
