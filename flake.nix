@@ -187,6 +187,7 @@
       packages.${system} = {
         inherit generated main;
         screeps-server = screepsServer;
+        screeps-client = screepsClient;
         secrix = secrixCli;
         default = main;
         installer-iso =

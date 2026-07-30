@@ -40,12 +40,16 @@
 #
 # Env knobs: MEM (default 8G), CPUS (default 4), DISK (default
 # ./dox-populi.qcow2), DISK_SIZE (default 40G), WORKDIR (host dir
-# shared into the guest at ~/work; default: none), INSTALL=1 (force an
-# installer boot without recreating the disk).
+# shared into the guest at ~/work; default: ~/vm-keys, skipped if it
+# doesn't exist), INSTALL=1 (force an installer boot without
+# recreating the disk).
 set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")" && pwd)"
 DISK="${DISK:-dox-populi.qcow2}"
+# Host dir shared into the guest at ~/work (keys, client assets).
+# Skipped if the directory doesn't exist.
+WORKDIR="${WORKDIR:-$HOME/vm-keys}"
 DISK_SIZE="${DISK_SIZE:-40G}"
 MEM="${MEM:-32G}"
 CPUS="${CPUS:-8}"
@@ -173,7 +177,7 @@ EOF
     # Optional host directory shared into the guest (9p, mounted at
     # /home/dev/work by the guest's fstab).
     SHARE=()
-    if [ -n "${WORKDIR:-}" ]; then
+    if [ -n "${WORKDIR:-}" ] && [ -d "$WORKDIR" ]; then
       SHARE=(-virtfs "local,path=$WORKDIR,mount_tag=workdir,security_model=mapped-xattr")
 
       # Browser-client assets: put the game's package.nw in the shared
