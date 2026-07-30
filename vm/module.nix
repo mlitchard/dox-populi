@@ -111,8 +111,8 @@
     =================
     Quickstart:
       1. cd ~/dox-populi
-      2. nix develop                 — the dev shell (first run downloads
-                                       and builds everything in the VM)
+      2. nix develop                 — the dev shell (pre-built during
+                                       install — ready immediately)
       3. nix run .#server            — private server on host port 21025
                                        (nix-vendored — no Steam needed)
       4. nix run .#deploy-local      — provision account, push main.js,
@@ -124,9 +124,10 @@
                                        Steam install of the game
 
     Secrets (secrix, same workflow as native nix):
-      Apps decrypt secrets with YOUR key. Place it in the host dir you
-      share via run-vm.sh (WORKDIR=...) named "identity" — it appears
-      here as ~/work/identity, which SCREEPS_IDENTITY already points to.
+      Apps decrypt secrets with YOUR key. Place it in the host dir
+      run-vm.sh shares (~/vm-keys by default; WORKDIR= to override)
+      named "identity" — it appears here as ~/work/identity, which
+      SCREEPS_IDENTITY already points to.
       (Or export SCREEPS_IDENTITY=/path/to/your/key yourself.)
       deploy-local reads secrets/SCREEPS_LOCAL_CREDS ("username:password"),
       or set SCREEPS_LOCAL_EMAIL / SCREEPS_LOCAL_PASSWORD instead.

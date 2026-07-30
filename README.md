@@ -127,14 +127,14 @@ itself. Host prerequisites: `qemu`, `tmux`, `curl`.
    cp /path/to/your/key ~/vm-keys/identity
    ```
 
-   The directory you pass as `WORKDIR` appears inside the VM at `~/work`,
-   so your key is found at its conventional path `~/work/identity`
-   automatically.
+   `~/vm-keys` (override with `WORKDIR=`) appears inside the VM at
+   `~/work`, so your key is found at its conventional path
+   `~/work/identity` automatically.
 
 3. **Install the VM (fully automatic)**
 
    ```sh
-   WORKDIR=$HOME/vm-keys ./run-vm.sh
+   ./run-vm.sh
    ./run-vm.sh console        # watch; Ctrl-b d detaches
    ```
 
@@ -147,7 +147,7 @@ itself. Host prerequisites: `qemu`, `tmux`, `curl`.
 4. **Boot and log in**
 
    ```sh
-   WORKDIR=$HOME/vm-keys ./run-vm.sh     # WORKDIR needed on every start
+   ./run-vm.sh
    ssh -p 2222 dev@localhost             # password: dox-populi
    ```
 
@@ -167,7 +167,7 @@ itself. Host prerequisites: `qemu`, `tmux`, `curl`.
 
    ```sh
    cd ~/dox-populi
-   nix develop        # first run builds everything, takes a while
+   nix develop        # pre-built during install — ready immediately
    nix run .#server
    ```
 
@@ -200,5 +200,6 @@ itself. Host prerequisites: `qemu`, `tmux`, `curl`.
 ```
 
 Knobs: `MEM`, `CPUS`, `DISK`, `DISK_SIZE`, `WORKDIR`, `ISO`, `ISO_URL`,
-`INSTALL=1` (force reinstall boot). Factory reset: `rm dox-populi.qcow2`.
+`INSTALL=1` (force reinstall boot). `WORKDIR` defaults to `~/vm-keys`
+(skipped if it doesn't exist). Factory reset: `rm dox-populi.qcow2`.
 Fresh game world: in the VM, `nix run .#reset-local`.

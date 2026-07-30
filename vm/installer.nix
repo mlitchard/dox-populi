@@ -38,6 +38,9 @@
       pkgs.systemd
       pkgs.nixos-install-tools
       pkgs.nix
+      # nix shells out to `git` to fetch plain git+https flake inputs
+      # (e.g. paradox's nix-parsec) while evaluating this flake.
+      pkgs.git
     ];
     serviceConfig = {
       Type = "oneshot";
@@ -62,6 +65,19 @@
       mount -t ext4 /dev/vda1 /mnt
       echo "=== nixos-install: building the system inside the VM (takes a while) ==="
       nixos-install --no-root-passwd --flake ${self}#vm
+      echo "=== pre-building dev shell, server, and client into the installed system ==="
+      # Build from the installer side into the target store — the same
+      # pattern nixos-install itself uses to populate /mnt. (nixos-enter
+      # would chroot into /mnt, where a fresh install has no resolv.conf,
+      # so substituters would be unreachable.)
+      # NOTE: no `nix flake archive` here — it force-fetches ALL flake
+      # inputs, including gitlab-ci's git+ssh URL, which the installer
+      # can never reach (no ssh, no key). First `nix develop` in the VM
+      # re-downloads eval sources (nixpkgs, paradox) but builds nothing.
+      nix build --store /mnt --no-link \
+        ${self}#devShells.x86_64-linux.default \
+        ${self}#screeps-server \
+        ${self}#screeps-client
       echo "=== install complete — powering off; rerun ./run-vm.sh to boot ==="
       poweroff
     '';

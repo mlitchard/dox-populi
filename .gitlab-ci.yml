@@ -11,7 +11,8 @@ apps:cli:
     - nix build .#apps.x86_64-linux.cli.program --no-link --print-build-logs 2>/dev/null || nix build --no-link --print-build-logs "$(nix eval --raw --impure --expr 'builtins.head (builtins.attrNames (builtins.getContext (builtins.getFlake (toString ./.)).apps.x86_64-linux.cli.program))')"
   stage: build
 apps:client:
-  needs: []
+  needs:
+    - packages:screeps-client
   script:
     - nix build .#apps.x86_64-linux.client.program --no-link --print-build-logs 2>/dev/null || nix build --no-link --print-build-logs "$(nix eval --raw --impure --expr 'builtins.head (builtins.attrNames (builtins.getContext (builtins.getFlake (toString ./.)).apps.x86_64-linux.client.program))')"
   stage: build
@@ -192,6 +193,11 @@ packages:main:
     - packages:generated
   script:
     - nix build .#packages.x86_64-linux.main --no-link --print-build-logs
+  stage: build
+packages:screeps-client:
+  needs: []
+  script:
+    - nix build .#packages.x86_64-linux.screeps-client --no-link --print-build-logs
   stage: build
 packages:screeps-server:
   needs: []
