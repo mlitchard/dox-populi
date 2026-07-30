@@ -278,8 +278,8 @@ testers.runNixOSTest {
     # Server spawns storage/backend/engine children plus runner/processor
     # workers; the world db is an in-memory LokiJS.
     virtualisation = {
-      memorySize = 4096;
-      cores = 4;
+      memorySize = 32768;
+      cores = 8;
     };
 
     systemd.services.screeps = {

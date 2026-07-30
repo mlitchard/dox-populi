@@ -38,7 +38,7 @@
 # fetch-screeps-server — your own Steam account); play by pointing the
 # Steam client on the HOST at localhost:21025.
 #
-# Env knobs: MEM (default 8G), CPUS (default 4), DISK (default
+# Env knobs: MEM (default 32G), CPUS (default 8), DISK (default
 # ./dox-populi.qcow2), DISK_SIZE (default 40G), WORKDIR (host dir
 # shared into the guest at ~/work; default: ~/vm-keys, skipped if it
 # doesn't exist), INSTALL=1 (force an installer boot without
