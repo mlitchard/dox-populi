@@ -1,17 +1,22 @@
-import type { CreepRole, HarvesterState, UpgraderState } from "../generated/index";
+import type { CreepRole, CreepState } from "../generated/index";
 
 declare global {
   interface CreepMemory {
     role: CreepRole;
-    fsm?: HarvesterState | UpgraderState;
+    fsm?: CreepState;
   }
 
   interface Memory {
     stats?: {
       spawnEnergy: number;
       controllerProgress: number;
-      creeps: Record<string, { role: string; event: string; fsm: string }>;
-      errFullRecoveries: number;
+      controllerLevel: number;
+      extensionsBuilt: number;
+      extensionProgress: number;
+      creeps: Record<
+        string,
+        { role: string; event: string; fsm: string; action: string }
+      >;
     };
   }
 }
