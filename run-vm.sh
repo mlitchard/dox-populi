@@ -1,26 +1,22 @@
 #!/usr/bin/env bash
-# dox-populi dev VM manager (dubai vm-session pattern): qemu runs
+# dox-populi dev VM runner (dubai vm-session pattern): qemu runs
 # detached in a tmux session with its serial console on stdio, and you
 # connect to that console with `./run-vm.sh console` — a normal
 # terminal you can cut/paste in, and detach from (Ctrl-b d) without
 # stopping the VM.
 #
-# Host dependencies: qemu, tmux (+curl to download the ISO). NO nix —
-# nix runs INSIDE the VM:
+# This script only RUNS the VM. Provisioning is the flake's job:
 #
-#   First run:  creates dox-populi.qcow2 (empty disk) and boots
-#               dox-populi-installer.iso — an auto-installing ISO (the
-#               dubai installer-auto-dd pattern) with this repo
-#               embedded. Its systemd service partitions the disk,
-#               nixos-installs the dev environment (built entirely by
-#               the guest's nix), and powers off. Zero interaction —
-#               watch progress with `./run-vm.sh console`.
-#   After that: `./run-vm.sh` boots the installed system from disk.
+#   nix run .#installer-iso   one-time: creates dox-populi.qcow2 and
+#                             boots the auto-installing ISO, whose boot
+#                             service dd's the prebuilt system image
+#                             onto the disk and powers off
+#   ./run-vm.sh               boots the installed system from disk
 #
-# The ISO is built once by someone WITH nix:
-#   nix build .#installer-iso   → result/iso/dox-populi-installer.iso
+# Host dependencies: qemu, tmux. No nix needed to RUN the VM — nix
+# runs INSIDE it.
 #
-# Delete dox-populi.qcow2 for a factory reset.
+# Delete dox-populi.qcow2 for a factory reset (then reinstall).
 #
 # Commands:
 #   ./run-vm.sh [start]      start the VM (detached)
@@ -34,15 +30,13 @@
 #
 #   ssh -p 2222 dev@localhost   # password: dox-populi
 #
-# The Screeps server runs INSIDE the VM (install it there with
-# fetch-screeps-server — your own Steam account); play by pointing the
-# Steam client on the HOST at localhost:21025.
+# The Screeps server runs INSIDE the VM (nix run .#server — the
+# nix-vendored open-source server, pre-baked into the image); play by
+# pointing the Steam client on the HOST at localhost:21025.
 #
 # Env knobs: MEM (default 32G), CPUS (default 8), DISK (default
-# ./dox-populi.qcow2), DISK_SIZE (default 40G), WORKDIR (host dir
-# shared into the guest at ~/work; default: ~/vm-keys, skipped if it
-# doesn't exist), INSTALL=1 (force an installer boot without
-# recreating the disk).
+# ./dox-populi.qcow2), WORKDIR (host dir shared into the guest at
+# ~/work; default: ~/vm-keys, skipped if it doesn't exist).
 set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")" && pwd)"
@@ -50,14 +44,8 @@ DISK="${DISK:-dox-populi.qcow2}"
 # Host dir shared into the guest at ~/work (keys, client assets).
 # Skipped if the directory doesn't exist.
 WORKDIR="${WORKDIR:-$HOME/vm-keys}"
-DISK_SIZE="${DISK_SIZE:-40G}"
 MEM="${MEM:-32G}"
 CPUS="${CPUS:-8}"
-ISO="${ISO:-$REPO/dox-populi-installer.iso}"
-# Where non-nix users download the installer ISO from. Maintainer: after
-# publishing the built ISO (nix build .#installer-iso) as a release
-# asset, put its URL here so `./run-vm.sh` is fully self-serve.
-ISO_URL="${ISO_URL:-}"
 SESSION="${SESSION:-dox-populi-vm}"
 
 CMD="${1:-start}"
@@ -108,61 +96,24 @@ case "$CMD" in
       exit 0
     fi
 
-    # INSTALL=1 re-enters the installer without recreating the disk
-    # (e.g. after aborting a first install).
-    INSTALL="${INSTALL:-0}"
-    [ -f "$DISK" ] || INSTALL=1
-
-    # Resolve the installer ISO BEFORE creating the disk: if resolution
-    # fails we must exit with no disk on the ground, otherwise the next
-    # run sees an existing (empty) disk, keeps INSTALL=0, and boots a
-    # blank drive instead of the installer.
-    if [ "$INSTALL" = 1 ] && [ ! -f "$ISO" ]; then
-      # Maintainer convenience: pick up a freshly built ISO from
-      # ./result (whatever nix named it). `|| true`: an empty glob makes
-      # the substitution return nonzero, and without the guard set -e
-      # would kill the script here silently — before the error below
-      # ever prints.
-      BUILT=$(set -- "$REPO"/result/iso/*.iso; [ -f "$1" ] && echo "$1") || true
-      if [ -n "$BUILT" ]; then
-        ISO="$BUILT"
-      elif [ -n "$ISO_URL" ]; then
-        echo "downloading the dox-populi installer ISO (one-time)..."
-        curl -L -o "$ISO" "$ISO_URL"
-      else
-        cat >&2 <<EOF
-error: installer ISO not found: $ISO
-
-Download dox-populi-installer.iso from the project's releases and place
-it next to this script (or set ISO_URL= to fetch it automatically).
-Maintainers build it with: nix build .#installer-iso
-EOF
-        exit 1
-      fi
-    fi
-
-    # Disk creation only AFTER the ISO is resolved (see above).
+    # Running is this script's ONLY job — provisioning belongs to the
+    # flake. No disk means not installed; refuse, don't improvise.
     if [ ! -f "$DISK" ]; then
-      qemu-img create -f qcow2 "$DISK" "$DISK_SIZE"
-      echo "created $DISK ($DISK_SIZE)"
+      cat >&2 <<EOF
+error: no VM disk at $DISK
+
+Provision it first (one-time): nix run .#installer-iso
+EOF
+      exit 1
     fi
 
     tmux new-session -d -s "$SESSION" \
-      "INSTALL=$INSTALL DISK=$(printf %q "$DISK") MEM=$(printf %q "$MEM") \
-       CPUS=$(printf %q "$CPUS") ISO=$(printf %q "$ISO") \
+      "DISK=$(printf %q "$DISK") MEM=$(printf %q "$MEM") \
+       CPUS=$(printf %q "$CPUS") \
        QEMU=$(printf %q "$QEMU") \
        WORKDIR=$(printf %q "${WORKDIR:-}") $(printf %q "$0") _qemu"
 
     echo "VM started — serial console: $0 console   (Ctrl-b d = detach)"
-    if [ "$INSTALL" = 1 ]; then
-      cat <<EOF
-
-First run: the installer runs by itself — no interaction needed. It
-partitions the disk and builds the dev environment inside the VM
-(takes a while). Watch progress: $0 console. The VM powers off when
-the install finishes; then run $0 again to boot the installed system.
-EOF
-    fi
     exit 0
     ;;
 
@@ -184,11 +135,15 @@ EOF
         ;;
     esac
 
+    # The repo itself, shared read-write into the guest (9p, mounted at
+    # /home/dev/dox-populi by the guest's fstab): the guest works on the
+    # host's REAL working tree — history, branches, remote and all.
+    SHARE=(-virtfs "local,path=$REPO,mount_tag=repodir,security_model=mapped-xattr")
+
     # Optional host directory shared into the guest (9p, mounted at
     # /home/dev/work by the guest's fstab).
-    SHARE=()
     if [ -n "${WORKDIR:-}" ] && [ -d "$WORKDIR" ]; then
-      SHARE=(-virtfs "local,path=$WORKDIR,mount_tag=workdir,security_model=mapped-xattr")
+      SHARE+=(-virtfs "local,path=$WORKDIR,mount_tag=workdir,security_model=mapped-xattr")
 
       # Browser-client assets: put the game's package.nw in the shared
       # dir so `nix run .#client` inside the VM finds it (~/work/package.nw).
@@ -207,13 +162,6 @@ EOF
       fi
     fi
 
-    # Installer boot: the auto-installing ISO carries the repo source
-    # inside it and does everything itself (see vm/installer.nix).
-    INSTALLER=()
-    if [ "${INSTALL:-0}" = 1 ]; then
-      INSTALLER=(-cdrom "$ISO" -boot d)
-    fi
-
     # Port forwards: 2222 -> sshd, 21025/21026 -> Screeps server + CLI
     # (the host Steam client connects to localhost:21025), 8080 -> the
     # browser client bridge (nix run .#client inside the VM).
@@ -224,7 +172,6 @@ EOF
       -netdev user,id=net0,hostfwd=tcp::2222-:22,hostfwd=tcp::21025-:21025,hostfwd=tcp::21026-:21026,hostfwd=tcp::8080-:8080 \
       -device virtio-net-pci,netdev=net0 \
       "${SHARE[@]}" \
-      "${INSTALLER[@]}" \
       -display none \
       -serial mon:stdio \
       || { echo; echo "[qemu exited: $?] press Enter to close"; read -r; }

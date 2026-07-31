@@ -1,15 +1,19 @@
-# NixOS dev VM for people WITHOUT nix on their host. Nothing is built
-# on the host: run-vm.sh boots the official NixOS installer ISO in
-# qemu, and vm/install.sh (run inside the live installer) installs this
-# configuration (flake output nixosConfigurations.vm) onto the virtual
-# disk — the guest's own nix does all the building.
+# The NixOS dev VM. Nothing is built at install time: this
+# configuration is baked into a raw disk image (packages.vm-image,
+# disk layout in vm/disko.nix), and the installer ISO
+# (vm/installer.nix) just dd's that image onto the virtual disk —
+# provisioned one-time via `nix run .#installer-iso`, then run with
+# ./run-vm.sh (which needs only qemu + tmux, no nix).
 #
-# The guest is the real dev environment: nix + flakes, the repo seeded
-# at ~/dox-populi; everything (devshell, apps, the nix-vendored Screeps
-# server) is downloaded and built inside the VM. Nothing proprietary is
-# shipped or fetched — watching the game happens on the HOST (Steam
-# client or browser client bridge, both need the user's own game copy).
-{ pkgs, self, modulesPath, ... }:
+# The guest is the real dev environment: nix + flakes, the host's repo
+# live-mounted at ~/dox-populi (9p, via run-vm.sh). The devshell and
+# the nix-vendored Screeps server/client are pre-baked into the image
+# (system.extraDependencies, wired in flake.nix where self is in
+# scope — this module stays self-free for tests/vm.nix). Nothing
+# proprietary is shipped or fetched — watching the game happens on the
+# HOST (Steam client or browser client bridge, both need the user's
+# own game copy).
+{ pkgs, modulesPath, ... }:
 {
   # Virtio drivers in the initrd (disk, net, 9p).
   imports = [ (modulesPath + "/profiles/qemu-guest.nix") ];
@@ -26,13 +30,12 @@
   # run-vm.sh launches qemu -nographic: serial console is the terminal.
   boot.kernelParams = [ "console=ttyS0" ];
 
-  # Grub in the MBR of the virtual disk (partitioned by vm/install.sh).
-  boot.loader.grub.device = "/dev/vda";
-
-  fileSystems."/" = {
-    device = "/dev/disk/by-label/nixos";
-    fsType = "ext4";
-  };
+  # No bootloader or root-fs config here: vm/disko.nix declares the
+  # disk (GPT + EF02 BIOS-boot partition), and disko derives BOTH the
+  # fileSystems."/" definition and boot.loader.grub.devices from it —
+  # a hand-written grub.device would duplicate disko's ("duplicated
+  # devices in mirroredBoots"). In tests/vm.nix the harness supplies
+  # its own virtual disk and bootloader config instead.
 
   users.users.dev = {
     isNormalUser = true;
@@ -51,6 +54,15 @@
   # is fine (nofail).
   fileSystems."/home/dev/work" = {
     device = "workdir";
+    fsType = "9p";
+    options = [ "trans=virtio" "version=9p2000.L" "msize=524288" "rw" "nofail" ];
+  };
+
+  # The host's real repo, shared read-write by run-vm.sh (9p tag
+  # "repodir"): the guest works directly on the host's working tree —
+  # full history, branches, remote. Nothing to seed.
+  fileSystems."/home/dev/dox-populi" = {
+    device = "repodir";
     fsType = "9p";
     options = [ "trans=virtio" "version=9p2000.L" "msize=524288" "rw" "nofail" ];
   };
@@ -79,40 +91,14 @@
     pkgs.jq
   ];
 
-  # Seed the repo on first boot. The flake source has no .git, but the
-  # apps anchor themselves with `git rev-parse --show-toplevel`, so make
-  # it a real repository.
-  systemd.services.dox-populi-seed = {
-    description = "seed ~/dox-populi from the baked flake source";
-    wantedBy = [ "multi-user.target" ];
-    serviceConfig = {
-      Type = "oneshot";
-      User = "dev";
-      RemainAfterExit = true;
-    };
-    path = [ pkgs.git ];
-    script = ''
-      if [ ! -e /home/dev/dox-populi/.git ]; then
-        mkdir -p /home/dev/dox-populi
-        cp -r --no-preserve=mode ${self}/. /home/dev/dox-populi/
-        cd /home/dev/dox-populi
-        git init -q
-        git config user.name dev
-        git config user.email dev@dox-populi.local
-        git add -A
-        git commit -qm "seed from installed flake source"
-      fi
-    '';
-  };
-
   users.motd = ''
 
     dox-populi dev VM
     =================
     Quickstart:
       1. cd ~/dox-populi
-      2. nix develop                 — the dev shell (pre-built during
-                                       install — ready immediately)
+      2. nix develop                 — the dev shell (pre-baked into
+                                       the VM image — ready immediately)
       3. nix run .#server            — private server on host port 21025
                                        (nix-vendored — no Steam needed)
       4. nix run .#deploy-local      — provision account, push main.js,

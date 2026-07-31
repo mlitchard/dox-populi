@@ -16,21 +16,28 @@ testers.runNixOSTest {
 
   nodes.machine = {
     imports = [ nixosModule ];
-    # vm/module.nix receives `self` via specialArgs in the real
-    # nixosConfigurations.vm; provide it the module-args way here.
-    _module.args.self = self;
     virtualisation.memorySize = 2048;
+    # Mirror run-vm.sh's repodir share via the test driver's native
+    # shared-directory mechanism (mount tag = attr name, so "repodir"
+    # matches the module's fstab entry): backs the module's
+    # /home/dev/dox-populi 9p mount with the flake source.
+    virtualisation.sharedDirectories.repodir = {
+      source = "${self}";
+      target = "/home/dev/dox-populi";
+    };
   };
 
   testScript = ''
     machine.start()
     machine.wait_for_unit("multi-user.target")
 
-    with subtest("seed service populates ~/dox-populi as a real git repo"):
-        machine.wait_for_unit("dox-populi-seed.service")
-        machine.succeed("test -d /home/dev/dox-populi/.git")
+    with subtest("host repo is live-mounted at ~/dox-populi over 9p"):
+        # The mount is nofail, so multi-user.target does NOT wait for
+        # it: checking mountpoint right away races the mount unit —
+        # fast KVM hosts win, slow CI runners lose. Wait for the unit.
+        machine.wait_for_unit("home-dev-dox\\x2dpopuli.mount")
+        machine.succeed("mountpoint -q /home/dev/dox-populi")
         machine.succeed("test -f /home/dev/dox-populi/flake.nix")
-        machine.succeed("su - dev -c 'git -C ~/dox-populi rev-parse HEAD'")
 
     with subtest("sshd is up for host editor integration"):
         machine.wait_for_unit("sshd.service")
