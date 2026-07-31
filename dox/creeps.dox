@@ -1,9 +1,12 @@
 import std
 
-| Tutorial section 3 brain: harvester + upgrader + builder, plus the
-| generic-interpreter emit contract. The shell is a dumb fold: it reads
-| this file's exports (spawnQueue, behaviors, the three machines,
-| extension policy) and executes — it decides NOTHING.
+| Tutorial section 5 brain: harvester + upgrader + builder + tower, plus
+| the generic-interpreter emit contract. The shell is a dumb fold: it
+| reads this file's exports (spawnQueue, behaviors, the four machines,
+| extension + tower placement policy) and executes — it decides NOTHING.
+| The tower is the first NON-CREEP machine: same Machine/StateConfig/
+| Transition shape, its own event vocabulary, driven by the shell in a
+| separate structure loop.
 
 union CreepRole
   harvester
@@ -17,28 +20,35 @@ union BodyPart
 
 | State namespace design. Each machine is verified over its OWN state
 | union (generate rejects a machine whose state type has states the
-| machine never reaches), so machine states are per-role unions:
+| machine never reaches), so machine states are per-machine unions:
 |
-|   HarvesterState: harvesting, delivering
+|   HarvesterState: harvesting, delivering, supporting
 |   UpgraderState:  collecting, upgrading
 |   BuilderState:   gathering, building, assisting
+|   TowerState:     guarding, attacking, repairing
 |
-| CreepState is the shared NAMESPACE union over all seven names. It is
-| used only by the flat semantics — StateBehaviors totality and
-| RoleSpec.initial — never as a machine state type. In generated TS all
-| of these are string-literal types, so each role union is assignable
-| to CreepState.
+| CreepState is the shared NAMESPACE union over the eight CREEP names.
+| It is used only by the flat creep semantics — StateBehaviors totality
+| and RoleSpec.initial — never as a machine state type. TowerState is
+| deliberately NOT part of CreepState: the tower is not a creep, has its
+| own behaviors record (TowerStateBehaviors), and the shell drives
+| towers in a separate loop. In generated TS all of these are
+| string-literal types, so each role union is assignable to CreepState.
 |
-| Disjointness across roles is load-bearing: the shell's machine
-| registry uses the generated validHarvesterState / validUpgraderState
-| / validBuilderState functions as OWNERSHIP GUARDS — a creep whose
-| state fails a machine's valid*State check is foreign to that machine
-| and the machine is skipped. If two roles ever shared a state name,
-| ownership would be ambiguous — don't merge variants.
+| Disjointness across ALL machines — creep roles AND the tower — is
+| load-bearing: the shell's machine registry uses the generated
+| validHarvesterState / validUpgraderState / validBuilderState /
+| validTowerState functions as OWNERSHIP GUARDS — an actor whose state
+| fails a machine's valid*State check is foreign to that machine and the
+| machine is skipped. If two machines ever shared a state name,
+| ownership would be ambiguous — don't merge variants. That is why the
+| harvester's full-and-nowhere-to-deliver state is `supporting`, not
+| `assisting`: the builder already owns `assisting`.
 
 union HarvesterState
   harvesting
   delivering
+  supporting
 
 union UpgraderState
   collecting
@@ -49,9 +59,15 @@ union BuilderState
   building
   assisting
 
+union TowerState
+  guarding
+  attacking
+  repairing
+
 union CreepState
   harvesting
   delivering
+  supporting
   collecting
   upgrading
   gathering
@@ -59,56 +75,101 @@ union CreepState
   assisting
 
 | The shell observes the world and emits exactly ONE CreepEvent per
-| creep per tick, with priority:
+| creep per tick. There is NO priority and NO masking: the event is the
+| PRODUCT of three orthogonal facts, all of which ride every event.
 |
-|   storeEmpty > sinksFull > storeFull > sawSite|noSites
+|   store level  — empty     creep has zero energy
+|                  mid       neither empty nor full
+|                  full      creep has zero free capacity
+|   sink status  — SinksOpen some energy sink passes the free-energy
+|                            filter
+|                  SinksFull NO energy sink in the room passes the
+|                            free-energy filter
+|   site status  — Site      construction sites exist
+|                  NoSite    no construction sites exist
 |
-| Event semantics:
-|   storeEmpty — creep has zero energy (highest priority)
-|   sinksFull  — creep store is full AND every energy sink (spawn +
-|                all extensions) is full (compound observation)
-|   storeFull  — creep store is full, some sink has room
-|   sawSite    — none of the above; construction sites exist
-|   noSites    — none of the above; no construction sites exist
+| "Energy sink" = spawn + extensions + towers BELOW their energy
+| threshold (see towerContext: a tower is a sink only while its energy
+| < energyTarget — the same one filter drives delivery targeting AND
+| this observation, so the fact can never contradict the action).
 |
-| sinksFull is deliberately compound: "ready to deliver but nowhere to
-| put it." It only fires when the creep's store is ALSO full, which
-| prevents premature transitions (e.g. the upgrader switching to
-| upgrading with 2 energy just because the sinks are full). It also
-| supersedes the tutorial-2 ERR_FULL recovery: the shell observes sink
-| fullness BEFORE acting, so a transfer against a full sink is never
-| attempted and the old partial-transfer deadlock cannot occur.
+| NAMING CONTRACT (exact casing is load-bearing): each variant is the
+| literal concatenation storeLevel + sinkStatus + siteStatus. The shell
+| computes the event as the TypeScript template literal
 |
-| sawSite/noSites are the residual pair replacing the old bare `tick`:
-| when nothing urgent is happening, the one remaining fact the brain
-| needs is whether there is construction work in the world. Exactly one
-| of the two fires, so the machines stay total over all five events.
+|   `${store}${sinks}${sites}`
+|
+| with store in {"empty","mid","full"}, sinks in
+| {"SinksOpen","SinksFull"}, sites in {"Site","NoSite"} — and tsc proves
+| the inferred template-literal union is EXACTLY the generated
+| CreepEvent union. Rename a variant here and the shell fails to
+| typecheck; add a fourth store level and every machine below fails
+| generate's coverage check. Two checkers, one vocabulary.
+|
+| WHY a product instead of the old priority chain
+| (storeEmpty > sinksFull > storeFull > sawSite|noSites): priority
+| masking caused two live bugs.
+|
+|   1. The FROZEN builder: storeFull outranked the residual noSites, so
+|      a full builder in `building` with zero sites kept receiving
+|      storeFull, self-looped, resolved no build target, and idled
+|      until TTL death.
+|   2. The BLIND builder: sinksFull outranked sawSite, so a full
+|      builder under sink saturation could never observe that sites
+|      existed — the one fact its role runs on.
+|
+| With a product, masking is UNREPRESENTABLE: every event carries the
+| store level AND the sink status AND the site status. There is nothing
+| left to outrank. The old compound sinksFull ("store full AND sinks
+| full") dissolves into the fullSinksFull* corner of the product, and
+| the old residual pair sawSite/noSites becomes the always-present
+| Site/NoSite dimension. The observe-before-act property that retired
+| the tutorial-2 ERR_FULL recovery is unchanged: the shell still reads
+| sink fullness before any transfer is attempted.
+|
+| Variant order is systematic: store level outermost (empty, mid,
+| full), then sinks (Open, Full), then sites (Site, NoSite).
 
 union CreepEvent
-  storeEmpty
-  storeFull
-  sinksFull
-  sawSite
-  noSites
+  emptySinksOpenSite
+  emptySinksOpenNoSite
+  emptySinksFullSite
+  emptySinksFullNoSite
+  midSinksOpenSite
+  midSinksOpenNoSite
+  midSinksFullSite
+  midSinksFullNoSite
+  fullSinksOpenSite
+  fullSinksOpenNoSite
+  fullSinksFullSite
+  fullSinksFullNoSite
 
 | The FIXED action vocabulary the shell knows how to execute. States
-| are tagged with actions (see StateBehaviors); a novel state added by
-| a future spec mutation still maps into this vocabulary, so the shell
-| never needs new wiring. idle is currently unused by any state but
-| stays in the vocabulary — it pairs with TargetKind.none.
+| are tagged with actions (see StateBehaviors / TowerStateBehaviors); a
+| novel state added by a future spec mutation still maps into this
+| vocabulary, so the shell never needs new wiring. idle pairs with
+| TargetKind.none and is the tower's guarding behavior. attack and
+| repair are tower verbs — creep states never use them today, but the
+| vocabulary is shared: one Action union, one shell switch.
 
 union Action
   harvest
   transfer
   upgrade
   build
+  attack
+  repair
   idle
 
 | The FIXED target-selector vocabulary. The shell resolves each kind:
 |   source           — closest active energy source
-|   energySink       — closest spawn|extension with free energy capacity
+|   energySink       — closest spawn|extension|below-threshold tower
+|                      with free energy capacity (towers count only
+|                      while energy < towerContext.energyTarget)
 |   controller       — the room controller
 |   constructionSite — first construction site
+|   hostile          — closest hostile creep from the actor's pos
+|   damagedStructure — closest owned-room structure with hits < hitsMax
 |   none             — no target (pairs with Action.idle)
 
 union TargetKind
@@ -116,6 +177,8 @@ union TargetKind
   energySink
   controller
   constructionSite
+  hostile
+  damagedStructure
   none
 
 | A state's behavior: what to do and at what.
@@ -131,6 +194,7 @@ type Behavior
 type StateBehaviors
   harvesting: Behavior
   delivering: Behavior
+  supporting: Behavior
   collecting: Behavior
   upgrading: Behavior
   gathering: Behavior
@@ -146,6 +210,17 @@ deliveringBehavior: Behavior
   Behavior:
     action: Action.transfer
     target: TargetKind.energySink
+
+| supporting = the harvester's full-and-nowhere-to-deliver escape:
+| spend the load on the controller instead of stalling on an empty
+| transfer-target set. Same action pair as the builder's assisting, but
+| its own name — cross-machine state disjointness is load-bearing (see
+| the namespace comment above).
+
+supportingBehavior: Behavior
+  Behavior:
+    action: Action.upgrade
+    target: TargetKind.controller
 
 collectingBehavior: Behavior
   Behavior:
@@ -176,6 +251,7 @@ behaviors: StateBehaviors
   StateBehaviors:
     harvesting: harvestingBehavior
     delivering: deliveringBehavior
+    supporting: supportingBehavior
     collecting: collectingBehavior
     upgrading: upgradingBehavior
     gathering: gatheringBehavior
@@ -302,11 +378,60 @@ offsetNorthwest: SiteOffset
 extensionOffsets: [SiteOffset]
   [offsetEast, offsetWest, offsetSouth, offsetNorth, offsetSoutheast, offsetNorthwest]
 
-| Per-creep FSMs. Three machines share CreepEvent/CreepContext but each
-| has its OWN state union, so generate verifies each machine total and
-| reachable over exactly its own states. Every state handles every
-| event, self-loops written out — total and explicit, no implicit
-| fallthrough.
+| Tower placement policy — brain data, mirrors the extension mechanism
+| exactly: the shell places STRUCTURE_TOWER construction sites at these
+| offsets from Spawn1 until desiredTowers exist (built or in progress),
+| once RCL allows it (towers unlock at RCL 3); server legality decides
+| whether a candidate sticks, so the list is ordered fallbacks. The
+| offsets are chosen to be DISJOINT from every extensionOffsets cell —
+| extensions own (2,0),(-2,0),(0,2),(0,-2),(2,2),(-2,-2); towers take
+| the remaining diagonals and the distance-3 cardinals.
+
+desiredTowers: Integer
+  1
+
+offsetSouthwest: SiteOffset
+  SiteOffset:
+    dx: -2
+    dy: 2
+
+offsetNortheast: SiteOffset
+  SiteOffset:
+    dx: 2
+    dy: -2
+
+offsetFarSouth: SiteOffset
+  SiteOffset:
+    dx: 0
+    dy: 3
+
+offsetFarEast: SiteOffset
+  SiteOffset:
+    dx: 3
+    dy: 0
+
+offsetFarNorth: SiteOffset
+  SiteOffset:
+    dx: 0
+    dy: -3
+
+offsetFarWest: SiteOffset
+  SiteOffset:
+    dx: -3
+    dy: 0
+
+towerOffsets: [SiteOffset]
+  [offsetSouthwest, offsetNortheast, offsetFarSouth, offsetFarEast, offsetFarNorth, offsetFarWest]
+
+| Per-creep FSMs. Three creep machines share CreepEvent/CreepContext
+| but each has its OWN state union, so generate verifies each machine
+| total and reachable over exactly its own states. Every state handles
+| every one of the 12 events, self-loops written out — total and
+| explicit, no implicit fallthrough. Transitions are named top-level
+| values and REUSED across states of the same machine wherever
+| event+target coincide: state names are disjoint across all machines,
+| so a name like toBuildingFullSinksOpenSite is globally unambiguous —
+| the target names the machine.
 
 | Context carries the same tier list as RoleSpec.bodies — a machine's
 | context must never contradict the spawn policy, so there is no
@@ -328,79 +453,151 @@ builderContext: CreepContext
   role: CreepRole.builder
   bodies: workerBodyTiers
 
-| Harvester machine: harvest until full, deliver until empty. sinksFull
-| sends delivering back to harvesting (nowhere to put the energy).
-| Construction-site events are noise to this role: explicit self-loops.
+| Harvester machine: harvest until full, deliver until empty; nowhere
+| to put it -> support the controller.
+|
+| The supporting state is the full-and-nowhere-to-deliver escape. Two
+| routes in:
+|
+|   - full + SinksFull anywhere: a full harvester with a saturated sink
+|     set has an EMPTY transfer-target set; delivering would be a
+|     null-target stall.
+|   - mid + SinksFull while delivering or supporting (CRITICAL): a
+|     mid-store harvester in delivering whose sinks just saturated is
+|     the exact freeze signature of the old builder bug — the behavior
+|     says transfer, the target set is empty, no API call happens, the
+|     store never drains, the event never changes. Staying put is a
+|     null-target stall; spend the remainder on the controller instead.
+|
+| mid + SinksOpen while supporting goes BACK to delivering: sinks
+| reopened, and delivery outranks controller-feeding for this role —
+| it powers spawning. Site presence is noise to this role: every
+| transition below is Site/NoSite-symmetric.
 
-harvestingStoreEmpty: Transition HarvesterState CreepEvent CreepContext
+| — empty in any harvester state: back to the source (8 values; the
+|   mid* four are the harvesting self-loops).
+
+toHarvestingEmptySinksOpenSite: Transition HarvesterState CreepEvent CreepContext
   Transition:
-    event: CreepEvent.storeEmpty
+    event: CreepEvent.emptySinksOpenSite
     target: HarvesterState.harvesting
     guard: ()
 
-harvestingStoreFull: Transition HarvesterState CreepEvent CreepContext
+toHarvestingEmptySinksOpenNoSite: Transition HarvesterState CreepEvent CreepContext
   Transition:
-    event: CreepEvent.storeFull
+    event: CreepEvent.emptySinksOpenNoSite
+    target: HarvesterState.harvesting
+    guard: ()
+
+toHarvestingEmptySinksFullSite: Transition HarvesterState CreepEvent CreepContext
+  Transition:
+    event: CreepEvent.emptySinksFullSite
+    target: HarvesterState.harvesting
+    guard: ()
+
+toHarvestingEmptySinksFullNoSite: Transition HarvesterState CreepEvent CreepContext
+  Transition:
+    event: CreepEvent.emptySinksFullNoSite
+    target: HarvesterState.harvesting
+    guard: ()
+
+toHarvestingMidSinksOpenSite: Transition HarvesterState CreepEvent CreepContext
+  Transition:
+    event: CreepEvent.midSinksOpenSite
+    target: HarvesterState.harvesting
+    guard: ()
+
+toHarvestingMidSinksOpenNoSite: Transition HarvesterState CreepEvent CreepContext
+  Transition:
+    event: CreepEvent.midSinksOpenNoSite
+    target: HarvesterState.harvesting
+    guard: ()
+
+toHarvestingMidSinksFullSite: Transition HarvesterState CreepEvent CreepContext
+  Transition:
+    event: CreepEvent.midSinksFullSite
+    target: HarvesterState.harvesting
+    guard: ()
+
+toHarvestingMidSinksFullNoSite: Transition HarvesterState CreepEvent CreepContext
+  Transition:
+    event: CreepEvent.midSinksFullNoSite
+    target: HarvesterState.harvesting
+    guard: ()
+
+| — open sinks with energy on board: deliver (mid* used by delivering/
+|   supporting, full* used by all three states).
+
+toDeliveringMidSinksOpenSite: Transition HarvesterState CreepEvent CreepContext
+  Transition:
+    event: CreepEvent.midSinksOpenSite
     target: HarvesterState.delivering
     guard: ()
 
-harvestingSinksFull: Transition HarvesterState CreepEvent CreepContext
+toDeliveringMidSinksOpenNoSite: Transition HarvesterState CreepEvent CreepContext
   Transition:
-    event: CreepEvent.sinksFull
-    target: HarvesterState.harvesting
+    event: CreepEvent.midSinksOpenNoSite
+    target: HarvesterState.delivering
     guard: ()
 
-harvestingSawSite: Transition HarvesterState CreepEvent CreepContext
+toDeliveringFullSinksOpenSite: Transition HarvesterState CreepEvent CreepContext
   Transition:
-    event: CreepEvent.sawSite
-    target: HarvesterState.harvesting
+    event: CreepEvent.fullSinksOpenSite
+    target: HarvesterState.delivering
     guard: ()
 
-harvestingNoSites: Transition HarvesterState CreepEvent CreepContext
+toDeliveringFullSinksOpenNoSite: Transition HarvesterState CreepEvent CreepContext
   Transition:
-    event: CreepEvent.noSites
-    target: HarvesterState.harvesting
+    event: CreepEvent.fullSinksOpenNoSite
+    target: HarvesterState.delivering
+    guard: ()
+
+| — saturated sinks with energy on board: support the controller (the
+|   null-target-stall escapes documented above).
+
+toSupportingMidSinksFullSite: Transition HarvesterState CreepEvent CreepContext
+  Transition:
+    event: CreepEvent.midSinksFullSite
+    target: HarvesterState.supporting
+    guard: ()
+
+toSupportingMidSinksFullNoSite: Transition HarvesterState CreepEvent CreepContext
+  Transition:
+    event: CreepEvent.midSinksFullNoSite
+    target: HarvesterState.supporting
+    guard: ()
+
+toSupportingFullSinksFullSite: Transition HarvesterState CreepEvent CreepContext
+  Transition:
+    event: CreepEvent.fullSinksFullSite
+    target: HarvesterState.supporting
+    guard: ()
+
+toSupportingFullSinksFullNoSite: Transition HarvesterState CreepEvent CreepContext
+  Transition:
+    event: CreepEvent.fullSinksFullNoSite
+    target: HarvesterState.supporting
     guard: ()
 
 harvestingConfig: StateConfig HarvesterState CreepEvent CreepContext
   StateConfig:
-    transitions: [harvestingStoreEmpty, harvestingStoreFull, harvestingSinksFull, harvestingSawSite, harvestingNoSites]
+    transitions: [toHarvestingEmptySinksOpenSite, toHarvestingEmptySinksOpenNoSite, toHarvestingEmptySinksFullSite, toHarvestingEmptySinksFullNoSite, toHarvestingMidSinksOpenSite, toHarvestingMidSinksOpenNoSite, toHarvestingMidSinksFullSite, toHarvestingMidSinksFullNoSite, toDeliveringFullSinksOpenSite, toDeliveringFullSinksOpenNoSite, toSupportingFullSinksFullSite, toSupportingFullSinksFullNoSite]
     label: "Harvesting"
 
-deliveringStoreEmpty: Transition HarvesterState CreepEvent CreepContext
-  Transition:
-    event: CreepEvent.storeEmpty
-    target: HarvesterState.harvesting
-    guard: ()
-
-deliveringStoreFull: Transition HarvesterState CreepEvent CreepContext
-  Transition:
-    event: CreepEvent.storeFull
-    target: HarvesterState.delivering
-    guard: ()
-
-deliveringSinksFull: Transition HarvesterState CreepEvent CreepContext
-  Transition:
-    event: CreepEvent.sinksFull
-    target: HarvesterState.harvesting
-    guard: ()
-
-deliveringSawSite: Transition HarvesterState CreepEvent CreepContext
-  Transition:
-    event: CreepEvent.sawSite
-    target: HarvesterState.delivering
-    guard: ()
-
-deliveringNoSites: Transition HarvesterState CreepEvent CreepContext
-  Transition:
-    event: CreepEvent.noSites
-    target: HarvesterState.delivering
-    guard: ()
+| delivering and supporting have IDENTICAL transition tables (empty ->
+| harvesting; SinksOpen with energy -> delivering; SinksFull with
+| energy -> supporting): both states are "energy on board, dispose of
+| it", and where to dispose depends only on the sink dimension.
 
 deliveringConfig: StateConfig HarvesterState CreepEvent CreepContext
   StateConfig:
-    transitions: [deliveringStoreEmpty, deliveringStoreFull, deliveringSinksFull, deliveringSawSite, deliveringNoSites]
+    transitions: [toHarvestingEmptySinksOpenSite, toHarvestingEmptySinksOpenNoSite, toHarvestingEmptySinksFullSite, toHarvestingEmptySinksFullNoSite, toDeliveringMidSinksOpenSite, toDeliveringMidSinksOpenNoSite, toSupportingMidSinksFullSite, toSupportingMidSinksFullNoSite, toDeliveringFullSinksOpenSite, toDeliveringFullSinksOpenNoSite, toSupportingFullSinksFullSite, toSupportingFullSinksFullNoSite]
     label: "Delivering"
+
+supportingConfig: StateConfig HarvesterState CreepEvent CreepContext
+  StateConfig:
+    transitions: [toHarvestingEmptySinksOpenSite, toHarvestingEmptySinksOpenNoSite, toHarvestingEmptySinksFullSite, toHarvestingEmptySinksFullNoSite, toDeliveringMidSinksOpenSite, toDeliveringMidSinksOpenNoSite, toSupportingMidSinksFullSite, toSupportingMidSinksFullNoSite, toDeliveringFullSinksOpenSite, toDeliveringFullSinksOpenNoSite, toSupportingFullSinksFullSite, toSupportingFullSinksFullNoSite]
+    label: "Supporting"
 
 harvesterMachine: Machine HarvesterState CreepEvent CreepContext
   Machine:
@@ -408,81 +605,133 @@ harvesterMachine: Machine HarvesterState CreepEvent CreepContext
     initial: HarvesterState.harvesting
     context: harvesterContext
     finals: {}
-    states: {HarvesterState.harvesting: harvestingConfig, HarvesterState.delivering: deliveringConfig}
+    states: {HarvesterState.harvesting: harvestingConfig, HarvesterState.delivering: deliveringConfig, HarvesterState.supporting: supportingConfig}
 
-| Upgrader machine: collect until full, upgrade until empty. sinksFull
-| sends collecting to upgrading (this role delivers to the controller,
-| not the sinks — a full spawn is the signal to stop waiting and go
-| upgrade with what you have).
+| Upgrader machine: collect until full, upgrade until empty. The sink
+| and site dimensions are IRRELEVANT to this role — it delivers to the
+| controller, not the sinks, and it never builds — so every transition
+| depends only on the store level: full anywhere -> upgrading, empty
+| anywhere -> collecting, mid self-loops.
+|
+| The old collectingSinksFull -> upgrading shortcut dissolves here: the
+| old compound sinksFull only fired when the creep's store was ALSO
+| full, so it was never anything but a proxy for "store full" wearing a
+| sink costume. Under the product vocabulary the proxy is exposed —
+| full* covers every case the shortcut ever handled, and the sink
+| dimension goes back to being noise for this role.
 
-collectingStoreEmpty: Transition UpgraderState CreepEvent CreepContext
+| — full in any upgrader state: go upgrade (also the upgrading full
+|   self-loops).
+
+toUpgradingFullSinksOpenSite: Transition UpgraderState CreepEvent CreepContext
   Transition:
-    event: CreepEvent.storeEmpty
-    target: UpgraderState.collecting
-    guard: ()
-
-collectingStoreFull: Transition UpgraderState CreepEvent CreepContext
-  Transition:
-    event: CreepEvent.storeFull
+    event: CreepEvent.fullSinksOpenSite
     target: UpgraderState.upgrading
     guard: ()
 
-collectingSinksFull: Transition UpgraderState CreepEvent CreepContext
+toUpgradingFullSinksOpenNoSite: Transition UpgraderState CreepEvent CreepContext
   Transition:
-    event: CreepEvent.sinksFull
+    event: CreepEvent.fullSinksOpenNoSite
     target: UpgraderState.upgrading
     guard: ()
 
-collectingSawSite: Transition UpgraderState CreepEvent CreepContext
+toUpgradingFullSinksFullSite: Transition UpgraderState CreepEvent CreepContext
   Transition:
-    event: CreepEvent.sawSite
+    event: CreepEvent.fullSinksFullSite
+    target: UpgraderState.upgrading
+    guard: ()
+
+toUpgradingFullSinksFullNoSite: Transition UpgraderState CreepEvent CreepContext
+  Transition:
+    event: CreepEvent.fullSinksFullNoSite
+    target: UpgraderState.upgrading
+    guard: ()
+
+| — empty in any upgrader state: back to the source (also the
+|   collecting empty self-loops).
+
+toCollectingEmptySinksOpenSite: Transition UpgraderState CreepEvent CreepContext
+  Transition:
+    event: CreepEvent.emptySinksOpenSite
     target: UpgraderState.collecting
     guard: ()
 
-collectingNoSites: Transition UpgraderState CreepEvent CreepContext
+toCollectingEmptySinksOpenNoSite: Transition UpgraderState CreepEvent CreepContext
   Transition:
-    event: CreepEvent.noSites
+    event: CreepEvent.emptySinksOpenNoSite
     target: UpgraderState.collecting
+    guard: ()
+
+toCollectingEmptySinksFullSite: Transition UpgraderState CreepEvent CreepContext
+  Transition:
+    event: CreepEvent.emptySinksFullSite
+    target: UpgraderState.collecting
+    guard: ()
+
+toCollectingEmptySinksFullNoSite: Transition UpgraderState CreepEvent CreepContext
+  Transition:
+    event: CreepEvent.emptySinksFullNoSite
+    target: UpgraderState.collecting
+    guard: ()
+
+| — mid self-loops: keep doing what you're doing.
+
+toCollectingMidSinksOpenSite: Transition UpgraderState CreepEvent CreepContext
+  Transition:
+    event: CreepEvent.midSinksOpenSite
+    target: UpgraderState.collecting
+    guard: ()
+
+toCollectingMidSinksOpenNoSite: Transition UpgraderState CreepEvent CreepContext
+  Transition:
+    event: CreepEvent.midSinksOpenNoSite
+    target: UpgraderState.collecting
+    guard: ()
+
+toCollectingMidSinksFullSite: Transition UpgraderState CreepEvent CreepContext
+  Transition:
+    event: CreepEvent.midSinksFullSite
+    target: UpgraderState.collecting
+    guard: ()
+
+toCollectingMidSinksFullNoSite: Transition UpgraderState CreepEvent CreepContext
+  Transition:
+    event: CreepEvent.midSinksFullNoSite
+    target: UpgraderState.collecting
+    guard: ()
+
+toUpgradingMidSinksOpenSite: Transition UpgraderState CreepEvent CreepContext
+  Transition:
+    event: CreepEvent.midSinksOpenSite
+    target: UpgraderState.upgrading
+    guard: ()
+
+toUpgradingMidSinksOpenNoSite: Transition UpgraderState CreepEvent CreepContext
+  Transition:
+    event: CreepEvent.midSinksOpenNoSite
+    target: UpgraderState.upgrading
+    guard: ()
+
+toUpgradingMidSinksFullSite: Transition UpgraderState CreepEvent CreepContext
+  Transition:
+    event: CreepEvent.midSinksFullSite
+    target: UpgraderState.upgrading
+    guard: ()
+
+toUpgradingMidSinksFullNoSite: Transition UpgraderState CreepEvent CreepContext
+  Transition:
+    event: CreepEvent.midSinksFullNoSite
+    target: UpgraderState.upgrading
     guard: ()
 
 collectingConfig: StateConfig UpgraderState CreepEvent CreepContext
   StateConfig:
-    transitions: [collectingStoreEmpty, collectingStoreFull, collectingSinksFull, collectingSawSite, collectingNoSites]
+    transitions: [toCollectingEmptySinksOpenSite, toCollectingEmptySinksOpenNoSite, toCollectingEmptySinksFullSite, toCollectingEmptySinksFullNoSite, toCollectingMidSinksOpenSite, toCollectingMidSinksOpenNoSite, toCollectingMidSinksFullSite, toCollectingMidSinksFullNoSite, toUpgradingFullSinksOpenSite, toUpgradingFullSinksOpenNoSite, toUpgradingFullSinksFullSite, toUpgradingFullSinksFullNoSite]
     label: "Collecting"
-
-upgradingStoreEmpty: Transition UpgraderState CreepEvent CreepContext
-  Transition:
-    event: CreepEvent.storeEmpty
-    target: UpgraderState.collecting
-    guard: ()
-
-upgradingStoreFull: Transition UpgraderState CreepEvent CreepContext
-  Transition:
-    event: CreepEvent.storeFull
-    target: UpgraderState.upgrading
-    guard: ()
-
-upgradingSinksFull: Transition UpgraderState CreepEvent CreepContext
-  Transition:
-    event: CreepEvent.sinksFull
-    target: UpgraderState.upgrading
-    guard: ()
-
-upgradingSawSite: Transition UpgraderState CreepEvent CreepContext
-  Transition:
-    event: CreepEvent.sawSite
-    target: UpgraderState.upgrading
-    guard: ()
-
-upgradingNoSites: Transition UpgraderState CreepEvent CreepContext
-  Transition:
-    event: CreepEvent.noSites
-    target: UpgraderState.upgrading
-    guard: ()
 
 upgradingConfig: StateConfig UpgraderState CreepEvent CreepContext
   StateConfig:
-    transitions: [upgradingStoreEmpty, upgradingStoreFull, upgradingSinksFull, upgradingSawSite, upgradingNoSites]
+    transitions: [toCollectingEmptySinksOpenSite, toCollectingEmptySinksOpenNoSite, toCollectingEmptySinksFullSite, toCollectingEmptySinksFullNoSite, toUpgradingMidSinksOpenSite, toUpgradingMidSinksOpenNoSite, toUpgradingMidSinksFullSite, toUpgradingMidSinksFullNoSite, toUpgradingFullSinksOpenSite, toUpgradingFullSinksOpenNoSite, toUpgradingFullSinksFullSite, toUpgradingFullSinksFullNoSite]
     label: "Upgrading"
 
 upgraderMachine: Machine UpgraderState CreepEvent CreepContext
@@ -493,127 +742,172 @@ upgraderMachine: Machine UpgraderState CreepEvent CreepContext
     finals: {}
     states: {UpgraderState.collecting: collectingConfig, UpgraderState.upgrading: upgradingConfig}
 
-| Builder machine: gather until full, build while sites exist. When the
-| last site finishes (noSites while building), fall back to assisting —
-| upgrade the controller — instead of standing around. Spec decision:
-| no wasted creep-ticks. sawSite while assisting pulls the builder back
-| to building.
+| Builder machine: gather until full; full -> build if sites exist,
+| else assist; never freeze, never go blind. The sink dimension is
+| irrelevant to this role — a builder consumes energy on sites and the
+| controller, it never transfers — so every transition below is
+| SinksOpen/SinksFull-symmetric.
 |
-| storeFull while ALREADY IN building also falls back to assisting.
-| Timing argument: events are computed at tick start, before actions.
-| A builder that enters building on storeFull builds that same tick, so
-| the next tick it has spent energy and emits sawSite — an honestly
-| working builder never observes storeFull in the building state. If it
-| DOES, the previous build spent nothing (no reachable site), and since
-| storeFull outranks the residual noSites in the emit priority, the old
-| building self-loop was an unreachable-escape freeze: full builder,
-| zero sites, action=build resolving no target, idle until TTL death.
-| Assisting drains the store on the controller; storeEmpty then routes
-| back to gathering as usual.
+| BOTH historical bugs of the priority-chain vocabulary are now
+| UNREPRESENTABLE, and this machine is where they lived:
+|
+|   1. The FROZEN builder (historical): under the old chain, storeFull
+|      outranked the residual noSites, so a full builder in building
+|      with zero sites kept receiving storeFull. The old building
+|      self-loop on storeFull was an unreachable-escape freeze: full
+|      builder, zero sites, action=build resolving no target, idle
+|      until TTL death (births 105 / deaths 100 on the live server).
+|      The eventual fix routed building --storeFull--> assisting — an
+|      EXACT move only because of the timing argument: events are
+|      computed at tick start, before actions, and an honest builder
+|      entering building spends energy the same tick, so full while IN
+|      building implies the previous build spent nothing. Under the
+|      product that inference is unnecessary: full*NoSite says
+|      directly "full and no site exists" — the escape is observed,
+|      not deduced.
+|   2. The BLIND builder (historical): the old compound sinksFull
+|      outranked sawSite, so a full builder under sink saturation
+|      could never see a site. Now fullSinksFullSite -> building: the
+|      site fact rides the event no matter what the sinks are doing.
+|
+| full*Site while ALREADY IN building stays in building: by the same
+| timing argument, an honest builder should not observe full here — if
+| it does, the previous build spent nothing (site unreachable this
+| tick, ramp-up ordering, etc.). But the site is VISIBLE, and staying
+| on it is honest retry against an observed target — not masking. The
+| freeze case was full+NoSite being masked, and that now has its own
+| pair of events routing to assisting.
+|
+| mid*NoSite while building -> assisting: the last site finished
+| mid-drain; spend the remainder on the controller instead of
+| null-target stalling. Spec decision unchanged from section 3: no
+| wasted creep-ticks. mid*Site while assisting pulls the builder back
+| to building.
 
-gatheringStoreEmpty: Transition BuilderState CreepEvent CreepContext
+| — empty in any builder state: back to the source (the mid* four are
+|   the gathering self-loops).
+
+toGatheringEmptySinksOpenSite: Transition BuilderState CreepEvent CreepContext
   Transition:
-    event: CreepEvent.storeEmpty
+    event: CreepEvent.emptySinksOpenSite
     target: BuilderState.gathering
     guard: ()
 
-gatheringStoreFull: Transition BuilderState CreepEvent CreepContext
+toGatheringEmptySinksOpenNoSite: Transition BuilderState CreepEvent CreepContext
   Transition:
-    event: CreepEvent.storeFull
+    event: CreepEvent.emptySinksOpenNoSite
+    target: BuilderState.gathering
+    guard: ()
+
+toGatheringEmptySinksFullSite: Transition BuilderState CreepEvent CreepContext
+  Transition:
+    event: CreepEvent.emptySinksFullSite
+    target: BuilderState.gathering
+    guard: ()
+
+toGatheringEmptySinksFullNoSite: Transition BuilderState CreepEvent CreepContext
+  Transition:
+    event: CreepEvent.emptySinksFullNoSite
+    target: BuilderState.gathering
+    guard: ()
+
+toGatheringMidSinksOpenSite: Transition BuilderState CreepEvent CreepContext
+  Transition:
+    event: CreepEvent.midSinksOpenSite
+    target: BuilderState.gathering
+    guard: ()
+
+toGatheringMidSinksOpenNoSite: Transition BuilderState CreepEvent CreepContext
+  Transition:
+    event: CreepEvent.midSinksOpenNoSite
+    target: BuilderState.gathering
+    guard: ()
+
+toGatheringMidSinksFullSite: Transition BuilderState CreepEvent CreepContext
+  Transition:
+    event: CreepEvent.midSinksFullSite
+    target: BuilderState.gathering
+    guard: ()
+
+toGatheringMidSinksFullNoSite: Transition BuilderState CreepEvent CreepContext
+  Transition:
+    event: CreepEvent.midSinksFullNoSite
+    target: BuilderState.gathering
+    guard: ()
+
+| — a site exists and there is energy on board: build (mid* used by
+|   building/assisting, full* used by all three states — including the
+|   formerly-blind fullSinksFullSite).
+
+toBuildingMidSinksOpenSite: Transition BuilderState CreepEvent CreepContext
+  Transition:
+    event: CreepEvent.midSinksOpenSite
     target: BuilderState.building
     guard: ()
 
-gatheringSinksFull: Transition BuilderState CreepEvent CreepContext
+toBuildingMidSinksFullSite: Transition BuilderState CreepEvent CreepContext
   Transition:
-    event: CreepEvent.sinksFull
-    target: BuilderState.gathering
+    event: CreepEvent.midSinksFullSite
+    target: BuilderState.building
     guard: ()
 
-gatheringSawSite: Transition BuilderState CreepEvent CreepContext
+toBuildingFullSinksOpenSite: Transition BuilderState CreepEvent CreepContext
   Transition:
-    event: CreepEvent.sawSite
-    target: BuilderState.gathering
+    event: CreepEvent.fullSinksOpenSite
+    target: BuilderState.building
     guard: ()
 
-gatheringNoSites: Transition BuilderState CreepEvent CreepContext
+toBuildingFullSinksFullSite: Transition BuilderState CreepEvent CreepContext
   Transition:
-    event: CreepEvent.noSites
-    target: BuilderState.gathering
+    event: CreepEvent.fullSinksFullSite
+    target: BuilderState.building
+    guard: ()
+
+| — no site and energy on board: assist the controller (the formerly-
+|   frozen full+NoSite corner, now directly observed).
+
+toAssistingMidSinksOpenNoSite: Transition BuilderState CreepEvent CreepContext
+  Transition:
+    event: CreepEvent.midSinksOpenNoSite
+    target: BuilderState.assisting
+    guard: ()
+
+toAssistingMidSinksFullNoSite: Transition BuilderState CreepEvent CreepContext
+  Transition:
+    event: CreepEvent.midSinksFullNoSite
+    target: BuilderState.assisting
+    guard: ()
+
+toAssistingFullSinksOpenNoSite: Transition BuilderState CreepEvent CreepContext
+  Transition:
+    event: CreepEvent.fullSinksOpenNoSite
+    target: BuilderState.assisting
+    guard: ()
+
+toAssistingFullSinksFullNoSite: Transition BuilderState CreepEvent CreepContext
+  Transition:
+    event: CreepEvent.fullSinksFullNoSite
+    target: BuilderState.assisting
     guard: ()
 
 gatheringConfig: StateConfig BuilderState CreepEvent CreepContext
   StateConfig:
-    transitions: [gatheringStoreEmpty, gatheringStoreFull, gatheringSinksFull, gatheringSawSite, gatheringNoSites]
+    transitions: [toGatheringEmptySinksOpenSite, toGatheringEmptySinksOpenNoSite, toGatheringEmptySinksFullSite, toGatheringEmptySinksFullNoSite, toGatheringMidSinksOpenSite, toGatheringMidSinksOpenNoSite, toGatheringMidSinksFullSite, toGatheringMidSinksFullNoSite, toBuildingFullSinksOpenSite, toAssistingFullSinksOpenNoSite, toBuildingFullSinksFullSite, toAssistingFullSinksFullNoSite]
     label: "Gathering"
 
-buildingStoreEmpty: Transition BuilderState CreepEvent CreepContext
-  Transition:
-    event: CreepEvent.storeEmpty
-    target: BuilderState.gathering
-    guard: ()
-
-buildingStoreFull: Transition BuilderState CreepEvent CreepContext
-  Transition:
-    event: CreepEvent.storeFull
-    target: BuilderState.assisting
-    guard: ()
-
-buildingSinksFull: Transition BuilderState CreepEvent CreepContext
-  Transition:
-    event: CreepEvent.sinksFull
-    target: BuilderState.building
-    guard: ()
-
-buildingSawSite: Transition BuilderState CreepEvent CreepContext
-  Transition:
-    event: CreepEvent.sawSite
-    target: BuilderState.building
-    guard: ()
-
-buildingNoSites: Transition BuilderState CreepEvent CreepContext
-  Transition:
-    event: CreepEvent.noSites
-    target: BuilderState.assisting
-    guard: ()
+| building and assisting have IDENTICAL transition tables (empty ->
+| gathering; energy + Site -> building; energy + NoSite -> assisting):
+| both states are "energy on board, spend it", and where to spend
+| depends only on the site dimension.
 
 buildingConfig: StateConfig BuilderState CreepEvent CreepContext
   StateConfig:
-    transitions: [buildingStoreEmpty, buildingStoreFull, buildingSinksFull, buildingSawSite, buildingNoSites]
+    transitions: [toGatheringEmptySinksOpenSite, toGatheringEmptySinksOpenNoSite, toGatheringEmptySinksFullSite, toGatheringEmptySinksFullNoSite, toBuildingMidSinksOpenSite, toAssistingMidSinksOpenNoSite, toBuildingMidSinksFullSite, toAssistingMidSinksFullNoSite, toBuildingFullSinksOpenSite, toAssistingFullSinksOpenNoSite, toBuildingFullSinksFullSite, toAssistingFullSinksFullNoSite]
     label: "Building"
-
-assistingStoreEmpty: Transition BuilderState CreepEvent CreepContext
-  Transition:
-    event: CreepEvent.storeEmpty
-    target: BuilderState.gathering
-    guard: ()
-
-assistingStoreFull: Transition BuilderState CreepEvent CreepContext
-  Transition:
-    event: CreepEvent.storeFull
-    target: BuilderState.assisting
-    guard: ()
-
-assistingSinksFull: Transition BuilderState CreepEvent CreepContext
-  Transition:
-    event: CreepEvent.sinksFull
-    target: BuilderState.assisting
-    guard: ()
-
-assistingSawSite: Transition BuilderState CreepEvent CreepContext
-  Transition:
-    event: CreepEvent.sawSite
-    target: BuilderState.building
-    guard: ()
-
-assistingNoSites: Transition BuilderState CreepEvent CreepContext
-  Transition:
-    event: CreepEvent.noSites
-    target: BuilderState.assisting
-    guard: ()
 
 assistingConfig: StateConfig BuilderState CreepEvent CreepContext
   StateConfig:
-    transitions: [assistingStoreEmpty, assistingStoreFull, assistingSinksFull, assistingSawSite, assistingNoSites]
+    transitions: [toGatheringEmptySinksOpenSite, toGatheringEmptySinksOpenNoSite, toGatheringEmptySinksFullSite, toGatheringEmptySinksFullNoSite, toBuildingMidSinksOpenSite, toAssistingMidSinksOpenNoSite, toBuildingMidSinksFullSite, toAssistingMidSinksFullNoSite, toBuildingFullSinksOpenSite, toAssistingFullSinksOpenNoSite, toBuildingFullSinksFullSite, toAssistingFullSinksFullNoSite]
     label: "Assisting"
 
 builderMachine: Machine BuilderState CreepEvent CreepContext
@@ -623,3 +917,161 @@ builderMachine: Machine BuilderState CreepEvent CreepContext
     context: builderContext
     finals: {}
     states: {BuilderState.gathering: gatheringConfig, BuilderState.building: buildingConfig, BuilderState.assisting: assistingConfig}
+
+| ============================== TOWER ===============================
+| The first non-creep machine. Same Machine/StateConfig/Transition
+| shape as the creep machines, its own event and context types; the
+| shell drives towers in a SEPARATE loop (one TowerEvent per tower per
+| tick), with validTowerState as the ownership guard, exactly like the
+| creep registry.
+
+| TowerEvent is a product of two orthogonal facts, same construction
+| and same template-literal contract as CreepEvent:
+|
+|   threat    — hostile  hostile creeps present in the room
+|               calm     none
+|   integrity — Damage   some owned-room structure has hits < hitsMax
+|               Intact   none
+|
+| The shell computes the event as `${threat}${integrity}` with threat
+| in {"hostile","calm"} and integrity in {"Damage","Intact"}, and tsc
+| proves the inferred union is exactly the generated TowerEvent union.
+|
+| DELIBERATE EXCLUSION: tower energy is NOT an event dimension. No
+| tower decision depends on it — a drained tower's attack or repair is
+| a harmless no-op (the intent fails, nothing worse), and recovery is
+| delivery-driven: the tower re-enters the energy-sink set the moment
+| its energy drops below energyTarget, and harvesters refill it through
+| the ordinary delivery path. Including an energy dimension would
+| double the table for zero behavioral difference.
+
+union TowerEvent
+  hostileDamage
+  hostileIntact
+  calmDamage
+  calmIntact
+
+| The threshold-sink decision. A tower is an energy SINK only while its
+| energy < energyTarget. The shell uses this ONE filter for BOTH
+| delivery targeting (TargetKind.energySink resolution) and the
+| SinksFull observation, so the observed fact can never contradict the
+| available action. Why a threshold and not full capacity (1000): the
+| 500..1000 band is attack/repair buffer that nobody eagerly refills —
+| with full-capacity sink semantics, every point of repair drain would
+| reopen the sink set and flap saturation forever (a leaky sink that
+| keeps the harvesters chasing it). Below 500 the tower is a real
+| delivery target; above it, it's on its own buffer.
+|
+| TowerContext carries desired alongside energyTarget: Paradox rejects
+| single-field product types (error 23; the alternative, wrap, would
+| emit a branded scalar and change the shell-facing shape). desired
+| REFERENCES desiredTowers — the context must never contradict the
+| placement policy, same pattern as CreepContext.bodies referencing
+| workerBodyTiers.
+
+type TowerContext
+  energyTarget: Integer
+  desired: Integer
+
+towerEnergyTarget: Integer
+  500
+
+towerContext: TowerContext
+  energyTarget: towerEnergyTarget
+  desired: desiredTowers
+
+| Tower policy: attack OUTRANKS repair. The reference implementation
+| (tutorial section 5 main.js) issues repair and then attack in the
+| same tick, where the later attack intent wins anyway — engine
+| accident as priority. We make the priority explicit and verified:
+| hostile present -> attacking, no matter the integrity fact.
+|
+| The mapping is STATE-INDEPENDENT — all three states carry the
+| IDENTICAL four transitions, so this is a pure policy function
+| (TowerEvent -> TowerState) in FSM clothing. That is deliberate: the
+| uniform machine shape keeps the shell a generic interpreter — one
+| registry, one transition call, no special-casing the tower. The
+| current state still matters downstream: towerBehaviors[state] picks
+| the action each tick.
+
+toAttackingHostileDamage: Transition TowerState TowerEvent TowerContext
+  Transition:
+    event: TowerEvent.hostileDamage
+    target: TowerState.attacking
+    guard: ()
+
+toAttackingHostileIntact: Transition TowerState TowerEvent TowerContext
+  Transition:
+    event: TowerEvent.hostileIntact
+    target: TowerState.attacking
+    guard: ()
+
+toRepairingCalmDamage: Transition TowerState TowerEvent TowerContext
+  Transition:
+    event: TowerEvent.calmDamage
+    target: TowerState.repairing
+    guard: ()
+
+toGuardingCalmIntact: Transition TowerState TowerEvent TowerContext
+  Transition:
+    event: TowerEvent.calmIntact
+    target: TowerState.guarding
+    guard: ()
+
+guardingConfig: StateConfig TowerState TowerEvent TowerContext
+  StateConfig:
+    transitions: [toAttackingHostileDamage, toAttackingHostileIntact, toRepairingCalmDamage, toGuardingCalmIntact]
+    label: "Guarding"
+
+attackingConfig: StateConfig TowerState TowerEvent TowerContext
+  StateConfig:
+    transitions: [toAttackingHostileDamage, toAttackingHostileIntact, toRepairingCalmDamage, toGuardingCalmIntact]
+    label: "Attacking"
+
+repairingConfig: StateConfig TowerState TowerEvent TowerContext
+  StateConfig:
+    transitions: [toAttackingHostileDamage, toAttackingHostileIntact, toRepairingCalmDamage, toGuardingCalmIntact]
+    label: "Repairing"
+
+| Reachability from guarding: hostile* -> attacking, calmDamage ->
+| repairing — all three states reachable, every state covers all four
+| events, no finals, no deadlock. generate verifies exactly this.
+
+towerMachine: Machine TowerState TowerEvent TowerContext
+  Machine:
+    name: "tower"
+    initial: TowerState.guarding
+    context: towerContext
+    finals: {}
+    states: {TowerState.guarding: guardingConfig, TowerState.attacking: attackingConfig, TowerState.repairing: repairingConfig}
+
+| TowerStateBehaviors is a RECORD with one field per TowerState variant
+| — the same tsc-totality trick as StateBehaviors: the shell indexes
+| towerBehaviors[state], and adding a tower state without a behavior
+| fails the build.
+
+type TowerStateBehaviors
+  guarding: Behavior
+  attacking: Behavior
+  repairing: Behavior
+
+guardingBehavior: Behavior
+  Behavior:
+    action: Action.idle
+    target: TargetKind.none
+
+attackingBehavior: Behavior
+  Behavior:
+    action: Action.attack
+    target: TargetKind.hostile
+
+repairingBehavior: Behavior
+  Behavior:
+    action: Action.repair
+    target: TargetKind.damagedStructure
+
+towerBehaviors: TowerStateBehaviors
+  TowerStateBehaviors:
+    guarding: guardingBehavior
+    attacking: attackingBehavior
+    repairing: repairingBehavior
