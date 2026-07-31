@@ -17,6 +17,9 @@
 , # self.apps.*.program — the exact scripts users run
   serverProgram
 , deployProgram
+, # ms per tick pushed to the server CLI — wired from the flake's
+  # tickMs binding so the test and the dev server share one knob.
+  tickMs ? 100
 }:
 let
   email = "itest";
@@ -262,7 +265,7 @@ let
   # server CLI on 21026 accepts system.setTickDuration(ms); best-effort
   # (the test still passes at 1s ticks, just near the deadline).
   setTickDuration = writeShellScript "set-tick-duration" ''
-    printf 'system.setTickDuration(100)\n' \
+    printf 'system.setTickDuration(${toString tickMs})\n' \
       | ${netcat-openbsd}/bin/nc -q 2 127.0.0.1 21026
   '';
 in
@@ -330,7 +333,7 @@ testers.runNixOSTest {
     # Best-effort tick compression via the server CLI — a failure here
     # only means slower ticks, never a failed test.
     status, out = machine.execute("${setTickDuration} 2>&1")
-    print(f">>> system.setTickDuration(100) via CLI (status {status}): {out.strip()}")
+    print(f">>> system.setTickDuration(${toString tickMs}) via CLI (status {status}): {out.strip()}")
 
     with subtest("spawn acquires energy"):
         # Explicit poll loop so every observation is visible in the log.

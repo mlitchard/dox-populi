@@ -91,6 +91,14 @@
         '';
       };
 
+      # Tick-speed knob: ms per tick for the private server (engine
+      # default: 1000). Single source of truth — apps.server re-asserts
+      # it over the CLI on every launch (setTickDuration PERSISTS in the
+      # world's env storage, so the knob must overrule stale world
+      # state), and the itest is wired to the same value. Optional
+      # per-shell override: SCREEPS_TICK_MS.
+      tickMs = 100;
+
       # The Screeps server itself, nix-vendored from the open-source npm
       # package (`screeps` = the launcher; it pulls in @screeps/backend,
       # engine, storage, driver...). Replaces the Steam-bundled tree: no
@@ -287,6 +295,7 @@
         itest = pkgs.callPackage ./tests/integration.nix {
           serverProgram = self.apps.${system}.server.program;
           deployProgram = self.apps.${system}.deploy-local.program;
+          inherit tickMs;
         };
 
         # Boots the dev VM system (vm/module.nix) in the NixOS test
@@ -397,6 +406,15 @@
           type = "app";
           program = toString (pkgs.writeShellScript "screeps-server" ''
             set -euo pipefail
+            # Tick duration: flake default first (works out of the box),
+            # SCREEPS_TICK_MS as optional per-shell override. The value
+            # is spliced into a CLI expression — digits only, no excuses.
+            TICK_MS="''${SCREEPS_TICK_MS:-${toString tickMs}}"
+            case "$TICK_MS" in
+              ("" | *[!0-9]*)
+                echo "error: SCREEPS_TICK_MS must be digits only (milliseconds per tick), got: '$TICK_MS'" >&2
+                exit 1 ;;
+            esac
             LAUNCHER="${screepsServer}/node_modules/@screeps/launcher"
             # Anchor to the repo root regardless of launch cwd — a stray
             # $PWD/.server-data means a parallel world with its own db.
@@ -455,6 +473,7 @@
               ${./server/screepsrc} > "$DATA/.screepsrc"
 
             echo "screeps private server: http://$SCREEPS_HOST:21025 (cli on $SCREEPS_HOST:21026)"
+            echo "tick duration: $TICK_MS ms/tick (flake default ${toString tickMs}; override with SCREEPS_TICK_MS) — re-asserted on every launch"
             echo "data dir: $DATA"
             cd "$DATA"
             # Mods live in the nix store, but require() the server's own
@@ -469,13 +488,35 @@
             # vendored server's store path in its argv) on ANY exit,
             # including Ctrl-C.
             cleanup() {
+              [ -n "''${TICK_PID:-}" ] && kill "$TICK_PID" 2>/dev/null || true
               ${pkgs.procps}/bin/pkill -TERM -f '${screepsServer}/node_modules' 2>/dev/null || true
               sleep 2
               ${pkgs.procps}/bin/pkill -9 -f '${screepsServer}/node_modules' 2>/dev/null || true
             }
             trap cleanup EXIT
             ${serverNode}/bin/node "$LAUNCHER/bin/screeps.js" start "$@" &
-            wait $! || true
+            LAUNCHER_PID=$!
+            # Assert the tick duration once the CLI answers. The launcher
+            # is backgrounded, so 21026 may not be bound yet — poll by
+            # pushing the command itself (nc fails fast while the port is
+            # closed). setTickDuration PERSISTS in the world's env
+            # storage (LokiJS db.json, autosave), so this re-asserts
+            # every launch: the knob is authoritative, not whatever an
+            # old session left behind. Best-effort — a miss means wrong
+            # tick speed, never a dead server.
+            (
+              for _ in $(seq 1 60); do
+                if printf 'system.setTickDuration(%s)\n' "$TICK_MS" \
+                     | ${pkgs.netcat-openbsd}/bin/nc -q 2 127.0.0.1 21026 >/dev/null 2>&1; then
+                  echo "tick duration set: $TICK_MS ms/tick"
+                  exit 0
+                fi
+                sleep 2
+              done
+              echo "warning: CLI (21026) never answered — tick duration NOT set (world keeps its stored rate)" >&2
+            ) &
+            TICK_PID=$!
+            wait "$LAUNCHER_PID" || true
           '');
         };
 
