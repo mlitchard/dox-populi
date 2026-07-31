@@ -30,12 +30,12 @@
   # run-vm.sh launches qemu -nographic: serial console is the terminal.
   boot.kernelParams = [ "console=ttyS0" ];
 
-  # BIOS grub on the virtual disk (GPT + EF02 BIOS-boot partition,
-  # layout in vm/disko.nix).
-  # The root filesystem definition comes from vm/disko.nix for the real
-  # system, and from the test harness's virtual disk in tests/vm.nix —
-  # no hand-written fileSystems."/" here.
-  boot.loader.grub.device = "/dev/vda";
+  # No bootloader or root-fs config here: vm/disko.nix declares the
+  # disk (GPT + EF02 BIOS-boot partition), and disko derives BOTH the
+  # fileSystems."/" definition and boot.loader.grub.devices from it —
+  # a hand-written grub.device would duplicate disko's ("duplicated
+  # devices in mirroredBoots"). In tests/vm.nix the harness supplies
+  # its own virtual disk and bootloader config instead.
 
   users.users.dev = {
     isNormalUser = true;

@@ -17,12 +17,14 @@ testers.runNixOSTest {
   nodes.machine = {
     imports = [ nixosModule ];
     virtualisation.memorySize = 2048;
-    # Mirror run-vm.sh's repodir share: export the flake source over 9p
-    # so the module's /home/dev/dox-populi mount has a backend, exactly
-    # like the host repo does in the real dev VM.
-    virtualisation.qemu.options = [
-      "-virtfs local,path=${self},mount_tag=repodir,security_model=mapped-xattr"
-    ];
+    # Mirror run-vm.sh's repodir share via the test driver's native
+    # shared-directory mechanism (mount tag = attr name, so "repodir"
+    # matches the module's fstab entry): backs the module's
+    # /home/dev/dox-populi 9p mount with the flake source.
+    virtualisation.sharedDirectories.repodir = {
+      source = "${self}";
+      target = "/home/dev/dox-populi";
+    };
   };
 
   testScript = ''
