@@ -1,5 +1,6 @@
-// FSM behavioral tests: verify the generated transition functions against
-// an independent restatement of the spec's policy tables. Run via
+// FSM behavioral tests: verify the generated transition functions AND
+// the generated state behaviors against an independent restatement of
+// the spec's policy tables. Run via
 // `nix build .#checks.x86_64-linux.fsm-behavior`.
 //
 // Event vocabulary (tutorial 5): CreepEvent is a PRODUCT of three
@@ -10,15 +11,20 @@
 // One event per actor per tick, no priority, no masking: every fact
 // rides every event.
 //
-// Test strategy: the dimension arrays below reconstruct the full event
-// product (tsc proves the template-literal union matches the generated
-// union — same contract the shell's emitEvent relies on), and each
-// machine is checked EXHAUSTIVELY: every state x every event against a
-// policy oracle restated here from the spec's documentation. The oracle
-// is an independent second statement of the tables in dox/creeps.dox;
-// if spec and oracle ever disagree, one of them is lying and this check
-// fails. Named regression sections then pin the two historical
-// priority-chain bugs to specific pairs.
+// Test strategy, two sweeps:
+//  1. Transitions: every state x every event against a policy oracle
+//     restated here from the spec's documentation — proves the state
+//     GRAPH routes correctly.
+//  2. Behaviors: every state's {action, target} against a full restated
+//     behavior table — the shell executes behaviors[state], so a
+//     transition sweep alone would stay green even if codegen wired
+//     e.g. supporting to 'harvest' and every "supporting" creep went
+//     mining at the controller.
+// The oracles are an independent second statement of the tables in
+// dox/creeps.dox; if spec and oracle ever disagree, one of them is
+// lying and this check fails. tsc proves the reconstructed event
+// product and the oracle tables against the generated types: rename a
+// spec variant and this file stops compiling.
 import {
   harvesterTransition,
   upgraderTransition,
@@ -28,6 +34,8 @@ import {
   upgraderContext,
   builderContext,
   towerContext,
+  behaviors,
+  towerBehaviors,
 } from "../generated/index";
 import type {
   HarvesterState,
@@ -36,6 +44,8 @@ import type {
   TowerState,
   CreepEvent,
   TowerEvent,
+  StateBehaviors,
+  TowerStateBehaviors,
 } from "../generated/index";
 
 let failures = 0;
@@ -50,9 +60,6 @@ function assert(label: string, actual: string, expected: string): void {
 }
 
 // ── The event product, reconstructed ─────────────────────────────────
-// tsc verifies each `${store}${sinks}${sites}` template below is
-// assignable to CreepEvent (and `${threat}${integrity}` to TowerEvent):
-// rename a spec variant and this file stops compiling.
 
 const STORES = ["empty", "mid", "full"] as const;
 const SINKS = ["SinksOpen", "SinksFull"] as const;
@@ -90,8 +97,13 @@ function tTx(state: TowerState, event: TowerEvent): TowerState {
 // Harvester: harvest until full, deliver until empty; nowhere to put it
 // -> support the controller. empty -> harvesting; mid while harvesting
 // stays (fill up first); otherwise energy on board is disposed of by
-// the sink dimension: SinksOpen -> delivering, SinksFull -> supporting
-// (the null-target-stall escape). Sites are noise to this role.
+// the sink dimension: SinksOpen -> delivering, SinksFull -> supporting.
+// Sites are noise to this role.
+// Historical: a mid-store harvester in delivering whose sinks just
+// saturated has an EMPTY transfer-target set — staying put is the same
+// null-target freeze the builder once had; the *SinksFull* rows pin the
+// supporting escape. Sinks reopening pulls supporting back to
+// delivering because delivery powers spawning.
 function harvesterOracle(
   state: HarvesterState,
   st: Store,
@@ -114,6 +126,16 @@ function upgraderOracle(state: UpgraderState, st: Store): UpgraderState {
 // Builder: gather until full; energy on board is spent by the site
 // dimension: Site -> building, NoSite -> assisting. mid while gathering
 // stays (fill up first). Sinks are noise to this role.
+// Historical (both fixed by the product vocabulary, both pinned by the
+// full* rows of the sweep):
+//  - FROZEN builder: the old priority chain let storeFull mask the
+//    residual noSites — a full builder with zero sites self-looped in
+//    building (action=build, no target, no API call) until TTL death.
+//    full*NoSite -> assisting is the escape, observed not deduced.
+//  - BLIND builder: the compound sinksFull outranked sawSite, so a full
+//    builder under sink saturation shoveled overflow at the controller
+//    next to an unbuilt extension. full*Site -> building keeps sight of
+//    the site regardless of the sink dimension.
 function builderOracle(
   state: BuilderState,
   st: Store,
@@ -124,11 +146,36 @@ function builderOracle(
   return si === "Site" ? "building" : "assisting";
 }
 
-// Tower: attack OUTRANKS repair; state-independent pure policy.
+// Tower: attack OUTRANKS repair; state-independent pure policy. The
+// reference (section 5 main.js) issues repair then attack in one tick
+// and lets the later intent win — engine accident as priority. The spec
+// makes it explicit: hostile present -> attacking, no matter the
+// integrity fact (the hostileDamage rows pin it).
 function towerOracle(th: Threat, integ: Integrity): TowerState {
   if (th === "hostile") return "attacking";
   return integ === "Damage" ? "repairing" : "guarding";
 }
+
+// ── Behavior oracles: what each state DOES ───────────────────────────
+// Typed as the generated StateBehaviors/TowerStateBehaviors so tsc
+// enforces exhaustiveness and variant spelling; the runtime compare
+// below catches wrong wiring (right shape, wrong action or target).
+const creepBehaviorOracle: StateBehaviors = {
+  harvesting: { action: "harvest", target: "source" },
+  delivering: { action: "transfer", target: "energySink" },
+  supporting: { action: "upgrade", target: "controller" },
+  collecting: { action: "harvest", target: "source" },
+  upgrading: { action: "upgrade", target: "controller" },
+  gathering: { action: "harvest", target: "source" },
+  building: { action: "build", target: "constructionSite" },
+  assisting: { action: "upgrade", target: "controller" },
+};
+
+const towerBehaviorOracle: TowerStateBehaviors = {
+  guarding: { action: "idle", target: "none" },
+  attacking: { action: "attack", target: "hostile" },
+  repairing: { action: "repair", target: "damagedStructure" },
+};
 
 // ── Exhaustive sweeps: every state x every event, oracle vs generated ─
 
@@ -171,92 +218,35 @@ for (const state of ["guarding", "attacking", "repairing"] as const) {
     }
 }
 
-// ── Regression: the FROZEN builder (historical, fixed on this branch) ─
-// Under the old priority chain, storeFull outranked the residual
-// noSites, so a full builder in building with zero sites kept receiving
-// storeFull and self-looped: action=build, no target, no API call, idle
-// until TTL death (births 105 / deaths 100 on the live server). The
-// product makes the corner directly observable: full*NoSite routes to
-// assisting — observed, not deduced from a timing argument.
-console.log("Regression: frozen builder (full + NoSite is observed, not masked)");
-assert(
-  "building + fullSinksOpenNoSite → assisting",
-  bTx("building", "fullSinksOpenNoSite"),
-  "assisting"
-);
-assert(
-  "building + fullSinksFullNoSite → assisting",
-  bTx("building", "fullSinksFullNoSite"),
-  "assisting"
-);
+// ── Exhaustive behavior sweep: every state's action+target vs oracle ─
 
-// ── Regression: the BLIND builder (historical, fixed on this branch) ──
-// Under the old chain, the compound sinksFull outranked sawSite, so a
-// full builder under sink saturation could never see a site and
-// shoveled overflow at the controller next to an unbuilt extension.
-// Now the site fact rides the event regardless of the sink dimension.
-console.log("Regression: blind builder (site visible under saturation)");
-assert(
-  "building + fullSinksFullSite → building (kept sight of the site)",
-  bTx("building", "fullSinksFullSite"),
-  "building"
-);
-assert(
-  "assisting + fullSinksFullSite → building (pulled back to work)",
-  bTx("assisting", "fullSinksFullSite"),
-  "building"
-);
+console.log("Behaviors: every creep state's action + target");
+for (const state of Object.keys(creepBehaviorOracle) as (keyof StateBehaviors)[]) {
+  assert(
+    `${state}.action`,
+    behaviors[state].action,
+    creepBehaviorOracle[state].action
+  );
+  assert(
+    `${state}.target`,
+    behaviors[state].target,
+    creepBehaviorOracle[state].target
+  );
+}
 
-// ── Regression: harvester null-target-stall escapes ──────────────────
-// A mid-store harvester in delivering whose sinks just saturated has an
-// EMPTY transfer-target set — staying put is the same freeze signature
-// the builder had. The spec routes it to supporting (spend the
-// remainder on the controller); when the sinks reopen, delivery
-// outranks controller-feeding because it powers spawning.
-console.log("Regression: harvester never stalls on a saturated sink set");
-assert(
-  "delivering + midSinksFullNoSite → supporting (no transfer target)",
-  hTx("delivering", "midSinksFullNoSite"),
-  "supporting"
-);
-assert(
-  "supporting + midSinksOpenNoSite → delivering (sinks reopened)",
-  hTx("supporting", "midSinksOpenNoSite"),
-  "delivering"
-);
-assert(
-  "delivering + fullSinksFullNoSite → supporting (full and saturated)",
-  hTx("delivering", "fullSinksFullNoSite"),
-  "supporting"
-);
-
-// ── Tower priority: attack outranks repair ───────────────────────────
-// The reference (section 5 main.js) issues repair then attack in one
-// tick and lets the later intent win — engine accident as priority.
-// The spec makes it explicit: hostile present -> attacking, no matter
-// the integrity fact.
-console.log("Tower: attack outranks repair");
-assert(
-  "repairing + hostileDamage → attacking (drop the wrench, draw the gun)",
-  tTx("repairing", "hostileDamage"),
-  "attacking"
-);
-
-// ── Multi-step scenario: builder lifecycle around a construction site ─
-// gather → fill up → build → site completes mid-drain → assist →
-// new site placed → back to building → run dry → gather.
-console.log("Builder: multi-step scenario");
-let bState: BuilderState = "gathering";
-bState = bTx(bState, "midSinksOpenSite"); // site exists, store not full
-assert("gathering while site waits", bState, "gathering");
-bState = bTx(bState, "fullSinksOpenSite"); // full, go build
-assert("store fills up", bState, "building");
-bState = bTx(bState, "midSinksOpenNoSite"); // site finished under our trowel
-assert("site done, fall back to assisting", bState, "assisting");
-bState = bTx(bState, "midSinksOpenSite"); // new site placed
-assert("new site, back to building", bState, "building");
-bState = bTx(bState, "emptySinksOpenSite"); // ran dry mid-build
-assert("empty, back to gathering", bState, "gathering");
+console.log("Behaviors: every tower state's action + target");
+for (const state of Object.keys(towerBehaviorOracle) as (keyof TowerStateBehaviors)[]) {
+  assert(
+    `tower ${state}.action`,
+    towerBehaviors[state].action,
+    towerBehaviorOracle[state].action
+  );
+  assert(
+    `tower ${state}.target`,
+    towerBehaviors[state].target,
+    towerBehaviorOracle[state].target
+  );
+}
 
 // ── Summary ────────────────────────────────────────────────────────
 console.log("");
