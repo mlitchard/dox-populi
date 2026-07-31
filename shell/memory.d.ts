@@ -28,6 +28,16 @@ declare global {
         }
       >;
     };
+    trace?: Record<
+      string,
+      Array<{
+        t: number;
+        event: string;
+        fsm: string;
+        action: string;
+        rc: number | null;
+      }>
+    >;
   }
 }
 

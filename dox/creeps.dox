@@ -498,6 +498,18 @@ upgraderMachine: Machine UpgraderState CreepEvent CreepContext
 | upgrade the controller — instead of standing around. Spec decision:
 | no wasted creep-ticks. sawSite while assisting pulls the builder back
 | to building.
+|
+| storeFull while ALREADY IN building also falls back to assisting.
+| Timing argument: events are computed at tick start, before actions.
+| A builder that enters building on storeFull builds that same tick, so
+| the next tick it has spent energy and emits sawSite — an honestly
+| working builder never observes storeFull in the building state. If it
+| DOES, the previous build spent nothing (no reachable site), and since
+| storeFull outranks the residual noSites in the emit priority, the old
+| building self-loop was an unreachable-escape freeze: full builder,
+| zero sites, action=build resolving no target, idle until TTL death.
+| Assisting drains the store on the controller; storeEmpty then routes
+| back to gathering as usual.
 
 gatheringStoreEmpty: Transition BuilderState CreepEvent CreepContext
   Transition:
@@ -543,7 +555,7 @@ buildingStoreEmpty: Transition BuilderState CreepEvent CreepContext
 buildingStoreFull: Transition BuilderState CreepEvent CreepContext
   Transition:
     event: CreepEvent.storeFull
-    target: BuilderState.building
+    target: BuilderState.assisting
     guard: ()
 
 buildingSinksFull: Transition BuilderState CreepEvent CreepContext

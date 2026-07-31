@@ -185,6 +185,53 @@ function execute(behavior: Behavior, creep: Creep, obs: RoomObs): ActionResult {
   return result;
 }
 
+// ---------------------------------------------------------------------------
+// Flight recorder. A per-creep ring buffer of (tick, event, fsm, action, rc)
+// in Memory.trace, appended only when the tuple CHANGES — a stuck creep costs
+// one entry, not one per tick. rc is the raw Screeps API return code from
+// execute() (null = no call made: idle, or unresolvable target). Traces of
+// dead creeps are kept for post-mortem, pruned oldest-first past a cap.
+// Pure observation: nothing reads the trace to make decisions.
+// ---------------------------------------------------------------------------
+
+const TRACE_LIMIT = 50; // max entries per creep
+const TRACE_DEAD_LIMIT = 10; // max dead-creep traces kept for post-mortem
+
+function recordTrace(
+  name: string,
+  event: string,
+  fsm: string,
+  action: string,
+  rc: number | null
+): void {
+  const traces = (Memory.trace ??= {});
+  const log = (traces[name] ??= []);
+  const last = log[log.length - 1];
+  if (
+    last &&
+    last.event === event &&
+    last.fsm === fsm &&
+    last.action === action &&
+    last.rc === rc
+  )
+    return;
+  log.push({ t: Game.time, event, fsm, action, rc });
+  if (log.length > TRACE_LIMIT) log.shift();
+}
+
+function pruneDeadTraces(): void {
+  if (!Memory.trace) return;
+  const traces = Memory.trace;
+  const lastTick = (n: string): number => {
+    const log = traces[n];
+    return log.length > 0 ? log[log.length - 1].t : 0;
+  };
+  const dead = Object.keys(traces)
+    .filter((n) => !(n in Game.creeps))
+    .sort((a, b) => lastTick(a) - lastTick(b));
+  while (dead.length > TRACE_DEAD_LIMIT) delete traces[dead.shift()!];
+}
+
 // A creep with missing/invalid fsm memory gets the initial state of the
 // spec whose role matches its own — pure data comparison against spawnQueue,
 // not a role literal.
@@ -203,6 +250,7 @@ export const loop = (): void => {
       deathsThisTick += 1;
     }
   }
+  pruneDeadTraces();
 
   const spawn: StructureSpawn | undefined = Game.spawns["Spawn1"];
 
@@ -288,7 +336,8 @@ export const loop = (): void => {
     const event = emitEvent(creep, obs);
     const next = step(state, event);
     creep.memory.fsm = next;
-    execute(behaviors[next], creep, obs);
+    const rc = execute(behaviors[next], creep, obs);
+    recordTrace(name, event, next, behaviors[next].action, rc);
 
     creepStats[name] = {
       role: creep.memory.role,

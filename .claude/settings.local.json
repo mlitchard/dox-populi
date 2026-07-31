@@ -25,7 +25,10 @@
       "Bash(for f:*)",
       "Bash(do grep:*)",
       "Bash(done)",
-      "WebFetch(domain:raw.githubusercontent.com)"
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(curl -s --max-time 5 http://127.0.0.1:21025/api/version)",
+      "Bash(printf 'storage.db[\"\"\"\"users\"\"\"\"].find\\({}\\)\\\\n')",
+      "Bash(nc -q 3 127.0.0.1 21026)"
     ]
   }
 }
