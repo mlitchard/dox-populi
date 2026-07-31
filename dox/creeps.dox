@@ -12,11 +12,19 @@ union CreepRole
   harvester
   upgrader
   builder
+  defender
+
+| BodyPart variant names are EXACT Screeps BODYPART_COST keys — the
+| generated string literals index the engine cost table and feed
+| spawnCreep directly, no shell mapping. tough/attack arrive with the
+| defender role (the first combat creep).
 
 union BodyPart
   work
   carry
   move
+  tough
+  attack
 
 | State namespace design. Each machine is verified over its OWN state
 | union (generate rejects a machine whose state type has states the
@@ -25,9 +33,10 @@ union BodyPart
 |   HarvesterState: harvesting, delivering, supporting
 |   UpgraderState:  collecting, upgrading
 |   BuilderState:   gathering, building, assisting
+|   DefenderState:  patrolling, engaging
 |   TowerState:     guarding, attacking, repairing
 |
-| CreepState is the shared NAMESPACE union over the eight CREEP names.
+| CreepState is the shared NAMESPACE union over the ten CREEP names.
 | It is used only by the flat creep semantics — StateBehaviors totality
 | and RoleSpec.initial — never as a machine state type. TowerState is
 | deliberately NOT part of CreepState: the tower is not a creep, has its
@@ -43,7 +52,8 @@ union BodyPart
 | machine is skipped. If two machines ever shared a state name,
 | ownership would be ambiguous — don't merge variants. That is why the
 | harvester's full-and-nowhere-to-deliver state is `supporting`, not
-| `assisting`: the builder already owns `assisting`.
+| `assisting`: the builder already owns `assisting` — and the defender
+| fights in `engaging`, not `attacking`: the tower owns `attacking`.
 
 union HarvesterState
   harvesting
@@ -59,6 +69,10 @@ union BuilderState
   building
   assisting
 
+union DefenderState
+  patrolling
+  engaging
+
 union TowerState
   guarding
   attacking
@@ -73,6 +87,8 @@ union CreepState
   gathering
   building
   assisting
+  patrolling
+  engaging
 
 | The shell observes the world and emits exactly ONE CreepEvent per
 | creep per tick. There is NO priority and NO masking: the event is the
@@ -148,9 +164,10 @@ union CreepEvent
 | are tagged with actions (see StateBehaviors / TowerStateBehaviors); a
 | novel state added by a future spec mutation still maps into this
 | vocabulary, so the shell never needs new wiring. idle pairs with
-| TargetKind.none and is the tower's guarding behavior. attack and
-| repair are tower verbs — creep states never use them today, but the
-| vocabulary is shared: one Action union, one shell switch.
+| TargetKind.none (tower guarding, defender patrolling). The vocabulary
+| is shared across actor kinds: one Action union, one shell switch —
+| attack serves both the tower (attacking) and the defender (engaging);
+| repair remains tower-only today.
 
 union Action
   harvest
@@ -200,6 +217,8 @@ type StateBehaviors
   gathering: Behavior
   building: Behavior
   assisting: Behavior
+  patrolling: Behavior
+  engaging: Behavior
 
 harvestingBehavior: Behavior
   Behavior:
@@ -247,6 +266,22 @@ assistingBehavior: Behavior
     action: Action.upgrade
     target: TargetKind.controller
 
+| Defender behaviors. patrolling = stand guard where spawned (idle, no
+| target); engaging = creep.attack at the closest hostile — the day the
+| Action comment foresaw: attack stops being a tower-only verb. The
+| shell's ERR_NOT_IN_RANGE handling supplies the closing move, so melee
+| needs no separate "approach" state.
+
+patrollingBehavior: Behavior
+  Behavior:
+    action: Action.idle
+    target: TargetKind.none
+
+engagingBehavior: Behavior
+  Behavior:
+    action: Action.attack
+    target: TargetKind.hostile
+
 behaviors: StateBehaviors
   StateBehaviors:
     harvesting: harvestingBehavior
@@ -257,16 +292,59 @@ behaviors: StateBehaviors
     gathering: gatheringBehavior
     building: buildingBehavior
     assisting: assistingBehavior
+    patrolling: patrollingBehavior
+    engaging: engagingBehavior
+
+| ============================ THREAT LEVEL ==========================
+| ThreatLevel is the ONE room-threat fact, observed once per room per
+| tick (hostile creeps present or not), with THREE consumers sharing
+| the exact spelling — same-filter doctrine at the type level, so the
+| projections can never disagree:
+|
+|   1. the tower event's first product fact (`${threat}...` below),
+|   2. the defender machine's event type (the whole vocabulary — a
+|      defender has no carry parts, so the store-shaped CreepEvent is
+|      degenerate for it; threat is the only fact its decisions read),
+|   3. the DesiredCounts field index: the shell resolves each role's
+|      desired count as desired[threatLevel] — a literal bridge, no
+|      if/else. tsc proves the shell's projected string inhabits this
+|      union, and the union's variant names ARE the DesiredCounts
+|      field names.
+|
+| Deliberate exclusions, same doctrine as the tower's old energy
+| exclusion: hostile COUNT and PROXIMITY are not facts — no decision
+| branches on them. Count adds nothing while targeting is closest-first
+| (which already encodes proximity at the resolution layer); a fact
+| earns an event dimension only when some transition branches on it.
+
+union ThreatLevel
+  hostile
+  calm
 
 | Population policy. spawnQueue's ORDER is the spawn priority: the
 | shell walks it front to back and spawns the first role below its
 | desired count. No if/else chain in the shell — this list IS the
 | policy.
 |
-| Capacity-tiered bodies. Part costs: work=100, carry=50, move=50.
+| THREAT-CONDITIONAL POPULATION (the first population policy that
+| reads an observation): desired is no longer a scalar but a
+| DesiredCounts RECORD indexed by the observed ThreatLevel. The
+| defender exists only under threat (hostile: 1, calm: 0) and sits
+| FIRST in the spawnQueue: when calm its desired count is 0, so it
+| costs the economy nothing and the walk passes straight through; when
+| hostiles are present, raising the defender outranks economy
+| replacement — answer the sword before the plow. Every other role is
+| threat-indifferent (same count in both fields). A defender that
+| outlives the raid (TTL) is simply not replaced once calm — the
+| policy breathes in both directions.
 |
-|   heavyWorkerBody = [work, work, carry, move, move]  cost 350
-|   workerBody      = [work, carry, move]              cost 200
+| Capacity-tiered bodies. Part costs: work=100, carry=50, move=50,
+| attack=80, tough=10.
+|
+|   heavyWorkerBody   = [work, work, carry, move, move]     cost 350
+|   workerBody        = [work, carry, move]                 cost 200
+|   heavyDefenderBody = [tough, attack, attack, move, move] cost 270
+|   lightDefenderBody = [attack, move]                      cost 130
 |
 | 350 is exactly the current room energyCapacityAvailable (spawn 300 +
 | 1 extension 50). A tier list is ORDERED, richest first — the order IS
@@ -283,6 +361,20 @@ heavyWorkerBody: [BodyPart]
 
 workerBodyTiers: [[BodyPart]]
   [heavyWorkerBody, workerBody]
+
+| Defender tiers: the heavy tier fits current capacity (270 <= 350);
+| the light tier (130) is the crisis fallback — spawnable from spawn
+| trickle alone while the economy is dead and a hostile stands in the
+| yard.
+
+lightDefenderBody: [BodyPart]
+  [BodyPart.attack, BodyPart.move]
+
+heavyDefenderBody: [BodyPart]
+  [BodyPart.tough, BodyPart.attack, BodyPart.attack, BodyPart.move, BodyPart.move]
+
+defenderBodyTiers: [[BodyPart]]
+  [heavyDefenderBody, lightDefenderBody]
 
 | Afford basis: which Room energy figure a spawn attempt is priced
 | against. The variant names are EXACT Screeps Room property names —
@@ -303,35 +395,65 @@ union SpawnAffordBasis
 spawnAffordBasis: SpawnAffordBasis
   SpawnAffordBasis.energyAvailable
 
+| DesiredCounts: field names ARE the ThreatLevel variant names — the
+| literal bridge the shell indexes with the observed threat level.
+
+type DesiredCounts
+  hostile: Integer
+  calm: Integer
+
 type RoleSpec
   role: CreepRole
-  desired: Integer
+  desired: DesiredCounts
   bodies: [[BodyPart]]
   initial: CreepState
+
+harvesterDesired: DesiredCounts
+  hostile: 2
+  calm: 2
+
+upgraderDesired: DesiredCounts
+  hostile: 1
+  calm: 1
+
+builderDesired: DesiredCounts
+  hostile: 2
+  calm: 2
+
+defenderDesired: DesiredCounts
+  hostile: 1
+  calm: 0
 
 harvesterSpec: RoleSpec
   RoleSpec:
     role: CreepRole.harvester
-    desired: 2
+    desired: harvesterDesired
     bodies: workerBodyTiers
     initial: CreepState.harvesting
 
 upgraderSpec: RoleSpec
   RoleSpec:
     role: CreepRole.upgrader
-    desired: 1
+    desired: upgraderDesired
     bodies: workerBodyTiers
     initial: CreepState.collecting
 
 builderSpec: RoleSpec
   RoleSpec:
     role: CreepRole.builder
-    desired: 2
+    desired: builderDesired
     bodies: workerBodyTiers
     initial: CreepState.gathering
 
+defenderSpec: RoleSpec
+  RoleSpec:
+    role: CreepRole.defender
+    desired: defenderDesired
+    bodies: defenderBodyTiers
+    initial: CreepState.patrolling
+
 spawnQueue: [RoleSpec]
-  [harvesterSpec, upgraderSpec, builderSpec]
+  [defenderSpec, harvesterSpec, upgraderSpec, builderSpec]
 
 | Extension placement policy. The shell places construction sites for
 | extensions until desiredExtensions exist (built or in progress),
@@ -452,6 +574,10 @@ upgraderContext: CreepContext
 builderContext: CreepContext
   role: CreepRole.builder
   bodies: workerBodyTiers
+
+defenderContext: CreepContext
+  role: CreepRole.defender
+  bodies: defenderBodyTiers
 
 | Harvester machine: harvest until full, deliver until empty; nowhere
 | to put it -> support the controller.
@@ -918,6 +1044,52 @@ builderMachine: Machine BuilderState CreepEvent CreepContext
     finals: {}
     states: {BuilderState.gathering: gatheringConfig, BuilderState.building: buildingConfig, BuilderState.assisting: assistingConfig}
 
+| ============================= DEFENDER =============================
+| The first combat creep, and the first creep machine with its OWN
+| event type: ThreatLevel (see the union's comment for why CreepEvent
+| is degenerate here — no carry parts, no store facts). The shell's
+| machine registry pairs each machine with its own emitter, so this
+| costs no special-casing: the defender's emitter projects the same
+| room-threat fact the tower and the spawn walk consume.
+|
+| The mapping is STATE-INDEPENDENT (tower precedent): both states
+| carry the identical two transitions — a pure policy function
+| ThreatLevel -> DefenderState in FSM clothing. hostile -> engaging
+| (attack the closest hostile; the shell's ERR_NOT_IN_RANGE move
+| closes distance), calm -> patrolling (idle at post). Reachability
+| from patrolling: hostile -> engaging; every state covers both
+| events, no finals, no deadlock — generate verifies exactly this.
+
+toEngagingHostile: Transition DefenderState ThreatLevel CreepContext
+  Transition:
+    event: ThreatLevel.hostile
+    target: DefenderState.engaging
+    guard: ()
+
+toPatrollingCalm: Transition DefenderState ThreatLevel CreepContext
+  Transition:
+    event: ThreatLevel.calm
+    target: DefenderState.patrolling
+    guard: ()
+
+patrollingConfig: StateConfig DefenderState ThreatLevel CreepContext
+  StateConfig:
+    transitions: [toEngagingHostile, toPatrollingCalm]
+    label: "Patrolling"
+
+engagingConfig: StateConfig DefenderState ThreatLevel CreepContext
+  StateConfig:
+    transitions: [toEngagingHostile, toPatrollingCalm]
+    label: "Engaging"
+
+defenderMachine: Machine DefenderState ThreatLevel CreepContext
+  Machine:
+    name: "defender"
+    initial: DefenderState.patrolling
+    context: defenderContext
+    finals: {}
+    states: {DefenderState.patrolling: patrollingConfig, DefenderState.engaging: engagingConfig}
+
 | ============================== TOWER ===============================
 | The first non-creep machine. Same Machine/StateConfig/Transition
 | shape as the creep machines, its own event and context types; the
@@ -925,31 +1097,46 @@ builderMachine: Machine BuilderState CreepEvent CreepContext
 | tick), with validTowerState as the ownership guard, exactly like the
 | creep registry.
 
-| TowerEvent is a product of two orthogonal facts, same construction
+| TowerEvent is a product of THREE orthogonal facts, same construction
 | and same template-literal contract as CreepEvent:
 |
-|   threat    — hostile  hostile creeps present in the room
-|               calm     none
-|   integrity — Damage   some owned-room structure has hits < hitsMax
-|               Intact   none
+|   threat    — hostile     hostile creeps present in the room
+|               calm        none
+|   integrity — Damage      some owned-room structure has hits < hitsMax
+|               Intact      none
+|   reserve   — ReserveOk   tower energy >= attackReserve
+|               ReserveLow  tower energy below the attack reserve
 |
-| The shell computes the event as `${threat}${integrity}` with threat
-| in {"hostile","calm"} and integrity in {"Damage","Intact"}, and tsc
-| proves the inferred union is exactly the generated TowerEvent union.
+| The shell computes the event as `${threat}${integrity}${reserve}`;
+| the threat component is the typed ThreatLevel projection (the same
+| value that drives the defender machine and the DesiredCounts index),
+| and tsc proves the inferred template-literal union is exactly the
+| generated TowerEvent union.
 |
-| DELIBERATE EXCLUSION: tower energy is NOT an event dimension. No
-| tower decision depends on it — a drained tower's attack or repair is
-| a harmless no-op (the intent fails, nothing worse), and recovery is
-| delivery-driven: the tower re-enters the energy-sink set the moment
-| its energy drops below energyTarget, and harvesters refill it through
-| the ordinary delivery path. Including an energy dimension would
-| double the table for zero behavioral difference.
+| AMENDED EXCLUSION (was: tower energy is not an event dimension). The
+| total exclusion held while no tower decision read energy. The repair
+| doctrine broke it: with real battle damage, calmDamage -> repairing
+| to hitsMax could REPAIR THE TOWER DRY — repair spends energy with no
+| floor, and the next raider meets an empty magazine. Repair-or-wait
+| genuinely branches on a reserve fact, so energy enters as exactly
+| ONE BIT (above/below attackReserve). The full gradation stays
+| excluded: attack ignores reserve (shooting is always right — the
+| last 10 energy belongs to the gun; a drained tower's attack is still
+| a harmless no-op), and refill remains delivery-driven, no tower
+| decision required. attackReserve < energyTarget is load-bearing: a
+| ReserveLow tower is BELOW the sink threshold, so it is already back
+| in the delivery target set — the wait ends by the ordinary delivery
+| path, guaranteed.
 
 union TowerEvent
-  hostileDamage
-  hostileIntact
-  calmDamage
-  calmIntact
+  hostileDamageReserveOk
+  hostileDamageReserveLow
+  hostileIntactReserveOk
+  hostileIntactReserveLow
+  calmDamageReserveOk
+  calmDamageReserveLow
+  calmIntactReserveOk
+  calmIntactReserveLow
 
 | The threshold-sink decision. A tower is an energy SINK only while its
 | energy < energyTarget. The shell uses this ONE filter for BOTH
@@ -972,70 +1159,115 @@ union TowerEvent
 type TowerContext
   energyTarget: Integer
   desired: Integer
+  attackReserve: Integer
 
 towerEnergyTarget: Integer
   500
 
+| attackReserve: the repair floor — calm-time repair runs only while
+| energy >= this; below it the tower guards and waits for delivery.
+| 200 = 20 shots held back for the next raid. MUST stay below
+| towerEnergyTarget (see the amended-exclusion comment: below the sink
+| threshold, refill is delivery-guaranteed). A genome knob for the
+| evolution tournament.
+
+towerAttackReserve: Integer
+  200
+
 towerContext: TowerContext
   energyTarget: towerEnergyTarget
   desired: desiredTowers
+  attackReserve: towerAttackReserve
 
-| Tower policy: attack OUTRANKS repair. The reference implementation
-| (tutorial section 5 main.js) issues repair and then attack in the
-| same tick, where the later attack intent wins anyway — engine
-| accident as priority. We make the priority explicit and verified:
-| hostile present -> attacking, no matter the integrity fact.
+| Tower policy: attack OUTRANKS repair, and repair OUTRANKS itself dry.
+| The reference implementation (tutorial section 5 main.js) issues
+| repair and then attack in the same tick, where the later attack
+| intent wins anyway — engine accident as priority. We make the
+| priority explicit and verified:
+|
+|   hostile**                -> attacking  (reserve IGNORED: shoot with
+|                                           whatever is in the tank)
+|   calmDamageReserveOk      -> repairing  (heal to hitsMax)
+|   calmDamageReserveLow     -> guarding   (energy discipline: do NOT
+|                                           repair below the reserve;
+|                                           wait for delivery refill)
+|   calmIntact*              -> guarding
 |
 | The mapping is STATE-INDEPENDENT — all three states carry the
-| IDENTICAL four transitions, so this is a pure policy function
+| IDENTICAL eight transitions, so this is a pure policy function
 | (TowerEvent -> TowerState) in FSM clothing. That is deliberate: the
 | uniform machine shape keeps the shell a generic interpreter — one
 | registry, one transition call, no special-casing the tower. The
 | current state still matters downstream: towerBehaviors[state] picks
 | the action each tick.
 
-toAttackingHostileDamage: Transition TowerState TowerEvent TowerContext
+toAttackingHostileDamageReserveOk: Transition TowerState TowerEvent TowerContext
   Transition:
-    event: TowerEvent.hostileDamage
+    event: TowerEvent.hostileDamageReserveOk
     target: TowerState.attacking
     guard: ()
 
-toAttackingHostileIntact: Transition TowerState TowerEvent TowerContext
+toAttackingHostileDamageReserveLow: Transition TowerState TowerEvent TowerContext
   Transition:
-    event: TowerEvent.hostileIntact
+    event: TowerEvent.hostileDamageReserveLow
     target: TowerState.attacking
     guard: ()
 
-toRepairingCalmDamage: Transition TowerState TowerEvent TowerContext
+toAttackingHostileIntactReserveOk: Transition TowerState TowerEvent TowerContext
   Transition:
-    event: TowerEvent.calmDamage
+    event: TowerEvent.hostileIntactReserveOk
+    target: TowerState.attacking
+    guard: ()
+
+toAttackingHostileIntactReserveLow: Transition TowerState TowerEvent TowerContext
+  Transition:
+    event: TowerEvent.hostileIntactReserveLow
+    target: TowerState.attacking
+    guard: ()
+
+toRepairingCalmDamageReserveOk: Transition TowerState TowerEvent TowerContext
+  Transition:
+    event: TowerEvent.calmDamageReserveOk
     target: TowerState.repairing
     guard: ()
 
-toGuardingCalmIntact: Transition TowerState TowerEvent TowerContext
+toGuardingCalmDamageReserveLow: Transition TowerState TowerEvent TowerContext
   Transition:
-    event: TowerEvent.calmIntact
+    event: TowerEvent.calmDamageReserveLow
+    target: TowerState.guarding
+    guard: ()
+
+toGuardingCalmIntactReserveOk: Transition TowerState TowerEvent TowerContext
+  Transition:
+    event: TowerEvent.calmIntactReserveOk
+    target: TowerState.guarding
+    guard: ()
+
+toGuardingCalmIntactReserveLow: Transition TowerState TowerEvent TowerContext
+  Transition:
+    event: TowerEvent.calmIntactReserveLow
     target: TowerState.guarding
     guard: ()
 
 guardingConfig: StateConfig TowerState TowerEvent TowerContext
   StateConfig:
-    transitions: [toAttackingHostileDamage, toAttackingHostileIntact, toRepairingCalmDamage, toGuardingCalmIntact]
+    transitions: [toAttackingHostileDamageReserveOk, toAttackingHostileDamageReserveLow, toAttackingHostileIntactReserveOk, toAttackingHostileIntactReserveLow, toRepairingCalmDamageReserveOk, toGuardingCalmDamageReserveLow, toGuardingCalmIntactReserveOk, toGuardingCalmIntactReserveLow]
     label: "Guarding"
 
 attackingConfig: StateConfig TowerState TowerEvent TowerContext
   StateConfig:
-    transitions: [toAttackingHostileDamage, toAttackingHostileIntact, toRepairingCalmDamage, toGuardingCalmIntact]
+    transitions: [toAttackingHostileDamageReserveOk, toAttackingHostileDamageReserveLow, toAttackingHostileIntactReserveOk, toAttackingHostileIntactReserveLow, toRepairingCalmDamageReserveOk, toGuardingCalmDamageReserveLow, toGuardingCalmIntactReserveOk, toGuardingCalmIntactReserveLow]
     label: "Attacking"
 
 repairingConfig: StateConfig TowerState TowerEvent TowerContext
   StateConfig:
-    transitions: [toAttackingHostileDamage, toAttackingHostileIntact, toRepairingCalmDamage, toGuardingCalmIntact]
+    transitions: [toAttackingHostileDamageReserveOk, toAttackingHostileDamageReserveLow, toAttackingHostileIntactReserveOk, toAttackingHostileIntactReserveLow, toRepairingCalmDamageReserveOk, toGuardingCalmDamageReserveLow, toGuardingCalmIntactReserveOk, toGuardingCalmIntactReserveLow]
     label: "Repairing"
 
-| Reachability from guarding: hostile* -> attacking, calmDamage ->
-| repairing — all three states reachable, every state covers all four
-| events, no finals, no deadlock. generate verifies exactly this.
+| Reachability from guarding: hostile** -> attacking,
+| calmDamageReserveOk -> repairing — all three states reachable, every
+| state covers all eight events, no finals, no deadlock. generate
+| verifies exactly this.
 
 towerMachine: Machine TowerState TowerEvent TowerContext
   Machine:

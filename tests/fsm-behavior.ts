@@ -3,13 +3,15 @@
 // the spec's policy tables. Run via
 // `nix build .#checks.x86_64-linux.fsm-behavior`.
 //
-// Event vocabulary (tutorial 5): CreepEvent is a PRODUCT of three
-// orthogonal facts — store level (empty|mid|full) x sink saturation
-// (SinksOpen|SinksFull) x site presence (Site|NoSite) — 12 variants,
-// spelled as the exact concatenation of the dimension values. TowerEvent
-// is the product threat (hostile|calm) x integrity (Damage|Intact).
-// One event per actor per tick, no priority, no masking: every fact
-// rides every event.
+// Event vocabulary (tutorial 5 + attack-defense): CreepEvent is a
+// PRODUCT of three orthogonal facts — store level (empty|mid|full) x
+// sink saturation (SinksOpen|SinksFull) x site presence (Site|NoSite)
+// — 12 variants, spelled as the exact concatenation of the dimension
+// values. TowerEvent is the product threat (hostile|calm) x integrity
+// (Damage|Intact) x reserve (ReserveOk|ReserveLow). The defender
+// machine's event type is ThreatLevel itself (hostile|calm). One event
+// per actor per tick, no priority, no masking: every fact rides every
+// event.
 //
 // Test strategy, two sweeps:
 //  1. Transitions: every state x every event against a policy oracle
@@ -29,10 +31,12 @@ import {
   harvesterTransition,
   upgraderTransition,
   builderTransition,
+  defenderTransition,
   towerTransition,
   harvesterContext,
   upgraderContext,
   builderContext,
+  defenderContext,
   towerContext,
   behaviors,
   towerBehaviors,
@@ -41,9 +45,11 @@ import type {
   HarvesterState,
   UpgraderState,
   BuilderState,
+  DefenderState,
   TowerState,
   CreepEvent,
   TowerEvent,
+  ThreatLevel,
   StateBehaviors,
   TowerStateBehaviors,
 } from "../generated/index";
@@ -66,17 +72,24 @@ const SINKS = ["SinksOpen", "SinksFull"] as const;
 const SITES = ["Site", "NoSite"] as const;
 const THREATS = ["hostile", "calm"] as const;
 const INTEGRITIES = ["Damage", "Intact"] as const;
+const RESERVES = ["ReserveOk", "ReserveLow"] as const;
 
 type Store = (typeof STORES)[number];
 type Sinks = (typeof SINKS)[number];
 type Sites = (typeof SITES)[number];
 type Threat = (typeof THREATS)[number];
 type Integrity = (typeof INTEGRITIES)[number];
+type Reserve = (typeof RESERVES)[number];
+
+// The THREATS dimension IS the ThreatLevel union (the defender's whole
+// event vocabulary and the tower event's first fact share one spelling)
+// — tsc proves the identification here.
+const threatEvent = (th: Threat): ThreatLevel => th;
 
 const creepEvent = (st: Store, sk: Sinks, si: Sites): CreepEvent =>
   `${st}${sk}${si}`;
-const towerEvent = (th: Threat, integ: Integrity): TowerEvent =>
-  `${th}${integ}`;
+const towerEvent = (th: Threat, integ: Integrity, rs: Reserve): TowerEvent =>
+  `${th}${integ}${rs}`;
 
 // Helper: run a transition and return the target state.
 function hTx(state: HarvesterState, event: CreepEvent): HarvesterState {
@@ -87,6 +100,9 @@ function uTx(state: UpgraderState, event: CreepEvent): UpgraderState {
 }
 function bTx(state: BuilderState, event: CreepEvent): BuilderState {
   return builderTransition(state, event, builderContext).target;
+}
+function dTx(state: DefenderState, event: ThreatLevel): DefenderState {
+  return defenderTransition(state, event, defenderContext).target;
 }
 function tTx(state: TowerState, event: TowerEvent): TowerState {
   return towerTransition(state, event, towerContext).target;
@@ -146,14 +162,25 @@ function builderOracle(
   return si === "Site" ? "building" : "assisting";
 }
 
-// Tower: attack OUTRANKS repair; state-independent pure policy. The
-// reference (section 5 main.js) issues repair then attack in one tick
-// and lets the later intent win — engine accident as priority. The spec
-// makes it explicit: hostile present -> attacking, no matter the
-// integrity fact (the hostileDamage rows pin it).
-function towerOracle(th: Threat, integ: Integrity): TowerState {
+// Defender: state-independent pure policy over the one threat fact —
+// hostile -> engaging, calm -> patrolling. The first combat creep and
+// the first creep machine with its own event type.
+function defenderOracle(th: Threat): DefenderState {
+  return th === "hostile" ? "engaging" : "patrolling";
+}
+
+// Tower: attack OUTRANKS repair, and repair respects the reserve;
+// state-independent pure policy. The reference (section 5 main.js)
+// issues repair then attack in one tick and lets the later intent win —
+// engine accident as priority. The spec makes it explicit: hostile
+// present -> attacking no matter integrity OR reserve (shoot with
+// whatever is in the tank); calm + Damage repairs only at ReserveOk —
+// at ReserveLow the tower guards instead of repairing itself dry (the
+// calmDamageReserveLow rows pin the energy discipline).
+function towerOracle(th: Threat, integ: Integrity, rs: Reserve): TowerState {
   if (th === "hostile") return "attacking";
-  return integ === "Damage" ? "repairing" : "guarding";
+  if (integ === "Damage" && rs === "ReserveOk") return "repairing";
+  return "guarding";
 }
 
 // ── Behavior oracles: what each state DOES ───────────────────────────
@@ -169,6 +196,8 @@ const creepBehaviorOracle: StateBehaviors = {
   gathering: { action: "harvest", target: "source" },
   building: { action: "build", target: "constructionSite" },
   assisting: { action: "upgrade", target: "controller" },
+  patrolling: { action: "idle", target: "none" },
+  engaging: { action: "attack", target: "hostile" },
 };
 
 const towerBehaviorOracle: TowerStateBehaviors = {
@@ -209,13 +238,22 @@ for (const state of ["gathering", "building", "assisting"] as const) {
       }
 }
 
-console.log("Tower: exhaustive 3 states x 4 events");
+console.log("Defender: exhaustive 2 states x 2 events");
+for (const state of ["patrolling", "engaging"] as const) {
+  for (const th of THREATS) {
+    const ev = threatEvent(th);
+    assert(`${state} + ${ev}`, dTx(state, ev), defenderOracle(th));
+  }
+}
+
+console.log("Tower: exhaustive 3 states x 8 events");
 for (const state of ["guarding", "attacking", "repairing"] as const) {
   for (const th of THREATS)
-    for (const integ of INTEGRITIES) {
-      const ev = towerEvent(th, integ);
-      assert(`${state} + ${ev}`, tTx(state, ev), towerOracle(th, integ));
-    }
+    for (const integ of INTEGRITIES)
+      for (const rs of RESERVES) {
+        const ev = towerEvent(th, integ, rs);
+        assert(`${state} + ${ev}`, tTx(state, ev), towerOracle(th, integ, rs));
+      }
 }
 
 // ── Exhaustive behavior sweep: every state's action+target vs oracle ─
