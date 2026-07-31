@@ -97,7 +97,7 @@
       # world's env storage, so the knob must overrule stale world
       # state), and the itest is wired to the same value. Optional
       # per-shell override: SCREEPS_TICK_MS.
-      tickMs = 100;
+      tickMs = 50;
 
       # The Screeps server itself, nix-vendored from the open-source npm
       # package (`screeps` = the launcher; it pulls in @screeps/backend,
