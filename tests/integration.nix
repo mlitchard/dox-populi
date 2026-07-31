@@ -408,7 +408,7 @@ testers.runNixOSTest {
         # progress keeps rising after the funeral.
 
         # Phase 1: wait for the first natural death. 1500 ticks after the
-        # first spawn is ~150s at compressed 100ms ticks; the earlier
+        # first spawn is short at compressed (tickMs) ticks; the earlier
         # subtests have already burned thousands of ticks, so the first
         # funeral may well be in the books before we even start —
         # `deaths >= 1` on the cumulative counter handles both cases. The
