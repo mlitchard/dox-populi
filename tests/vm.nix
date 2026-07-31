@@ -16,21 +16,22 @@ testers.runNixOSTest {
 
   nodes.machine = {
     imports = [ nixosModule ];
-    # vm/module.nix receives `self` via specialArgs in the real
-    # nixosConfigurations.vm; provide it the module-args way here.
-    _module.args.self = self;
     virtualisation.memorySize = 2048;
+    # Mirror run-vm.sh's repodir share: export the flake source over 9p
+    # so the module's /home/dev/dox-populi mount has a backend, exactly
+    # like the host repo does in the real dev VM.
+    virtualisation.qemu.options = [
+      "-virtfs local,path=${self},mount_tag=repodir,security_model=mapped-xattr"
+    ];
   };
 
   testScript = ''
     machine.start()
     machine.wait_for_unit("multi-user.target")
 
-    with subtest("seed service populates ~/dox-populi as a real git repo"):
-        machine.wait_for_unit("dox-populi-seed.service")
-        machine.succeed("test -d /home/dev/dox-populi/.git")
+    with subtest("host repo is live-mounted at ~/dox-populi over 9p"):
+        machine.succeed("mountpoint -q /home/dev/dox-populi")
         machine.succeed("test -f /home/dev/dox-populi/flake.nix")
-        machine.succeed("su - dev -c 'git -C ~/dox-populi rev-parse HEAD'")
 
     with subtest("sshd is up for host editor integration"):
         machine.wait_for_unit("sshd.service")

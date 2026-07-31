@@ -13,16 +13,30 @@
 
     secrix.url = "github:Platonic-Systems/secrix";
 
+    disko = {
+      url = "github:nix-community/disko";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     gitlab-ci = {
       url = "git+ssh://git@gitlab.platonic.systems/platonic/gitlab-ci.nix.git";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };
 
-  outputs = { self, nixpkgs, paradox, typed-screeps, secrix, gitlab-ci }:
+  outputs = { self, nixpkgs, paradox, typed-screeps, secrix, disko, gitlab-ci }:
     let
       system = "x86_64-linux";
       pkgs = import nixpkgs { inherit system; };
+      # Every locked flake input source, recursively (nested inputs
+      # included). Baked into the VM image so the guest's first
+      # `nix develop` finds all eval sources (content-addressed by
+      # narHash) already in the store and fetches nothing.
+      collectFlakeInputs = input:
+        [ input ] ++ builtins.concatMap collectFlakeInputs
+          (builtins.attrValues (input.inputs or { }));
+      flakeInputSources =
+        builtins.concatMap collectFlakeInputs (builtins.attrValues self.inputs);
       paradoxBin = paradox.packages.${system}.paradox;
       # Atlas lives in the paradox *source* (the flake input), not the
       # installed package output.
@@ -168,19 +182,42 @@
         ];
       };
 
-      # Dev VM for hosts without nix. Never built on the host: run-vm.sh
-      # (qemu only) boots the auto-installing ISO (vm/installer.nix,
-      # dubai installer-auto-dd pattern), whose boot service runs
-      # `nixos-install --flake <embedded repo>#vm` — the guest's nix
-      # builds everything. See vm/module.nix for the installed system.
+      # Dev VM for hosts without nix (dubai installer-auto-dd dd
+      # pattern). Never built on the host, never built at install time:
+      # the disko image builder bakes nixosConfigurations.vm into a raw
+      # disk image (packages.vm-image → vm-image-zst), the installer
+      # ISO (vm/installer.nix) carries that compressed image and its
+      # boot service just dd's it onto /dev/vda and grows the root
+      # partition — no nix, no git, no network in the installer.
+      # vm/module.nix is the installed system; vm/disko.nix holds the
+      # disk layout (a separate module so tests/vm.nix, which imports
+      # module.nix alone, stays disko-free).
       nixosConfigurations.vm = nixpkgs.lib.nixosSystem {
         inherit system;
-        specialArgs = { inherit self; };
-        modules = [ ./vm/module.nix ];
+        modules = [
+          disko.nixosModules.disko
+          ./vm/disko.nix
+          ./vm/module.nix
+          # Bake the dev goodies into the image so the first
+          # `nix develop` in the VM builds nothing AND fetches nothing:
+          # build outputs (devshell/server/client) plus every locked
+          # flake input source (eval needs them; content-addressed, so
+          # the guest's nix reuses the baked copies). Lives here — not
+          # in vm/module.nix — because it needs `self`, and module.nix
+          # must stay self-free for tests/vm.nix. (Replaces the old
+          # installer-time `nix build --store /mnt` step.)
+          {
+            system.extraDependencies = flakeInputSources ++ [
+              self.devShells.${system}.default
+              self.packages.${system}.screeps-server
+              self.packages.${system}.screeps-client
+            ];
+          }
+        ];
       };
       nixosConfigurations.installer = nixpkgs.lib.nixosSystem {
         inherit system;
-        specialArgs = { inherit self; };
+        specialArgs = { vmImageZst = self.packages.${system}.vm-image-zst; };
         modules = [ ./vm/installer.nix ];
       };
 
@@ -190,6 +227,20 @@
         screeps-client = screepsClient;
         secrix = secrixCli;
         default = main;
+        # Raw disk image of the dev VM system, built by disko's image
+        # builder (qemu in the sandbox): 16G GPT disk (BIOS-boot part +
+        # ext4 root), BIOS grub, full closure preinstalled. Output:
+        # <name>.raw per disk (vm/disko.nix names one disk, "main").
+        vm-image =
+          self.nixosConfigurations.vm.config.system.build.diskoImages;
+        # zstd -3: dubai measured ~100x faster than -19 for <3% size
+        # difference; decompression speed is level-independent.
+        vm-image-zst = pkgs.runCommand "dox-populi-vm-image-zst"
+          { nativeBuildInputs = [ pkgs.zstd ]; } ''
+          mkdir -p $out
+          zstd -3 -T0 -v -o $out/image.raw.zst \
+            ${self.packages.${system}.vm-image}/*.raw
+        '';
         installer-iso =
           self.nixosConfigurations.installer.config.system.build.isoImage;
       };
@@ -224,7 +275,8 @@
           echo "  nix run .#stop                — stop server + client (world kept)"
           echo "  nix run .#reset-local         — stop server + wipe the private world"
           echo "  nix run .#itest               — VM integration test: deploy + spawn + harvest"
-          echo "  ./run-vm.sh                   — dev VM for non-nix users (self-installs via qemu)"
+          echo "  nix run .#installer-iso       — provision the dev VM disk (one-time dd install)"
+          echo "  ./run-vm.sh                   — run the installed dev VM"
           echo "  nix flake check               — run all checks"
         '';
       };
@@ -239,7 +291,7 @@
 
         # Boots the dev VM system (vm/module.nix) in the NixOS test
         # harness (dubai nix-workstation-image pattern) and asserts the
-        # first-boot contract: seeded repo, sshd, flakes, dev env vars.
+        # first-boot contract: live-mounted repo, sshd, flakes, dev env vars.
         vm-boot = pkgs.callPackage ./tests/vm.nix {
           nixosModule = ./vm/module.nix;
           inherit self;
@@ -555,6 +607,51 @@
             ${pkgs.procps}/bin/pkill -9 -f '${screepsServer}/node_modules' 2>/dev/null || true
             rm -rf "$DATA"
             echo "world reset: $DATA removed (fresh world on next nix run .#server)"
+          '');
+        };
+
+        # Provision the dev VM disk (one-time): create dox-populi.qcow2
+        # and boot the flake's own installer ISO in qemu, foreground,
+        # serial on stdio. The ISO's boot service dd's the prebuilt
+        # system image onto the disk, grows the root partition, and
+        # powers off (vm/installer.nix) — qemu exiting cleanly means
+        # the install is done. Run the installed VM with ./run-vm.sh
+        # (which only RUNS; all provisioning lives here). No -netdev:
+        # the dd installer needs no network, so it gets none.
+        # `nix run .#installer-iso` resolves to this app; `nix build
+        # .#installer-iso` still builds the bare ISO package.
+        installer-iso = {
+          type = "app";
+          program = toString (pkgs.writeShellScript "install-vm" ''
+            set -euo pipefail
+            DISK="''${DISK:-$(${pkgs.git}/bin/git rev-parse --show-toplevel)/dox-populi.qcow2}"
+            DISK_SIZE="''${DISK_SIZE:-40G}"
+            MEM="''${MEM:-4G}"
+            CPUS="''${CPUS:-4}"
+            if [ -f "$DISK" ]; then
+              echo "error: $DISK already exists — the VM is already installed." >&2
+              echo "run it with ./run-vm.sh, or delete the disk for a factory reset." >&2
+              exit 1
+            fi
+            ISO=$(set -- ${self.packages.${system}.installer-iso}/iso/*.iso; echo "$1")
+            ACCEL=()
+            if [ -w /dev/kvm ]; then
+              ACCEL=(-enable-kvm -cpu host)
+            else
+              echo "warning: /dev/kvm not writable — running unaccelerated (slow)" >&2
+            fi
+            ${pkgs.qemu}/bin/qemu-img create -f qcow2 "$DISK" "$DISK_SIZE"
+            echo "created $DISK ($DISK_SIZE) — booting the installer (dd, grow, poweroff)..."
+            ${pkgs.qemu}/bin/qemu-system-x86_64 \
+              "''${ACCEL[@]}" \
+              -m "$MEM" -smp "$CPUS" \
+              -drive "file=$DISK,if=virtio,format=qcow2" \
+              -cdrom "$ISO" -boot d \
+              -display none \
+              -serial mon:stdio \
+              || { echo "error: installer qemu exited abnormally — delete $DISK and retry" >&2; exit 1; }
+            echo ""
+            echo "install complete — boot the dev VM with ./run-vm.sh"
           '');
         };
 
