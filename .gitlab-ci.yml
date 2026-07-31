@@ -45,6 +45,21 @@ apps:gitlab-ci:
   script:
     - nix build .#apps.x86_64-linux.gitlab-ci.program --no-link --print-build-logs 2>/dev/null || nix build --no-link --print-build-logs "$(nix eval --raw --impure --expr 'builtins.head (builtins.attrNames (builtins.getContext (builtins.getFlake (toString ./.)).apps.x86_64-linux.gitlab-ci.program))')"
   stage: build
+apps:installer-iso:
+  needs:
+    - apps:secrix
+    - devShells:default
+    - nixosConfigurations:installer
+    - nixosConfigurations:vm
+    - packages:installer-iso
+    - packages:screeps-client
+    - packages:screeps-server
+    - packages:secrix
+    - packages:vm-image
+    - packages:vm-image-zst
+  script:
+    - nix build .#apps.x86_64-linux.installer-iso.program --no-link --print-build-logs 2>/dev/null || nix build --no-link --print-build-logs "$(nix eval --raw --impure --expr 'builtins.head (builtins.attrNames (builtins.getContext (builtins.getFlake (toString ./.)).apps.x86_64-linux.installer-iso.program))')"
+  stage: build
 apps:itest:
   needs: []
   script:
@@ -166,7 +181,12 @@ nixosConfigurations:installer:
     - nixos-rebuild build --flake .#installer -L
   stage: build
 nixosConfigurations:vm:
-  needs: []
+  needs:
+    - apps:secrix
+    - devShells:default
+    - packages:screeps-client
+    - packages:screeps-server
+    - packages:secrix
   script:
     - nixos-rebuild build --flake .#vm -L
   stage: build
@@ -183,7 +203,15 @@ packages:generated:
   stage: build
 packages:installer-iso:
   needs:
+    - apps:secrix
+    - devShells:default
     - nixosConfigurations:installer
+    - nixosConfigurations:vm
+    - packages:screeps-client
+    - packages:screeps-server
+    - packages:secrix
+    - packages:vm-image
+    - packages:vm-image-zst
   script:
     - nix build .#packages.x86_64-linux.installer-iso --no-link --print-build-logs
   stage: build
@@ -209,6 +237,29 @@ packages:secrix:
     - apps:secrix
   script:
     - nix build .#packages.x86_64-linux.secrix --no-link --print-build-logs
+  stage: build
+packages:vm-image:
+  needs:
+    - apps:secrix
+    - devShells:default
+    - nixosConfigurations:vm
+    - packages:screeps-client
+    - packages:screeps-server
+    - packages:secrix
+  script:
+    - nix build .#packages.x86_64-linux.vm-image --no-link --print-build-logs
+  stage: build
+packages:vm-image-zst:
+  needs:
+    - apps:secrix
+    - devShells:default
+    - nixosConfigurations:vm
+    - packages:screeps-client
+    - packages:screeps-server
+    - packages:secrix
+    - packages:vm-image
+  script:
+    - nix build .#packages.x86_64-linux.vm-image-zst --no-link --print-build-logs
   stage: build
 stages:
   - build

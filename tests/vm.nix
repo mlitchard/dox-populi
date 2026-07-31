@@ -32,6 +32,10 @@ testers.runNixOSTest {
     machine.wait_for_unit("multi-user.target")
 
     with subtest("host repo is live-mounted at ~/dox-populi over 9p"):
+        # The mount is nofail, so multi-user.target does NOT wait for
+        # it: checking mountpoint right away races the mount unit —
+        # fast KVM hosts win, slow CI runners lose. Wait for the unit.
+        machine.wait_for_unit("home-dev-dox\\x2dpopuli.mount")
         machine.succeed("mountpoint -q /home/dev/dox-populi")
         machine.succeed("test -f /home/dev/dox-populi/flake.nix")
 
