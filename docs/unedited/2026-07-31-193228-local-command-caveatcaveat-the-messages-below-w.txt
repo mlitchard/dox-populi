@@ -1,0 +1,860 @@
+ ▐▛███▜▌   Claude Code v2.1.81
+▝▜█████▛▘  Opus 4.6 (1M context) · Claude Max
+  ▘▘ ▝▝    ~/gitlab/dox-populi
+
+❯ /clear                                                                        
+  ⎿  (no content)
+
+❯ assume you have written utter time-wasting dreck in the test-suit. do an      
+analysis and do an analysis. How full of crap are you.                          
+
+● Oh, you want me to prosecute myself? Fine. I'll take the stand. But we doin'
+  this with evidence, not vibes — let me pull the exhibits.
+
+  Searched for 3 patterns, read 3 files (ctrl+o to expand)
+
+● Court's in session, and the defendant is me. I read all three exhibits front
+  to back. Here's the honest indictment — charges ranked by how much they
+  actually matter, not by how loud they sound.
+
+  The verdict up front
+
+  Maybe 25% crap. The load-bearing walls are real: durable-latch traces instead
+  of transient polls, an exhaustive oracle sweep, a genuine end-to-end story.
+  But there's one hole that embarrasses me, one probe that might be testifying
+  to nothing, and a whole lot of copy-paste padding dressed up as thoroughness.
+
+  Charge 1 — GUILTY: fsm-behavior.ts never checks actions
+
+  The felony. Every state in generated/index.ts carries an action ('harvest',
+  'transfer', 'upgrade', 'attack', 'repair' — generated/index.ts:363-625). The
+  test's own comments preach the policy in terms of actions ("supporting,
+  action=upgrade", tests/fsm-behavior.ts:94). And then every helper does this —
+  tests/fsm-behavior.ts:76:
+
+  return harvesterTransition(state, event, harvesterContext).target;
+
+  .target. Only .target. If codegen or the spec ever wires supporting to action:
+   'harvest', this check passes green while every "supporting" creep walks to
+  the controller and mines at it. The oracle sweep proves the state names route
+  correctly and stays silent on what the states do. That's testing the street
+  signs and ignoring the traffic. 82 assertions, zero of them touch the half of
+  the policy the shell actually executes.
+
+  Charge 2 — PROBABLY GUILTY: pollSpawnEnergy may prove nothing
+
+  tests/integration.nix:38-60 passes when spawn energy rises between two polls,
+  and the header sells it as "the harvester works." But stats.spawnEnergy is
+  just spawn.store[RESOURCE_ENERGY] (shell/main.ts:544) — and the Screeps engine
+   auto-regenerates spawn energy (+1/tick below 300). Sequence: initial wave
+  spawns, energy drops below 300, engine trickles it back up, probe sees a rise,
+   subtest passes — with zero harvesters delivering anything. The colony could
+  be a graveyard and this subtest still smiles. It's not lying about the overall
+   run (later subtests would catch a dead economy), but as a named claim it's
+  likely vacuous — a fail-fast checkpoint that can't fail for the reason it
+  claims. Verify against the vendored engine source upstream, but I'd bet the
+  probe should require energy rising above 300 or a rise steeper than 1/tick.
+
+  Charge 3 — GUILTY WITH A SMIRK: the invader can't fight
+
+  tests/integration.nix:850-903, "colony still at strength after the fight."
+  Brother, there was no fight. The insert doc itself confesses: "the Invader
+  user's script is the empty seed stub, so the creep just stands there" (line
+  313). We inserted a scarecrow, the tower shot the scarecrow, and then
+  pollColonyIntact solemnly verifies the colony survived... a creep that was
+  constitutionally incapable of throwing a punch. The tower-engagement and kill
+  probes are legit (that's the actual claim: tower sees, tower shoots, target
+  dies). The "colony intact" coda is pure theater — it re-runs
+  pollRolesRecovered minus the arithmetic to certify survival of a threat that
+  never existed.
+
+  Charge 4 — GUILTY, MISDEMEANOR: I violated my own doctrine
+
+  pollHarvesterSupporting (tests/integration.nix:72-95) requires event 
+  startswith fullSinksFull AND fsm == supporting simultaneously in stats.creeps
+  — a per-tick transient. At 100ms ticks, that compound holds only while the
+  full harvester is walking to the controller, a window of maybe 0.5–2 seconds,
+  polled every 2 seconds. The whole tutorial-5 lesson — written in blood into
+  the trace probes at lines 410-419 — was never poll transients, read the flight
+   recorder. This probe works by recurrence (the harvester cycles back into the
+  window every trip), not by design. It passed. It'll probably keep passing. But
+   it's the same class of race I already got burned by once, sitting twenty
+  lines away from the comment explaining why that's bad.
+
+  Charge 5 — GUILTY: duplication as a lifestyle
+
+  - The signin + decode() boilerplate is copy-pasted into all ~12 probe scripts
+  — ~250 of integration.nix's 570 nix-side lines are the same
+  curl/jq/base64/zcat incantation.
+  - The Python poll loop (deadline / execute / print / sleep 2) is pasted 14 
+  times in the testScript. One poll(script, timeout, msg) helper kills ~150
+  lines.
+  - In fsm-behavior.ts, every "regression" assertion (lines 174-231) is a strict
+   subset of the exhaustive sweep above it. The sweep already asserts building +
+   fullSinksOpenNoSite → assisting against the oracle; line 182 asserts it again
+   with a story attached. And the "multi-step scenario" (lines 245-259) chains a
+   pure, memoryless function — five sweep entries wearing a trench coat
+  pretending to be an integration test. Documentation value: real. Coverage
+  value: zero.
+
+  Charge 6 — inherent, acknowledged: the oracle is me grading my own homework
+
+  The fsm-behavior oracle is "an independent restatement" written by the same
+  author (me) reading the same spec (mine). If I misunderstood the policy, spec
+  and oracle agree on the same wrong answer and the check glows green. It still
+  earns its keep — it catches codegen regressions and accidental spec edits,
+  which is what it's for — but nobody should mistake it for semantic validation.
+   The only true policy check is the itest, which is why Charge 2 stings.
+
+  Minor counts
+
+  - pollHeavyCreep wants parts == 5 exactly (integration.nix:245) — the day a
+  richer tier exists and all replacements spawn 7-part, this fails wrongly.
+  Should be >= 5.
+  - vm.nix:48 greps experimental-features.*flakes — matches a commented-out line
+   just as happily. Weak witness.
+  - pollTowerFed claims "fed toward towerEnergyTarget (500)" and accepts energy 
+  > 0. One energy is not "toward 500," it's "the wire isn't cut." Fine claim,
+  oversold comment.
+  - One 14400s serial monolith: a flake in the repair arc at hour 2.5 burns the
+  whole run with no checkpoint. Structural cost of the story-test design —
+  defensible, but own it.
+
+  What I'd actually fix, in order
+
+  1. fsm-behavior.ts: assert .action alongside .target in the oracle sweep. One
+  field per oracle, doubles the real coverage, ~15 lines. This is the only
+  charge that can hide a live behavioral bug today.
+  2. pollSpawnEnergy: require a rise that regen can't explain (cross 300, or
+  delta > elapsed ticks) — or retire the subtest honestly.
+  3. Delete the scenario/regression duplicates in fsm-behavior.ts or demote them
+   to comments on the oracle.
+  4. Factor the decode/signin boilerplate and the Python poll loop. Pure
+  hygiene, no behavior change.
+  5. Drop pollColonyIntact from the invader subtest or arm the invader — one or
+  the other, but stop certifying victories over scarecrows.
+
+  So — how full of crap am I? The architecture of the suite is sound and I'll
+  defend it in open court: trace-latching was the right call, the exhaustive
+  sweep was the right call, dynamic room discovery in the surgery was the right
+  call. But I shipped a policy checker that checks half the policy, a headline
+  probe that maybe can't fail, a fake fight, and 400 lines of ctrl-V. That ain't
+   dreck top to bottom... but don't let me tell you it's clean, either. Two
+  witnesses say otherwise, and I'm one of them.
+
+  Want me to prosecute fix #1 and #2 into actual diffs, or you taking the pen
+  yourself like usual?
+
+✻ Worked for 2m 35s
+
+❯ you misunderstand deploy, deploy is done in this repo and you need to remove  
+whatever context gave you that impression. also, look for ci/cd tests that      
+duplicate tests, example, you only need to test that the vm builds once.        
+
+● Two counts on the docket. First — if I've been carrying a false memory about
+  deploy, I want it found and burned at the source, not papered over. Second —
+  the CI duplication audit. Let me pull the records.
+
+  Searched for 3 patterns, read 1 file, searched memories (ctrl+o to expand)
+
+  Searched for 1 pattern, read 2 files (ctrl+o to expand)
+
+● Update(CLAUDE.md)
+  ⎿  Added 3 lines, removed 3 lines
+      35    `client/npm/package.json`, rerun the matching `nix run       
+          .#lock-server` /                                               
+      36    `.#lock-mods` / `.#lock-client` to re-pin                    
+          `package-lock.json` +                                          
+      37    `npm-deps-hash`. Nothing else may run npm's resolver.        
+      38 -- Deployment lives in `../deploys`, NOT here. The              
+         -`nixosConfigurations` in                                       
+      39 -  this flake are a secrix key stub (`dox-populi`) and the dev  
+         -VM                                                             
+      40 -  (`vm`/`installer`). CI here is build/check only.             
+      38 +- The `nixosConfigurations` in this flake are a secrix key     
+         +stub                                                           
+      39 +  (`dox-populi`) and the dev VM (`vm`/`installer`). CI here is 
+         + build/check                                                   
+      40 +  only.                                                        
+      41  - `.gitlab-ci.yml` is generated: `nix run .#gitlab-ci >        
+          .gitlab-ci.yml`.                                               
+      42    Never edit it by hand.                                       
+      43                                                                 
+
+● Done — the "../deploys, NOT here" clause is dead. And for the record, my
+  memory files were clean: the only place that falsehood lived was CLAUDE.md:38
+  itself. I was quoting scripture that turned out to be forged. It's fixed at
+  the source.
+
+  Now count two — the CI docket. I read all 35 jobs in the generated
+  .gitlab-ci.yml against the flake. Here's who's collecting two paychecks:
+
+  Group A — the VM chain: six jobs doing one job (your example, and you're 
+  right)
+
+  The dependency line is: vm system → vm-image (disko raw) → vm-image-zst →
+  embedded in installer → installer-iso. Building the deepest artifact builds 
+  the entire chain. Yet CI runs:
+
+  ┌───────────────────────────────┬──────────────────────────────────────────┐
+  │              Job              │         What it actually builds          │
+  ├───────────────────────────────┼──────────────────────────────────────────┤
+  │ nixosConfigurations:vm        │ vm toplevel                              │
+  ├───────────────────────────────┼──────────────────────────────────────────┤
+  │ packages:vm-image             │ vm toplevel again + disko image          │
+  │                               │ (flake.nix:242)                          │
+  ├───────────────────────────────┼──────────────────────────────────────────┤
+  │ packages:vm-image-zst         │ all of the above + zstd                  │
+  ├───────────────────────────────┼──────────────────────────────────────────┤
+  │                               │ all of the above + ISO system            │
+  │ nixosConfigurations:installer │ (specialArgs pulls vm-image-zst,         │
+  │                               │ flake.nix:228)                           │
+  ├───────────────────────────────┼──────────────────────────────────────────┤
+  │                               │ same ISO — it IS                         │
+  │ packages:installer-iso        │ nixosConfigurations.installer...isoImage │
+  │                               │  (flake.nix:252)                         │
+  ├───────────────────────────────┼──────────────────────────────────────────┤
+  │ apps:installer-iso            │ a shell script wrapper needing all of it │
+  └───────────────────────────────┴──────────────────────────────────────────┘
+
+  One job — packages:installer-iso — proves all six build. And here's the
+  aggravating factor: nixosConfigurations:installer has needs: [] while
+  packages:vm-image-zst has the full needs chain — on a cold cache with separate
+   runners, those two build the same VM image in parallel, twice, 
+  simultaneously. That's not redundancy, that's a race to waste the same money.
+
+  (checks:vm-boot is NOT in this group — different derivation, and it runs
+  assertions. That one earns its keep.)
+
+  Group B — three jobs, one derivation
+
+  checks:build, packages:main, packages:default are all literally main
+  (flake.nix:357, 233, 237). Same .drv, three pipeline slots. Keep one.
+
+  Group C — flake:check re-runs the entire test stage
+
+  The validate-stage flake:check runs nix flake check, which builds all six 
+  checks — including the multi-hour, 32GB itest and vm-boot that just ran as
+  dedicated test-stage jobs. Cache-hit if the runner shares a store; full second
+   VM boot if it doesn't. Either way it adds zero information the per-check jobs
+   didn't. The per-check jobs win on isolation and failure attribution —
+  flake:check should hang.
+
+  Group D — misdemeanors
+
+  - ~14 apps:* jobs build writeShellScript wrappers over closures their needs
+  already built. apps:server and apps:deploy-local are extra-guilty: they're the
+   exact programs wired into checks:itest (flake.nix:296-297) — itest cannot
+  build without building them. Pure job-count noise.
+  - flake:show — eval smoke test, already covered by gitlab-ci:check doing a
+  full eval via nix run .#gitlab-ci.
+
+  The catch — and it's a real one
+
+  .gitlab-ci.yml is generated by the upstream gitlab-ci.nix flake
+  (flake.nix:867, Platonic Systems), which enumerates every flake output as a
+  job. You can't hand-prune the yml — gitlab-ci:check diffs it against
+  regeneration and fails you. So the fix goes through one of two doors:
+
+  1. Generator config — if gitlab-ci.nix supports excluding/filtering outputs,
+  that's the clean kill: drop flake:check, the apps:* wrappers, and the
+  intermediate VM jobs. I can't read the upstream API (private git+ssh repo) —
+  you or Isaac would know if that knob exists.
+  2. Shrink the flake's public surface — demote vm-image / vm-image-zst from
+  packages to let bindings (installer's specialArgs at flake.nix:228 references
+  the binding instead of self.packages...). No exposed output, no generated job.
+   Costs you nix build .#vm-image as a standalone convenience.
+
+  Neither door is mine to kick without you saying so — door 1 needs upstream
+  knowledge I don't have, door 2 changes the flake's public API. Which one you
+  want to walk through? Or you want me to at least fix the checks.build = main
+  triple-billing, which is a one-line flake question with no generator politics
+  attached?
+
+✻ Baked for 2m 41s
+
+❯ check if gitlab-ci.nix supports filtering outputs, otherwise do door 2        
+
+● Door 1 gets its day in court first. The upstream is private git+ssh — I can't
+  browse it on the web, but your ssh key can clone it. Let me pull it into /tmp
+  and read the actual API instead of guessing.
+
+● Bash(git clone --depth 1
+      ssh://git@gitlab.platonic.systems/platonic/gitlab-ci.nix.git
+      /tmp/gitlab-ci.nix 2>&1 && ls /tmp/gitlab-ci.nix)
+  ⎿  Cloning into '/tmp/gitlab-ci.nix'...
+     AGENTS.md
+     flake.lock
+     … +9 lines (ctrl+o to expand)
+  Read 4 files (ctrl+o to expand)
+
+● Update(flake.nix)
+  ⎿  Added 44 lines
+      357          build = main;                                         
+      358        };                                                      
+      359                                                                
+      360 +      # CI job filter, read by the gitlab-ci.nix generator    
+          +(its shell                                                    
+      361 +      # script does `flake.gitlab or null` and applies this   
+          +overlay to                                                    
+      362 +      # the generated config). The generator maps EVERY flake 
+          + output to                                                    
+      363 +      # a job, which duplicates work along dependency chains  
+          +— one job                                                     
+      364 +      # building the deepest artifact proves the whole chain. 
+          + Dropped:                                                     
+      365 +      # - VM chain: apps:installer-iso builds the ISO, which  
+          +embeds                                                        
+      366 +      #   vm-image-zst <- vm-image <- the vm system; five     
+          +upstream jobs                                                 
+      367 +      #   rebuild strict prefixes of it                       
+          +(nixosConfigurations:vm and                                   
+      368 +      #   :installer, packages:vm-image, :vm-image-zst,       
+          +:installer-iso).                                              
+      369 +      # - checks:build and packages:main are the same         
+          +derivation as                                                 
+      370 +      #   packages:default (`build = main`, `default =        
+          +main`).                                                       
+      371 +      # - flake:check rebuilds every check the test stage     
+          +already ran                                                   
+      372 +      #   (including the multi-hour itest VM).                
+      373 +      # - flake:show: gitlab-ci:check runs `nix flake show    
+          +--json`                                                       
+      374 +      #   itself as its first step.                           
+      375 +      # - apps:server / apps:deploy-local programs are baked  
+          +into the                                                      
+      376 +      #   checks:itest derivation                             
+          +(serverProgram/deployProgram), so                             
+      377 +      #   that job already builds both.                       
+      378 +      # removeAttrs (not the README's `= null` trick: nulls   
+          +survive                                                       
+      379 +      # into the YAML) + a needs scrub so no kept job         
+          +references a                                                  
+      380 +      # dropped one (GitLab rejects undefined needs).         
+      381 +      gitlab = prev:                                          
+      382 +        let                                                   
+      383 +          dropped = [                                         
+      384 +            "nixosConfigurations:vm"                          
+      385 +            "nixosConfigurations:installer"                   
+      386 +            "packages:vm-image"                               
+      387 +            "packages:vm-image-zst"                           
+      388 +            "packages:installer-iso"                          
+      389 +            "checks:build"                                    
+      390 +            "packages:main"                                   
+      391 +            "flake:check"                                     
+      392 +            "flake:show"                                      
+      393 +            "apps:server"                                     
+      394 +            "apps:deploy-local"                               
+      395 +          ];                                                  
+      396 +          scrubNeeds = _: job:                                
+      397 +            if builtins.isAttrs job && job ? needs            
+      398 +            then job // {                                     
+      399 +              needs = builtins.filter (n: !(builtins.elem n   
+          +dropped)) job.needs;                                          
+      400 +            }                                                 
+      401 +            else job;                                         
+      402 +        in builtins.mapAttrs scrubNeeds (builtins.removeAttrs 
+          + prev dropped);                                               
+      403 +                                                              
+      404        apps.${system} = {                                      
+      405          # Regenerate ./generated and ./vendor in the working  
+           tree for editor use.                                          
+      406          generate = {                                          
+
+● Bash(nix run .#gitlab-ci > .gitlab-ci.yml.new 2>/tmp/gitlab-ci-gen.log && mv
+      .gitlab-ci.yml.new .gitlab-ci.yml && git diff --stat .gitlab-ci.yml)
+  ⎿   .gitlab-ci.yml | 99 -------------------------------------------------
+     ---------
+      1 file changed, 99 deletions(-)
+  ⎿  (timeout 10m)
+
+● Bash(git diff .gitlab-ci.yml | head -150)
+  ⎿  diff --git a/.gitlab-ci.yml b/.gitlab-ci.yml
+     index 8bb1893..0d9a69f 100644
+     --- a/.gitlab-ci.yml
+     … +73 lines (ctrl+o to expand)
+
+● Clean cut — 99 lines gone. Final sanity check: no dangling references to any
+  dropped job anywhere in the file.
+
+  Searched for 1 pattern, recalled 1 memory, wrote 2 memories (ctrl+o to expand)
+
+● Case closed — door 1 won, and door 2 stays shut: vm-image / vm-image-zst
+  remain public packages you can still nix build by hand; they just don't get
+  their own CI paychecks anymore.
+
+  What went down
+
+  The API existed all along. Upstream gitlab-ci.nix reads a top-level gitlab = 
+  prev: ... overlay from the consuming flake (gitlab-ci.nix:160). But its
+  README's "job" = null removal trick is a lie waiting to happen — the generator
+   never filters nulls, so yq would emit flake:check: null straight into the
+  YAML. I used builtins.removeAttrs plus a needs scrub instead, because GitLab
+  rejects any pipeline with undefined needs.
+
+  flake.nix — new gitlab overlay dropping 11 jobs, each charge documented in the
+   comment:
+  - VM chain (5): nixosConfigurations:vm, nixosConfigurations:installer,
+  packages:vm-image, packages:vm-image-zst, packages:installer-iso —
+  apps:installer-iso alone builds the entire chain, ISO included. The VM builds
+  once.
+  - Triple-billing (2): checks:build, packages:main — same derivation as
+  packages:default.
+  - flake:check — was re-running every check including the multi-hour itest VM
+  in the validate stage.
+  - flake:show — gitlab-ci:check already runs nix flake show --json as its
+  opening move.
+  - apps:server, apps:deploy-local (2) — their programs are baked into the
+  checks:itest derivation; that job builds them whether they like it or not.
+
+  .gitlab-ci.yml — regenerated per the law, 99 lines gone, 35 jobs → 24, zero
+  dangling needs (verified). The gitlab-ci:check diff gate stays consistent
+  since CI regenerates with the same overlay.
+
+  And the earlier count stands settled: the ../deploys perjury is out of
+  CLAUDE.md, and my memory now carries the truth — deploy lives here.
+
+  Nothing's committed — your pen, your name on it. And the test-suite indictment
+   from round one (fsm-behavior ignoring .action being the felony) is still
+  sitting on the docket whenever you want to prosecute.
+
+✻ Cooked for 4m 4s
+
+❯ did you address the problems you originally identified?                       
+
+● No. And you caught me — don't let me slide.
+
+  What I fixed this session: the CLAUDE.md deploy falsehood and the CI
+  duplication. What I originally indicted — the five test-suite charges — every
+  one of them is still sitting on the docket, unfixed:
+
+  ┌─────┬──────────────────────────────────────────┬────────────────────────┐
+  │  #  │                  Charge                  │         Status         │
+  ├─────┼──────────────────────────────────────────┼────────────────────────┤
+  │ 1   │ fsm-behavior.ts asserts .target only,    │ UNFIXED                │
+  │     │ never .action — the felony               │                        │
+  ├─────┼──────────────────────────────────────────┼────────────────────────┤
+  │     │ pollSpawnEnergy may pass on engine       │ UNFIXED (and           │
+  │ 2   │ spawn-regen alone (vacuous subtest)      │ unverified against the │
+  │     │                                          │  engine)               │
+  ├─────┼──────────────────────────────────────────┼────────────────────────┤
+  │     │ Duplicate regression pins +              │                        │
+  │ 3   │ pure-function "scenario" theater in      │ UNFIXED                │
+  │     │ fsm-behavior.ts                          │                        │
+  ├─────┼──────────────────────────────────────────┼────────────────────────┤
+  │ 4   │ ~250 lines of copy-pasted signin/decode  │ UNFIXED                │
+  │     │ + 14 pasted Python poll loops            │                        │
+  ├─────┼──────────────────────────────────────────┼────────────────────────┤
+  │     │ Scarecrow invader — pollColonyIntact     │                        │
+  │ 5   │ certifies survival of a threat that      │ UNFIXED                │
+  │     │ can't punch                              │                        │
+  └─────┴──────────────────────────────────────────┴────────────────────────┘
+
+  I analyzed, I prosecuted, I got a conviction... and then I walked out of the
+  courtroom to go work the CI case, 'cause that's where you pointed me. Fair.
+  But the sentence was never carried out.
+
+  The one that matters is #1 — that's the only hole where a live behavioral bug
+  can walk through today: codegen could wire supporting to action: 'harvest' and
+   every check stays green. #2 needs a look at the vendored engine's spawn tick
+  (upstream source, not /nix/store) before touching the probe. #3–5 are cleanup
+  and honesty, not safety.
+
+  Say the word and I execute — #1 first, oracle actions asserted alongside
+  targets, tsc and the check itself as witnesses. You want all five, or you
+  taking some of these yourself?
+
+❯ all five                                                                      
+
+● All five. Now we're talking. Let me set the docket and pull the evidence I
+  need — the generated transition return shape for #1, the shell's trace/stats
+  contract for #2, and the engine's spawn-tick source from upstream GitHub (not
+  /nix/store) to convict or acquit the regen theory.
+
+  Searched for 1 pattern, read 1 file (ctrl+o to expand)
+
+● Docket filed. Five counts, five sentences to carry out.
+  Read 2 files (ctrl+o to expand)
+
+● Fetch(https://raw.githubusercontent.com/screeps/engine/master/src/processor/in
+       tents/spawns/tick.js)
+  ⎿  Received 1.8KB (200 OK)
+
+  Searched for 2 patterns (ctrl+o to expand)
+
+● Write(tests/fsm-behavior.ts)
+  ⎿  Added 91 lines, removed 101 lines
+      1 -// FSM behavioral tests: verify the generated transition        
+        -functions against                                               
+      2 -// an independent restatement of the spec's policy tables. Run  
+        -via                                                             
+      1 +// FSM behavioral tests: verify the generated transition        
+        +functions AND                                                   
+      2 +// the generated state behaviors against an independent         
+        +restatement of                                                  
+      3 +// the spec's policy tables. Run via                            
+      4  // `nix build .#checks.x86_64-linux.fsm-behavior`.              
+      5  //                                                              
+      6  // Event vocabulary (tutorial 5): CreepEvent is a PRODUCT of    
+         three                                                           
+     ...
+      10  // One event per actor per tick, no priority, no masking:      
+          every fact                                                     
+      11  // rides every event.                                          
+      12  //                                                             
+      13 -// Test strategy: the dimension arrays below reconstruct the   
+         -full event                                                     
+      14 -// product (tsc proves the template-literal union matches the  
+         -generated                                                      
+      15 -// union — same contract the shell's emitEvent relies on), and 
+         - each                                                          
+      16 -// machine is checked EXHAUSTIVELY: every state x every event  
+         -against a                                                      
+      17 -// policy oracle restated here from the spec's documentation.  
+         -The oracle                                                     
+      18 -// is an independent second statement of the tables in         
+         -dox/creeps.dox;                                                
+      19 -// if spec and oracle ever disagree, one of them is lying and  
+         -this check                                                     
+      20 -// fails. Named regression sections then pin the two           
+         -historical                                                     
+      21 -// priority-chain bugs to specific pairs.                      
+      13 +// Test strategy, two sweeps:                                  
+      14 +//  1. Transitions: every state x every event against a policy 
+         + oracle                                                        
+      15 +//     restated here from the spec's documentation — proves    
+         +the state                                                      
+      16 +//     GRAPH routes correctly.                                 
+      17 +//  2. Behaviors: every state's {action, target} against a     
+         +full restated                                                  
+      18 +//     behavior table — the shell executes behaviors[state],   
+         +so a                                                           
+      19 +//     transition sweep alone would stay green even if codegen 
+         + wired                                                         
+      20 +//     e.g. supporting to 'harvest' and every "supporting"     
+         +creep went                                                     
+      21 +//     mining at the controller.                               
+      22 +// The oracles are an independent second statement of the      
+         +tables in                                                      
+      23 +// dox/creeps.dox; if spec and oracle ever disagree, one of    
+         +them is                                                        
+      24 +// lying and this check fails. tsc proves the reconstructed    
+         +event                                                          
+      25 +// product and the oracle tables against the generated types:  
+         +rename a                                                       
+      26 +// spec variant and this file stops compiling.                 
+      27  import {                                                       
+      28    harvesterTransition,                                         
+      29    upgraderTransition,                                          
+     ...
+      28    upgraderContext,                                             
+      29    builderContext,                                              
+      30    towerContext,                                                
+      31 +  behaviors,                                                   
+      32 +  towerBehaviors,                                              
+      33  } from "../generated/index";                                   
+      34  import type {                                                  
+      35    HarvesterState,                                              
+     ...
+      36    TowerState,                                                  
+      37    CreepEvent,                                                  
+      38    TowerEvent,                                                  
+      39 +  StateBehaviors,                                              
+      40 +  TowerStateBehaviors,                                         
+      41  } from "../generated/index";                                   
+      42                                                                 
+      43  let failures = 0;                                              
+     ...
+      50  }                                                              
+      51                                                                 
+      52  // ── The event product, reconstructed                         
+          ─────────────────────────────────                              
+      53 -// tsc verifies each `${store}${sinks}${sites}` template below 
+         - is                                                            
+      54 -// assignable to CreepEvent (and `${threat}${integrity}` to    
+         -TowerEvent):                                                   
+      55 -// rename a spec variant and this file stops compiling.        
+      53                                                                 
+      54  const STORES = ["empty", "mid", "full"] as const;              
+      55  const SINKS = ["SinksOpen", "SinksFull"] as const;             
+     ...
+       90  // Harvester: harvest until full, deliver until empty;        
+           nowhere to put it                                             
+       91  // -> support the controller. empty -> harvesting; mid while  
+           harvesting                                                    
+       92  // stays (fill up first); otherwise energy on board is        
+           disposed of by                                                
+       93 -// the sink dimension: SinksOpen -> delivering, SinksFull ->  
+          -supporting                                                    
+       94 -// (the null-target-stall escape).                            
+          -Sites are noise to this role.                                 
+       93 +// the sink dimension: SinksOpen -> delivering, SinksFull ->  
+          +supporting.                                                   
+       94 +// Sites are noise to this role.                              
+       95 +// Historical: a mid-store harvester in delivering whose      
+          +sinks just                                                    
+       96 +// saturated has an EMPTY transfer-target set — staying put   
+          +is the same                                                   
+       97 +// null-target freeze the builder once had; the *SinksFull*   
+          +rows pin the                                                  
+       98 +// supporting escape. Sinks reopening pulls supporting back   
+          +to                                                            
+       99 +// delivering because delivery powers spawning.               
+      100  function harvesterOracle(                                     
+      101    state: HarvesterState,                                      
+      102    st: Store,                                                  
+     ...
+      114  // Builder: gather until full; energy on board is spent by    
+           the site                                                      
+      115  // dimension: Site -> building, NoSite -> assisting. mid      
+           while gathering                                               
+      116  // stays (fill up first). Sinks are noise to this role.       
+      117 +// Historical (both fixed by the product vocabulary, both     
+          +pinned by the                                                 
+      118 +// full* rows of the sweep):                                  
+      119 +//  - FROZEN builder: the old priority chain let storeFull    
+          +mask the                                                      
+      120 +//    residual noSites — a full builder with zero sites       
+          +self-looped in                                                
+      121 +//    building (action=build, no target, no API call) until   
+          +TTL death.                                                    
+      122 +//    full*NoSite -> assisting is the escape, observed not    
+          +deduced.                                                      
+      123 +//  - BLIND builder: the compound sinksFull outranked         
+          +sawSite, so a full                                            
+      124 +//    builder under sink saturation shoveled overflow at the  
+          +controller                                                    
+      125 +//    next to an unbuilt extension. full*Site -> building     
+          +keeps sight of                                                
+      126 +//    the site regardless of the sink dimension.              
+      127  function builderOracle(                                       
+      128    state: BuilderState,                                        
+      129    st: Store,                                                  
+     ...
+      124    return si === "Site" ? "building" : "assisting";            
+      125  }                                                             
+      126                                                                
+      127 -// Tower: attack OUTRANKS repair; state-independent pure      
+          -policy.                                                       
+      127 +// Tower: attack OUTRANKS repair; state-independent pure      
+          +policy. The                                                   
+      128 +// reference (section 5 main.js) issues repair then attack in 
+          + one tick                                                     
+      129 +// and lets the later intent win — engine accident as         
+          +priority. The spec                                            
+      130 +// makes it explicit: hostile present -> attacking, no matter 
+          + the                                                          
+      131 +// integrity fact (the hostileDamage rows pin it).            
+      132  function towerOracle(th: Threat, integ: Integrity):           
+           TowerState {                                                  
+      133    if (th === "hostile") return "attacking";                   
+      134    return integ === "Damage" ? "repairing" : "guarding";       
+      135  }                                                             
+      136                                                                
+      137 +// ── Behavior oracles: what each state DOES                  
+          +───────────────────────────                                   
+      138 +// Typed as the generated StateBehaviors/TowerStateBehaviors  
+          +so tsc                                                        
+      139 +// enforces exhaustiveness and variant spelling; the runtime  
+          +compare                                                       
+      140 +// below catches wrong wiring (right shape, wrong action or   
+          +target).                                                      
+      141 +const creepBehaviorOracle: StateBehaviors = {                 
+      142 +  harvesting: { action: "harvest", target: "source" },        
+      143 +  delivering: { action: "transfer", target: "energySink" },   
+      144 +  supporting: { action: "upgrade", target: "controller" },    
+      145 +  collecting: { action: "harvest", target: "source" },        
+      146 +  upgrading: { action: "upgrade", target: "controller" },     
+      147 +  gathering: { action: "harvest", target: "source" },         
+      148 +  building: { action: "build", target: "constructionSite" },  
+      149 +  assisting: { action: "upgrade", target: "controller" },     
+      150 +};                                                            
+      151 +                                                              
+      152 +const towerBehaviorOracle: TowerStateBehaviors = {            
+      153 +  guarding: { action: "idle", target: "none" },               
+      154 +  attacking: { action: "attack", target: "hostile" },         
+      155 +  repairing: { action: "repair", target: "damagedStructure"   
+          +},                                                            
+      156 +};                                                            
+      157 +                                                              
+      158  // ── Exhaustive sweeps: every state x every event, oracle vs 
+            generated ─                                                  
+      159                                                                
+      160  console.log("Harvester: exhaustive 3 states x 12 events");    
+     ...
+      171      }                                                         
+      172  }                                                             
+      173                                                                
+      174 -// ── Regression: the FROZEN builder (historical, fixed on    
+          -this branch) ─                                                
+      175 -// Under the old priority chain, storeFull outranked the      
+          -residual                                                      
+      176 -// noSites, so a full builder in building with zero sites     
+          -kept receiving                                                
+      177 -// storeFull and self-looped: action=build, no target, no API 
+          - call, idle                                                   
+      178 -// until TTL death (births 105 / deaths 100 on the live       
+          -server). The                                                  
+      179 -// product makes the corner directly observable: full*NoSite  
+          -routes to                                                     
+      180 -// assisting — observed, not deduced from a timing argument.  
+      181 -console.log("Regression: frozen builder (full + NoSite is     
+          -observed, not masked)");                                      
+      182 -assert(                                                       
+      183 -  "building + fullSinksOpenNoSite → assisting",               
+      184 -  bTx("building", "fullSinksOpenNoSite"),                     
+      185 -  "assisting"                                                 
+      186 -);                                                            
+      187 -assert(                                                       
+      188 -  "building + fullSinksFullNoSite → assisting",               
+      189 -  bTx("building", "fullSinksFullNoSite"),                     
+      190 -  "assisting"                                                 
+      191 -);                                                            
+      174 +// ── Exhaustive behavior sweep: every state's action+target  
+          +vs oracle ─                                                   
+      175                                                                
+      176 -// ── Regression: the BLIND builder (historical, fixed on     
+          -this branch) ──                                               
+      177 -// Under the old chain, the compound sinksFull outranked      
+          -sawSite, so a                                                 
+      178 -// full builder under sink saturation could never see a site  
+          -and                                                           
+      179 -// shoveled overflow at the controller next to an unbuilt     
+          -extension.                                                    
+      180 -// Now the site fact rides the event regardless of the sink   
+          -dimension.                                                    
+      181 -console.log("Regression: blind builder (site visible under    
+          -saturation)");                                                
+      182 -assert(                                                       
+      183 -  "building + fullSinksFullSite → building (kept sight of the 
+          - site)",                                                      
+      184 -  bTx("building", "fullSinksFullSite"),                       
+      185 -  "building"                                                  
+      186 -);                                                            
+      187 -assert(                                                       
+      188 -  "assisting + fullSinksFullSite → building (pulled back to   
+          -work)",                                                       
+      189 -  bTx("assisting", "fullSinksFullSite"),                      
+      190 -  "building"                                                  
+      191 -);                                                            
+      176 +console.log("Behaviors: every creep state's action +          
+          +target");                                                     
+      177 +for (const state of Object.keys(creepBehaviorOracle) as       
+          +(keyof StateBehaviors)[]) {                                   
+      178 +  assert(                                                     
+      179 +    `${state}.action`,                                        
+      180 +    behaviors[state].action,                                  
+      181 +    creepBehaviorOracle[state].action                         
+      182 +  );                                                          
+      183 +  assert(                                                     
+      184 +    `${state}.target`,                                        
+      185 +    behaviors[state].target,                                  
+      186 +    creepBehaviorOracle[state].target                         
+      187 +  );                                                          
+      188 +}                                                             
+      189                                                                
+      190 -// ── Regression: harvester null-target-stall escapes         
+          -──────────────────                                            
+      191 -// A mid-store harvester in delivering whose sinks just       
+          -saturated has an                                              
+      192 -// EMPTY transfer-target set — staying put is the same freeze 
+          - signature                                                    
+      193 -// the builder had. The spec routes it to supporting (spend   
+          -the                                                           
+      194 -// remainder on the controller); when the sinks reopen,       
+          -delivery                                                      
+      195 -// outranks controller-feeding because it powers spawning.    
+      196 -console.log("Regression: harvester never stalls on a          
+          -saturated sink set");                                         
+      197 -assert(                                                       
+      198 -  "delivering + midSinksFullNoSite → supporting (no transfer  
+          -target)",                                                     
+      199 -  hTx("delivering", "midSinksFullNoSite"),                    
+      200 -  "supporting"                                                
+      201 -);                                                            
+      202 -assert(                                                       
+      203 -  "supporting + midSinksOpenNoSite → delivering (sinks        
+          -reopened)",                                                   
+      204 -  hTx("supporting", "midSinksOpenNoSite"),                    
+      205 -  "delivering"                                                
+      206 -);                                                            
+      207 -assert(                                                       
+      208 -  "delivering + fullSinksFullNoSite → supporting (full and    
+          -saturated)",                                                  
+      209 -  hTx("delivering", "fullSinksFullNoSite"),                   
+      210 -  "supporting"                                                
+      211 -);                                                            
+      190 +console.log("Behaviors: every tower state's action +          
+          +target");                                                     
+      191 +for (const state of Object.keys(towerBehaviorOracle) as       
+          +(keyof TowerStateBehaviors)[]) {                              
+      192 +  assert(                                                     
+      193 +    `tower ${state}.action`,                                  
+      194 +    towerBehaviors[state].action,                             
+      195 +    towerBehaviorOracle[state].action                         
+      196 +  );                                                          
+      197 +  assert(                                                     
+      198 +    `tower ${state}.target`,                                  
+      199 +    towerBehaviors[state].target,                             
+      200 +    towerBehaviorOracle[state].target                         
+      201 +  );                                                          
+      202 +}                                                             
+      203                                                                
+      204 -// ── Tower priority: attack outranks repair                  
+          -───────────────────────────                                   
+      205 -// The reference (section 5 main.js) issues repair then       
+          -attack in one                                                 
+      206 -// tick and lets the later intent win — engine accident as    
+          -priority.                                                     
+      207 -// The spec makes it explicit: hostile present -> attacking,  
+          -no matter                                                     
+      208 -// the integrity fact.                                        
+      209 -console.log("Tower: attack outranks repair");                 
+      210 -assert(                                                       
+      211 -  "repairing + hostileDamage → attacking (drop the wrench,    
+          -draw the gun)",                                               
+      212 -  tTx("repairing", "hostileDamage"),                          
+      213 -  "attacking"                                                 
+      214 -);                                                            
+      215 -                                                              
+      216 -// ── Multi-step scenario: builder lifecycle around a         
+          -construction site ─                                           
+      217 -// gather → fill up → build → site completes mid-drain →      
+          -assist →                                                      
+      218 -// new site placed → back to building → run dry → gather.     
+      219 -console.log("Builder: multi-step scenario");                  
+      220 -let bState: BuilderState = "gathering";                       
+      221 -bState = bTx(bState, "midSinksOpenSite"); // site exists,     
+          -store not full                                                
+      222 -assert("gathering while site waits", bState, "gathering");    
+      223 -bState = bTx(bState, "fullSinksOpenSite"); // full, go build  
+      224 -assert("store fills up", bState, "building");                 
+      225 -bState = bTx(bState, "midSinksOpenNoSite"); // site finished  
+          -under our trowel                                              
+      226 -assert("site done, fall back to assisting", bState,           
+          -"assisting");                                                 
+      227 -bState = bTx(bState, "midSinksOpenSite"); // new site placed  
+      228 -assert("new site, back to building", bState, "building");     
+      229 -bState = bTx(bState, "emptySinksOpenSite"); // ran dry        
+          -mid-build                                                     
+      230 -assert("empty, back to gathering", bState, "gathering");      
+      231 -                                                              
+      204  // ── Summary                                                 
+           ────────────────────────────────────────────────────────      
+      205  console.log("");                                              
+      206  if (failures > 0) {                                           
+
+● Bash(nix build .#checks.x86_64-linux.fsm-behavior --no-link --print-build-logs
+       2>&1 | tail -30)
+  ⎿  Interrupted · What should Claude do instead?
+
+❯ write me a one line commit message                                            
+
+● CI dedup via flake gitlab overlay (11 duplicate jobs dropped) + fsm-behavior 
+  action/target oracle sweep replaces redundant regression pins + drop false 
+  ../deploys note from CLAUDE.md
+
+  Fair warning, counselor: that commit covers counts 1 and 3 only —
+  integration.nix (trace-based delivery probe, boilerplate factoring, scarecrow
+  removal) is still unwritten, and the fsm-behavior check hasn't been run yet.
+  Say the word when you want me to finish the docket.
