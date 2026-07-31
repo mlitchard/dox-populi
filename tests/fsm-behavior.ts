@@ -1,31 +1,46 @@
-// FSM behavioral tests: verify transition functions produce correct states
-// for critical scenarios. Run via `nix build .#checks.x86_64-linux.fsm-behavior`.
+// FSM behavioral tests: verify the generated transition functions against
+// an independent restatement of the spec's policy tables. Run via
+// `nix build .#checks.x86_64-linux.fsm-behavior`.
 //
-// Event vocabulary (tutorial 3): storeEmpty, storeFull, sinksFull (creep
-// full AND every energy sink — spawn + extensions — full), and the
-// residual pair sawSite/noSites (construction sites exist / don't).
+// Event vocabulary (tutorial 5): CreepEvent is a PRODUCT of three
+// orthogonal facts — store level (empty|mid|full) x sink saturation
+// (SinksOpen|SinksFull) x site presence (Site|NoSite) — 12 variants,
+// spelled as the exact concatenation of the dimension values. TowerEvent
+// is the product threat (hostile|calm) x integrity (Damage|Intact).
+// One event per actor per tick, no priority, no masking: every fact
+// rides every event.
+//
+// Test strategy: the dimension arrays below reconstruct the full event
+// product (tsc proves the template-literal union matches the generated
+// union — same contract the shell's emitEvent relies on), and each
+// machine is checked EXHAUSTIVELY: every state x every event against a
+// policy oracle restated here from the spec's documentation. The oracle
+// is an independent second statement of the tables in dox/creeps.dox;
+// if spec and oracle ever disagree, one of them is lying and this check
+// fails. Named regression sections then pin the two historical
+// priority-chain bugs to specific pairs.
 import {
   harvesterTransition,
   upgraderTransition,
   builderTransition,
+  towerTransition,
   harvesterContext,
   upgraderContext,
   builderContext,
+  towerContext,
 } from "../generated/index";
 import type {
   HarvesterState,
   UpgraderState,
   BuilderState,
+  TowerState,
   CreepEvent,
+  TowerEvent,
 } from "../generated/index";
 
 let failures = 0;
 
-function assert(
-  label: string,
-  actual: string,
-  expected: string,
-): void {
+function assert(label: string, actual: string, expected: string): void {
   if (actual === expected) {
     console.log(`  PASS: ${label}`);
   } else {
@@ -33,6 +48,28 @@ function assert(
     failures++;
   }
 }
+
+// ── The event product, reconstructed ─────────────────────────────────
+// tsc verifies each `${store}${sinks}${sites}` template below is
+// assignable to CreepEvent (and `${threat}${integrity}` to TowerEvent):
+// rename a spec variant and this file stops compiling.
+
+const STORES = ["empty", "mid", "full"] as const;
+const SINKS = ["SinksOpen", "SinksFull"] as const;
+const SITES = ["Site", "NoSite"] as const;
+const THREATS = ["hostile", "calm"] as const;
+const INTEGRITIES = ["Damage", "Intact"] as const;
+
+type Store = (typeof STORES)[number];
+type Sinks = (typeof SINKS)[number];
+type Sites = (typeof SITES)[number];
+type Threat = (typeof THREATS)[number];
+type Integrity = (typeof INTEGRITIES)[number];
+
+const creepEvent = (st: Store, sk: Sinks, si: Sites): CreepEvent =>
+  `${st}${sk}${si}`;
+const towerEvent = (th: Threat, integ: Integrity): TowerEvent =>
+  `${th}${integ}`;
 
 // Helper: run a transition and return the target state.
 function hTx(state: HarvesterState, event: CreepEvent): HarvesterState {
@@ -44,167 +81,181 @@ function uTx(state: UpgraderState, event: CreepEvent): UpgraderState {
 function bTx(state: BuilderState, event: CreepEvent): BuilderState {
   return builderTransition(state, event, builderContext).target;
 }
+function tTx(state: TowerState, event: TowerEvent): TowerState {
+  return towerTransition(state, event, towerContext).target;
+}
 
-// ── Harvester: the sinksFull bug (né spawnFull) ─────────────────────
-// Scenario: harvester has a full store and every energy sink is full.
-// emitEvent emits "sinksFull" (compound: store full AND all sinks full)
-// so the FSM transitions to harvesting (idle) instead of stuck delivering.
-// Observe-first: this event fires BEFORE any doomed transfer is attempted,
-// which is what makes the old ERR_FULL deadlock structurally impossible.
-console.log("Harvester: sinksFull while delivering");
-assert(
-  "delivering + sinksFull → harvesting (go back to source)",
-  hTx("delivering", "sinksFull"),
-  "harvesting",
-);
+// ── Policy oracles: the spec's tables, restated independently ────────
 
-console.log("Harvester: sinksFull while harvesting");
-assert(
-  "harvesting + sinksFull → harvesting (stay at source)",
-  hTx("harvesting", "sinksFull"),
-  "harvesting",
-);
+// Harvester: harvest until full, deliver until empty; nowhere to put it
+// -> support the controller. empty -> harvesting; mid while harvesting
+// stays (fill up first); otherwise energy on board is disposed of by
+// the sink dimension: SinksOpen -> delivering, SinksFull -> supporting
+// (the null-target-stall escape). Sites are noise to this role.
+function harvesterOracle(
+  state: HarvesterState,
+  st: Store,
+  sk: Sinks
+): HarvesterState {
+  if (st === "empty") return "harvesting";
+  if (st === "mid" && state === "harvesting") return "harvesting";
+  return sk === "SinksOpen" ? "delivering" : "supporting";
+}
 
-// Harvester: normal storeFull cycle (some sink has room, storeFull fires).
-console.log("Harvester: normal harvest-deliver cycle");
-assert(
-  "harvesting + storeFull → delivering",
-  hTx("harvesting", "storeFull"),
-  "delivering",
-);
-assert(
-  "delivering + storeEmpty → harvesting",
-  hTx("delivering", "storeEmpty"),
-  "harvesting",
-);
+// Upgrader: collect until full, upgrade until empty; mid self-loops.
+// Sinks and sites are noise to this role — the old sinksFull->upgrading
+// shortcut was only ever a proxy for "store full" and dissolves here.
+function upgraderOracle(state: UpgraderState, st: Store): UpgraderState {
+  if (st === "full") return "upgrading";
+  if (st === "empty") return "collecting";
+  return state;
+}
 
-// Harvester: site observations are none of its business — self-loops.
-console.log("Harvester: site events are self-loops");
-assert(
-  "harvesting + sawSite → harvesting",
-  hTx("harvesting", "sawSite"),
-  "harvesting",
-);
-assert(
-  "delivering + sawSite → delivering",
-  hTx("delivering", "sawSite"),
-  "delivering",
-);
+// Builder: gather until full; energy on board is spent by the site
+// dimension: Site -> building, NoSite -> assisting. mid while gathering
+// stays (fill up first). Sinks are noise to this role.
+function builderOracle(
+  state: BuilderState,
+  st: Store,
+  si: Sites
+): BuilderState {
+  if (st === "empty") return "gathering";
+  if (st === "mid" && state === "gathering") return "gathering";
+  return si === "Site" ? "building" : "assisting";
+}
 
-// ── Upgrader: collecting + sinksFull must transition to upgrading ───
-// The upgrader delivers to the controller, not the sinks. When the
-// shell emits sinksFull, the upgrader should treat it as "go upgrade
-// with what you have" — not stay collecting.
-console.log("Upgrader: sinksFull while collecting");
-assert(
-  "collecting + sinksFull → upgrading (upgrader doesn't deliver to sinks)",
-  uTx("collecting", "sinksFull"),
-  "upgrading",
-);
+// Tower: attack OUTRANKS repair; state-independent pure policy.
+function towerOracle(th: Threat, integ: Integrity): TowerState {
+  if (th === "hostile") return "attacking";
+  return integ === "Damage" ? "repairing" : "guarding";
+}
 
-console.log("Upgrader: sinksFull while upgrading");
-assert(
-  "upgrading + sinksFull → upgrading (keep upgrading)",
-  uTx("upgrading", "sinksFull"),
-  "upgrading",
-);
+// ── Exhaustive sweeps: every state x every event, oracle vs generated ─
 
-// Upgrader: normal collect-upgrade cycle.
-console.log("Upgrader: normal collect-upgrade cycle");
-assert(
-  "collecting + storeFull → upgrading",
-  uTx("collecting", "storeFull"),
-  "upgrading",
-);
-assert(
-  "upgrading + storeEmpty → collecting",
-  uTx("upgrading", "storeEmpty"),
-  "collecting",
-);
+console.log("Harvester: exhaustive 3 states x 12 events");
+for (const state of ["harvesting", "delivering", "supporting"] as const) {
+  for (const st of STORES)
+    for (const sk of SINKS)
+      for (const si of SITES) {
+        const ev = creepEvent(st, sk, si);
+        assert(`${state} + ${ev}`, hTx(state, ev), harvesterOracle(state, st, sk));
+      }
+}
 
-// Upgrader: site observations are self-loops.
-console.log("Upgrader: site events are self-loops");
-assert(
-  "collecting + sawSite → collecting",
-  uTx("collecting", "sawSite"),
-  "collecting",
-);
-assert(
-  "upgrading + noSites → upgrading",
-  uTx("upgrading", "noSites"),
-  "upgrading",
-);
+console.log("Upgrader: exhaustive 2 states x 12 events");
+for (const state of ["collecting", "upgrading"] as const) {
+  for (const st of STORES)
+    for (const sk of SINKS)
+      for (const si of SITES) {
+        const ev = creepEvent(st, sk, si);
+        assert(`${state} + ${ev}`, uTx(state, ev), upgraderOracle(state, st));
+      }
+}
 
-// ── Builder: gather → build cycle ───────────────────────────────────
-console.log("Builder: normal gather-build cycle");
-assert(
-  "gathering + storeFull → building",
-  bTx("gathering", "storeFull"),
-  "building",
-);
-assert(
-  "building + storeEmpty → gathering",
-  bTx("building", "storeEmpty"),
-  "gathering",
-);
-assert(
-  "building + sawSite → building (keep building)",
-  bTx("building", "sawSite"),
-  "building",
-);
+console.log("Builder: exhaustive 3 states x 12 events");
+for (const state of ["gathering", "building", "assisting"] as const) {
+  for (const st of STORES)
+    for (const sk of SINKS)
+      for (const si of SITES) {
+        const ev = creepEvent(st, sk, si);
+        assert(`${state} + ${ev}`, bTx(state, ev), builderOracle(state, st, si));
+      }
+}
 
-// ── Builder: the no-sites fallback policy (spec decision) ───────────
-// When there is nothing to build, the builder does NOT idle — it
-// assists the upgrader (action=upgrade) until a site appears.
-console.log("Builder: no-sites fallback to assisting");
+console.log("Tower: exhaustive 3 states x 4 events");
+for (const state of ["guarding", "attacking", "repairing"] as const) {
+  for (const th of THREATS)
+    for (const integ of INTEGRITIES) {
+      const ev = towerEvent(th, integ);
+      assert(`${state} + ${ev}`, tTx(state, ev), towerOracle(th, integ));
+    }
+}
+
+// ── Regression: the FROZEN builder (historical, fixed on this branch) ─
+// Under the old priority chain, storeFull outranked the residual
+// noSites, so a full builder in building with zero sites kept receiving
+// storeFull and self-looped: action=build, no target, no API call, idle
+// until TTL death (births 105 / deaths 100 on the live server). The
+// product makes the corner directly observable: full*NoSite routes to
+// assisting — observed, not deduced from a timing argument.
+console.log("Regression: frozen builder (full + NoSite is observed, not masked)");
 assert(
-  "building + noSites → assisting (nothing to build, go upgrade)",
-  bTx("building", "noSites"),
-  "assisting",
+  "building + fullSinksOpenNoSite → assisting",
+  bTx("building", "fullSinksOpenNoSite"),
+  "assisting"
 );
 assert(
-  "assisting + sawSite → building (a site appeared, back to work)",
-  bTx("assisting", "sawSite"),
-  "building",
-);
-assert(
-  "assisting + storeEmpty → gathering (refuel first)",
-  bTx("assisting", "storeEmpty"),
-  "gathering",
-);
-assert(
-  "assisting + noSites → assisting (keep assisting)",
-  bTx("assisting", "noSites"),
-  "assisting",
+  "building + fullSinksFullNoSite → assisting",
+  bTx("building", "fullSinksFullNoSite"),
+  "assisting"
 );
 
-// Builder: sink state is not its delivery target — sinksFull self-loops.
-console.log("Builder: sinksFull is a self-loop everywhere");
+// ── Regression: the BLIND builder (historical, fixed on this branch) ──
+// Under the old chain, the compound sinksFull outranked sawSite, so a
+// full builder under sink saturation could never see a site and
+// shoveled overflow at the controller next to an unbuilt extension.
+// Now the site fact rides the event regardless of the sink dimension.
+console.log("Regression: blind builder (site visible under saturation)");
 assert(
-  "gathering + sinksFull → gathering",
-  bTx("gathering", "sinksFull"),
-  "gathering",
+  "building + fullSinksFullSite → building (kept sight of the site)",
+  bTx("building", "fullSinksFullSite"),
+  "building"
 );
 assert(
-  "building + sinksFull → building",
-  bTx("building", "sinksFull"),
-  "building",
+  "assisting + fullSinksFullSite → building (pulled back to work)",
+  bTx("assisting", "fullSinksFullSite"),
+  "building"
+);
+
+// ── Regression: harvester null-target-stall escapes ──────────────────
+// A mid-store harvester in delivering whose sinks just saturated has an
+// EMPTY transfer-target set — staying put is the same freeze signature
+// the builder had. The spec routes it to supporting (spend the
+// remainder on the controller); when the sinks reopen, delivery
+// outranks controller-feeding because it powers spawning.
+console.log("Regression: harvester never stalls on a saturated sink set");
+assert(
+  "delivering + midSinksFullNoSite → supporting (no transfer target)",
+  hTx("delivering", "midSinksFullNoSite"),
+  "supporting"
+);
+assert(
+  "supporting + midSinksOpenNoSite → delivering (sinks reopened)",
+  hTx("supporting", "midSinksOpenNoSite"),
+  "delivering"
+);
+assert(
+  "delivering + fullSinksFullNoSite → supporting (full and saturated)",
+  hTx("delivering", "fullSinksFullNoSite"),
+  "supporting"
+);
+
+// ── Tower priority: attack outranks repair ───────────────────────────
+// The reference (section 5 main.js) issues repair then attack in one
+// tick and lets the later intent win — engine accident as priority.
+// The spec makes it explicit: hostile present -> attacking, no matter
+// the integrity fact.
+console.log("Tower: attack outranks repair");
+assert(
+  "repairing + hostileDamage → attacking (drop the wrench, draw the gun)",
+  tTx("repairing", "hostileDamage"),
+  "attacking"
 );
 
 // ── Multi-step scenario: builder lifecycle around a construction site ─
-// Simulates: gather → fill up → build → site completes → assist →
-// new site placed → build again → run dry → gather.
+// gather → fill up → build → site completes mid-drain → assist →
+// new site placed → back to building → run dry → gather.
 console.log("Builder: multi-step scenario");
 let bState: BuilderState = "gathering";
-bState = bTx(bState, "sawSite");     // site exists but store not full
+bState = bTx(bState, "midSinksOpenSite"); // site exists, store not full
 assert("gathering while site waits", bState, "gathering");
-bState = bTx(bState, "storeFull");   // full, go build
+bState = bTx(bState, "fullSinksOpenSite"); // full, go build
 assert("store fills up", bState, "building");
-bState = bTx(bState, "noSites");     // site finished under our trowel
+bState = bTx(bState, "midSinksOpenNoSite"); // site finished under our trowel
 assert("site done, fall back to assisting", bState, "assisting");
-bState = bTx(bState, "sawSite");     // new site placed
+bState = bTx(bState, "midSinksOpenSite"); // new site placed
 assert("new site, back to building", bState, "building");
-bState = bTx(bState, "storeEmpty");  // ran dry mid-build
+bState = bTx(bState, "emptySinksOpenSite"); // ran dry mid-build
 assert("empty, back to gathering", bState, "gathering");
 
 // ── Summary ────────────────────────────────────────────────────────
