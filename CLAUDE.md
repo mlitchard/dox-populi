@@ -35,9 +35,9 @@ events to the generated brain, and makes Screeps API calls — nothing else.
   `client/npm/package.json`, rerun the matching `nix run .#lock-server` /
   `.#lock-mods` / `.#lock-client` to re-pin `package-lock.json` +
   `npm-deps-hash`. Nothing else may run npm's resolver.
-- Deployment lives in `../deploys`, NOT here. The `nixosConfigurations` in
-  this flake are a secrix key stub (`dox-populi`) and the dev VM
-  (`vm`/`installer`). CI here is build/check only.
+- The `nixosConfigurations` in this flake are a secrix key stub
+  (`dox-populi`) and the dev VM (`vm`/`installer`). CI here is build/check
+  only.
 - `.gitlab-ci.yml` is generated: `nix run .#gitlab-ci > .gitlab-ci.yml`.
   Never edit it by hand.
 

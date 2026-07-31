@@ -357,6 +357,50 @@
         build = main;
       };
 
+      # CI job filter, read by the gitlab-ci.nix generator (its shell
+      # script does `flake.gitlab or null` and applies this overlay to
+      # the generated config). The generator maps EVERY flake output to
+      # a job, which duplicates work along dependency chains — one job
+      # building the deepest artifact proves the whole chain. Dropped:
+      # - VM chain: apps:installer-iso builds the ISO, which embeds
+      #   vm-image-zst <- vm-image <- the vm system; five upstream jobs
+      #   rebuild strict prefixes of it (nixosConfigurations:vm and
+      #   :installer, packages:vm-image, :vm-image-zst, :installer-iso).
+      # - checks:build and packages:main are the same derivation as
+      #   packages:default (`build = main`, `default = main`).
+      # - flake:check rebuilds every check the test stage already ran
+      #   (including the multi-hour itest VM).
+      # - flake:show: gitlab-ci:check runs `nix flake show --json`
+      #   itself as its first step.
+      # - apps:server / apps:deploy-local programs are baked into the
+      #   checks:itest derivation (serverProgram/deployProgram), so
+      #   that job already builds both.
+      # removeAttrs (not the README's `= null` trick: nulls survive
+      # into the YAML) + a needs scrub so no kept job references a
+      # dropped one (GitLab rejects undefined needs).
+      gitlab = prev:
+        let
+          dropped = [
+            "nixosConfigurations:vm"
+            "nixosConfigurations:installer"
+            "packages:vm-image"
+            "packages:vm-image-zst"
+            "packages:installer-iso"
+            "checks:build"
+            "packages:main"
+            "flake:check"
+            "flake:show"
+            "apps:server"
+            "apps:deploy-local"
+          ];
+          scrubNeeds = _: job:
+            if builtins.isAttrs job && job ? needs
+            then job // {
+              needs = builtins.filter (n: !(builtins.elem n dropped)) job.needs;
+            }
+            else job;
+        in builtins.mapAttrs scrubNeeds (builtins.removeAttrs prev dropped);
+
       apps.${system} = {
         # Regenerate ./generated and ./vendor in the working tree for editor use.
         generate = {

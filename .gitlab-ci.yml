@@ -25,15 +25,6 @@ apps:deploy:
   script:
     - nix build .#apps.x86_64-linux.deploy.program --no-link --print-build-logs 2>/dev/null || nix build --no-link --print-build-logs "$(nix eval --raw --impure --expr 'builtins.head (builtins.attrNames (builtins.getContext (builtins.getFlake (toString ./.)).apps.x86_64-linux.deploy.program))')"
   stage: build
-apps:deploy-local:
-  needs:
-    - apps:secrix
-    - packages:default
-    - packages:generated
-    - packages:secrix
-  script:
-    - nix build .#apps.x86_64-linux.deploy-local.program --no-link --print-build-logs 2>/dev/null || nix build --no-link --print-build-logs "$(nix eval --raw --impure --expr 'builtins.head (builtins.attrNames (builtins.getContext (builtins.getFlake (toString ./.)).apps.x86_64-linux.deploy-local.program))')"
-  stage: build
 apps:generate:
   needs:
     - packages:generated
@@ -49,14 +40,9 @@ apps:installer-iso:
   needs:
     - apps:secrix
     - devShells:default
-    - nixosConfigurations:installer
-    - nixosConfigurations:vm
-    - packages:installer-iso
     - packages:screeps-client
     - packages:screeps-server
     - packages:secrix
-    - packages:vm-image
-    - packages:vm-image-zst
   script:
     - nix build .#apps.x86_64-linux.installer-iso.program --no-link --print-build-logs 2>/dev/null || nix build --no-link --print-build-logs "$(nix eval --raw --impure --expr 'builtins.head (builtins.attrNames (builtins.getContext (builtins.getFlake (toString ./.)).apps.x86_64-linux.installer-iso.program))')"
   stage: build
@@ -91,27 +77,12 @@ apps:secrix:
   script:
     - nix build .#apps.x86_64-linux.secrix.program --no-link --print-build-logs 2>/dev/null || nix build --no-link --print-build-logs "$(nix eval --raw --impure --expr 'builtins.head (builtins.attrNames (builtins.getContext (builtins.getFlake (toString ./.)).apps.x86_64-linux.secrix.program))')"
   stage: build
-apps:server:
-  needs:
-    - apps:secrix
-    - packages:screeps-server
-    - packages:secrix
-  script:
-    - nix build .#apps.x86_64-linux.server.program --no-link --print-build-logs 2>/dev/null || nix build --no-link --print-build-logs "$(nix eval --raw --impure --expr 'builtins.head (builtins.attrNames (builtins.getContext (builtins.getFlake (toString ./.)).apps.x86_64-linux.server.program))')"
-  stage: build
 apps:stop:
   needs:
     - packages:screeps-server
   script:
     - nix build .#apps.x86_64-linux.stop.program --no-link --print-build-logs 2>/dev/null || nix build --no-link --print-build-logs "$(nix eval --raw --impure --expr 'builtins.head (builtins.attrNames (builtins.getContext (builtins.getFlake (toString ./.)).apps.x86_64-linux.stop.program))')"
   stage: build
-checks:build:
-  needs:
-    - packages:default
-    - packages:generated
-  script:
-    - nix build .#checks.x86_64-linux.build --no-link --print-build-logs
-  stage: test
 checks:fsm-behavior:
   needs:
     - packages:generated
@@ -120,9 +91,7 @@ checks:fsm-behavior:
   stage: test
 checks:itest:
   needs:
-    - apps:deploy-local
     - apps:secrix
-    - apps:server
     - packages:default
     - packages:generated
     - packages:screeps-server
@@ -153,15 +122,6 @@ devShells:default:
   script:
     - nix build .#devShells.x86_64-linux.default --no-link --print-build-logs
   stage: build
-flake:check:
-  script:
-    - nix flake check --print-build-logs
-  stage: validate
-flake:show:
-  needs: []
-  script:
-    - nix flake show --allow-import-from-derivation
-  stage: build
 gitlab-ci:check:
   needs: []
   script:
@@ -175,21 +135,6 @@ nixosConfigurations:dox-populi:
   script:
     - nixos-rebuild build --flake .#dox-populi -L
   stage: build
-nixosConfigurations:installer:
-  needs: []
-  script:
-    - nixos-rebuild build --flake .#installer -L
-  stage: build
-nixosConfigurations:vm:
-  needs:
-    - apps:secrix
-    - devShells:default
-    - packages:screeps-client
-    - packages:screeps-server
-    - packages:secrix
-  script:
-    - nixos-rebuild build --flake .#vm -L
-  stage: build
 packages:default:
   needs:
     - packages:generated
@@ -200,27 +145,6 @@ packages:generated:
   needs: []
   script:
     - nix build .#packages.x86_64-linux.generated --no-link --print-build-logs
-  stage: build
-packages:installer-iso:
-  needs:
-    - apps:secrix
-    - devShells:default
-    - nixosConfigurations:installer
-    - nixosConfigurations:vm
-    - packages:screeps-client
-    - packages:screeps-server
-    - packages:secrix
-    - packages:vm-image
-    - packages:vm-image-zst
-  script:
-    - nix build .#packages.x86_64-linux.installer-iso --no-link --print-build-logs
-  stage: build
-packages:main:
-  needs:
-    - packages:default
-    - packages:generated
-  script:
-    - nix build .#packages.x86_64-linux.main --no-link --print-build-logs
   stage: build
 packages:screeps-client:
   needs: []
@@ -237,29 +161,6 @@ packages:secrix:
     - apps:secrix
   script:
     - nix build .#packages.x86_64-linux.secrix --no-link --print-build-logs
-  stage: build
-packages:vm-image:
-  needs:
-    - apps:secrix
-    - devShells:default
-    - nixosConfigurations:vm
-    - packages:screeps-client
-    - packages:screeps-server
-    - packages:secrix
-  script:
-    - nix build .#packages.x86_64-linux.vm-image --no-link --print-build-logs
-  stage: build
-packages:vm-image-zst:
-  needs:
-    - apps:secrix
-    - devShells:default
-    - nixosConfigurations:vm
-    - packages:screeps-client
-    - packages:screeps-server
-    - packages:secrix
-    - packages:vm-image
-  script:
-    - nix build .#packages.x86_64-linux.vm-image-zst --no-link --print-build-logs
   stage: build
 stages:
   - build
