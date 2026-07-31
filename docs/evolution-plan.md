@@ -60,6 +60,80 @@ reference: `~/github/tutorial-scripts`).
 
 Exit: tutorial 5 itest green.
 
+## Arena hostiles — the invader trajectory (Stage 1 → Stage 2)
+
+The tutorial's defense proof was a scarecrow: `surgeryInsertInvader`
+hands a creep to the seed's Invader NPC user (uid "2"), whose script is
+an empty stub — the creep stands still and dies. The arena needs real,
+*reproducible* aggression, delivered by the mechanism the tournament
+will reuse. Two stages; the brain stays the same, the delivery vehicle
+changes.
+
+**Foundational fact (verified against the running server):** the engine
+runner executes NPC user 2's `users.code` every tick (the empty stub
+exists precisely to silence "Unknown module 'main'"), and the stock
+seed's simplebots demonstrate the server's bot-AI hosting: `mods.json`
+`"bots"` maps AI name → package path, and the `bots.*` CLI mints a
+fresh NPC user running that code. Those two facts are the two stages.
+
+### Stage 1 — armed Invader script (branch `11-attack-defense`)
+
+- The raider brain is SPEC, not handwritten JS (user ruling): a
+  Paradox submodule `dox/invader/invader.dox` (its own generated
+  module, `generated/invader.ts`) with its own thin hands
+  (`shell/invader.ts`), bundled by esbuild exactly like the colony
+  brain. Same church, second congregation: the enemy's decision logic
+  goes through check → generate → typecheck. This IS the champion→bot
+  delivery pipeline of Phase 6, prototyped on the dumbest possible
+  brain.
+- Policy (deterministic, memory = FSM state only): attack a hostile
+  creep in reach, else an attackable hostile structure in reach, else
+  march on the nearest hostile spawn, else loiter. Product event
+  vocabulary (foe reach x struct reach x spawn sight), tower-style
+  state-independent transition table.
+- The flake's seed step injects the bundle (`jq --rawfile`) as uid 2's
+  `users.code` in place of the empty stub. The itest inherits it
+  automatically (it runs the exact `apps.server` program); the dev
+  world picks it up only on reseed or explicit CLI code surgery.
+- Creep provisioning stays `surgeryInsertInvader`: the test decides
+  when and with what body the attack comes; the world decides what the
+  attacker does.
+- Rides with it (session-prompt-live-invader.md Acts 2–3): defense
+  vocabulary/policy in the spec, and an itest that proves
+  moved → engaged → cleared → recovered from `Memory.trace` +
+  `stats.combat`.
+
+Exit: itest green against a hostile that actually moves and deals
+damage; `stats.combat` telemetry exists — the future combat-fitness
+signal.
+
+### Stage 2 — vendored invader bot AI (`server/mods/`)
+
+- The same brain, repackaged: a local npm package under `server/mods/`
+  wired into `mods.json` `"bots"`, re-pinned via `nix run .#lock-mods`.
+  Policy unchanged; packaging changes.
+- Provisioning flips: `surgeryInsertInvader` retires; the itest (and
+  later the orchestrator) uses `bots.spawn`-style CLI to mint hostile
+  users on demand — N hostiles, own spawn, sustained pressure instead
+  of one disposable creep. The uid-2 seed script reverts to the empty
+  stub: one mechanism, not two.
+- Deterministic knobs (aggression radius, target priority) as package
+  constants — reproducible trials.
+
+Exit: itest passes against a bot-spawned hostile; the `bots.*` CLI
+round-trip is proven — the injection path the arena reuses.
+
+### What this founds
+
+- **Phase 3** gains a second injection path: `deploy-many` provisions
+  player organisms; `bots.spawn` provisions environmental hostiles.
+- **Phase 4** fitness gains combat components (`stats.combat`),
+  reproducible because the hostile is deterministic.
+- **Phase 6**'s hall of fame becomes concrete: champion `.dox` →
+  bundled JS → bot AI package → sparring NPC, without burning a
+  `deploy-many` account. Stage 2's packaging is that pipeline's
+  prototype.
+
 ## Phase 1 — Generic-interpreter shell (fixed embodiment)
 
 The current shell hardcodes role/state → action wiring

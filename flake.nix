@@ -81,6 +81,26 @@
           cp main.js $out/
         '';
       };
+
+      # The ENEMY bundle: dox/invader (spec) → generated/invader.ts →
+      # shell/invader.ts (hands) → this JS, injected as NPC user 2's
+      # users.code by the seed step in apps.server. Stage 1 of the invader
+      # trajectory (docs/evolution-plan.md): the raider's decision logic
+      # goes through the same check → generate → typecheck pipeline as the
+      # colony brain — the enemy is world content, but its brain is spec.
+      invaderMain = pkgs.stdenv.mkDerivation {
+        name = "dox-populi-invader-main";
+        src = tsSrc;
+        nativeBuildInputs = [ pkgs.esbuild ];
+        buildPhase = ''
+          esbuild shell/invader.ts --bundle --format=cjs --platform=node \
+            --outfile=invader.js
+        '';
+        installPhase = ''
+          mkdir -p $out
+          cp invader.js $out/
+        '';
+      };
       # secrix CLI as a devShell command (llm-core pattern: tool packages
       # included in devShell packages, not reached via `nix run`).
       secrixApp = secrix.secrix self;
@@ -231,6 +251,10 @@
 
       packages.${system} = {
         inherit generated main;
+        # The enemy bundle (shell/invader.ts + generated/invader.*), seeded
+        # as NPC uid 2's users.code. Exported so CI gets a cheap build
+        # witness — otherwise it only builds inside the itest job.
+        invader-main = invaderMain;
         screeps-server = screepsServer;
         screeps-client = screepsClient;
         secrix = secrixCli;
@@ -500,10 +524,16 @@
             if [ ! -s "$DATA/db.json" ]; then
               cp "$LAUNCHER/init_dist/db.json" "$DATA/db.json"
               chmod u+w "$DATA/db.json"
-              # Give the NPC Invader user (id 2) an empty script in the seed:
-              # without one, engine_runner spams "Unknown module 'main'"
-              # every tick. Patched offline so no runtime step is needed.
-              ${pkgs.jq}/bin/jq '(.collections[] | select(.name == "users.code")) |= (.data += [{_id: "InvaderCode", user: "2", branch: "default", activeWorld: true, modules: {main: "module.exports.loop = function(){};"}, meta: {revision: 0, created: 0, version: 0}, "$loki": (.maxId + 1)}] | .maxId += 1)' \
+              # Arm the NPC Invader user (id 2) with the spec-driven raider
+              # brain (dox/invader → shell/invader.ts → invaderMain). A
+              # script must exist regardless — without one, engine_runner
+              # spams "Unknown module 'main'" every tick — but this one
+              # makes inserted invader creeps march on the spawn and attack
+              # what they reach. Patched offline so no runtime step is
+              # needed; an EXISTING world keeps its old code until
+              # reset-local or explicit users.code surgery.
+              ${pkgs.jq}/bin/jq --rawfile invader ${invaderMain}/invader.js \
+                '(.collections[] | select(.name == "users.code")) |= (.data += [{_id: "InvaderCode", user: "2", branch: "default", activeWorld: true, modules: {main: $invader}, meta: {revision: 0, created: 0, version: 0}, "$loki": (.maxId + 1)}] | .maxId += 1)' \
                 "$DATA/db.json" > "$DATA/db.json.tmp"
               mv -f "$DATA/db.json.tmp" "$DATA/db.json"
             fi
