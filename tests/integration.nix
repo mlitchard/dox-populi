@@ -8,10 +8,14 @@
 # colony survives generational turnover (creeps age out, replacements
 # respawn, progress continues), and (5) the defense arc — world surgery
 # over the server CLI forces RCL 3, the tower gets built and fed, then
-# LIVE raiders (the seeded "raiders" NPC runs the generated invader brain) are
-# inserted and must be observed to MARCH and LAND BLOWS before the
-# defense ENGAGES (tower trace), the threat CLEARS (downed count, not
-# just absence), the threat-conditional defender spawn fires, and the
+# LIVE raiders (the seeded "raiders" NPC runs the generated invader
+# brain) are inserted in ESCALATING WAVES (1, 2, ... up to a cap) until
+# damage is OBSERVED to land — the raiders MARCH and DRAW BLOOD
+# (damageTaken >= 1 at the minimum sufficient force, or the attack path
+# is convicted by exhaustion at the cap with the raiders' flight
+# recorder naming the root cause) — before the defense ENGAGES (tower
+# trace), the threat CLEARS (cumulative downed count, not just
+# absence), the threat-conditional defender spawn fires, and the
 # colony recovers; CLI-inflicted battle damage gets repaired, and the
 # economy keeps beating afterward.
 # Fully pure — runs in plain `nix flake check`.
@@ -33,6 +37,14 @@ let
   email = "itest";
   password = "itest-password";
   url = "http://127.0.0.1:21025";
+
+  # Wave cap for the escalating raider offense ordeal. Melee raiders
+  # need adjacent tiles to swing, and a spawn's adjacency ring has at
+  # most 8 walkable slots — the 9th raider can add nothing the first 8
+  # could not, so 8 is the natural ceiling of the escalation, not a
+  # tuning knob. Reaching the cap with damageTaken still 0 CONVICTS the
+  # attack path by exhaustion (the wave loop fails, recorder dumped).
+  raiderWaveCap = 8;
 
   # One-shot probe: sign in, read Memory.stats.spawnEnergy (the loop's
   # telemetry) via GET /api/user/memory, which returns
@@ -287,15 +299,28 @@ let
   # final .then is the success signal the shell greps for.
   # -------------------------------------------------------------------
 
-  # Raise the itest room's controller to RCL 3 (towers unlock at 3).
-  # Field shapes verified against a real dev-world controller document
-  # (.server-data/db.json): {room, type, x, y, level, progress,
-  # downgradeTime, user, ...} — no progressTotal on the doc, so only
-  # level + progress are $set (progress zeroed: level-3 progress
-  # restarts from scratch).
+  # Raise the itest room's controller to RCL 3 (towers unlock at 3)
+  # AND lift SAFE MODE. Field shapes verified against a real dev-world
+  # controller document (.server-data/db.json): {room, type, x, y,
+  # level, progress, downgradeTime, user, ...} — no progressTotal on
+  # the doc, so only level + progress are $set (progress zeroed:
+  # level-3 progress restarts from scratch).
+  # safeMode: null is the raid ordeal's level ground: initial spawn
+  # placement grants the room ~20000 ticks of safe mode, and the
+  # engine returns ERR_NO_BODYPART (-12) for EVERY hostile creep
+  # action in a safe-moded room — upstream engine/src/game/creeps.js:
+  # `if(this.room.controller && !this.room.controller.my &&
+  # this.room.controller.safeMode) return C.ERR_NO_BODYPART;` (same
+  # check in rangedAttack/rangedMassAttack/heal/rangedHeal). Itest run
+  # #6 convicted the attack path by exhaustion (8 waves, 36 raiders,
+  # zero damage) and the flight recorder named this statute: every
+  # raider reached razing/slaughtering and swung with rc -12 while
+  # holding a live tail-protected ATTACK part. Tower fire and repair
+  # are unaffected (the room is the colony's own), so the defense arc
+  # proved nothing about this until raiders needed to hit BACK.
   surgeryRcl3 = writeShellScript "surgery-rcl3" ''
     set -euo pipefail
-    CMD='storage.db.users.findOne({usernameLower: "${email}"}).then(u => storage.db["rooms.objects"].findOne({type: "spawn", user: u._id})).then(s => storage.db["rooms.objects"].update({room: s.room, type: "controller"}, {$set: {level: 3, progress: 0}})).then(r => "RCL3-OK:" + JSON.stringify(r))'
+    CMD='storage.db.users.findOne({usernameLower: "${email}"}).then(u => storage.db["rooms.objects"].findOne({type: "spawn", user: u._id})).then(s => storage.db["rooms.objects"].update({room: s.room, type: "controller"}, {$set: {level: 3, progress: 0, safeMode: null}})).then(r => "RCL3-OK:" + JSON.stringify(r))'
     OUT=$( (printf '%s\n' "$CMD"; sleep 3) | ${netcat-openbsd}/bin/nc -N -w 6 127.0.0.1 21026 || true)
     echo "$OUT"
     case "$OUT" in
@@ -304,20 +329,23 @@ let
     esac
   '';
 
-  # Insert TWO hostile creeps owned by the flake-seeded NPC "raiders"
-  # user, whose users.code runs the generated raider brain (dox/invader
-  # -> shell/invader.ts), so these creeps MARCH toward the spawn and
-  # ATTACK — the scarecrow is retired. NOT uid 2 (stock Invader): the
+  # Insert one WAVE of hostile creeps owned by the flake-seeded NPC
+  # "raiders" user, whose users.code runs the generated raider brain
+  # (dox/invader -> shell/invader.ts), so these creeps MARCH toward the
+  # spawn and ATTACK. Parameterized: $1 = wave index (names the raiders
+  # raider-w<wave>-<i>, unique across waves), $2 = wave size (how many
+  # raiders, one per approach offset). NOT uid 2 (stock Invader): the
   # ENGINE special-cases that user's creeps — run #4 forensics showed
   # inserted uid-2 raiders marched AWAY from the spawn under engine
   # invader AI while memory:2 stayed empty (users.code never ran), with
   # uid 2's stock invaderCore stronghold spawning defenderN noise on
   # top. The surgery also re-arms the user's `active` flag in the same
-  # CLI session: `active` is server-managed (the boot normalizes
-  # whatever the seed ships — observed live: seeded active: true read
-  # back as 0), and the runner roster is {active != 0 AND cpu > 0};
-  # a hand-set active: 10000 was observed to stick and put the brain
-  # on the roster (memory:raiders written, correct loitering FSM).
+  # CLI session — in EVERY wave's session: `active` is server-managed
+  # (the boot normalizes whatever the seed ships — observed live:
+  # seeded active: true read back as 0), and the runner roster is
+  # {active != 0 AND cpu > 0}; a hand-set active: 10000 was observed
+  # to stick and put the brain on the roster (memory:raiders written,
+  # correct loitering FSM).
   # Document shape mirrors a REAL NPC-owned creep; deliberately
   # omitted: ageTime (no natural death — the colony's kill is the
   # proof), boost/strongholdId, meta/$loki (LokiJS adds them).
@@ -326,23 +354,20 @@ let
   # front-to-back, so the single attack part goes LAST and stays
   # functional until the final 100 hits instead of being stripped at
   # ~2500 cumulative damage while the raider is still en route.
-  # TWO tanks are threat-window arithmetic, not drama: the tower
-  # deals at most 600/tick to ONE target, so 10000 pooled hits keep the
-  # threat alive >= 17 ticks — longer than the longest possible
-  # in-flight worker spawn (5 parts x 3 ticks = 15), so the spawn walk
-  # is GUARANTEED a free tick while threat=hostile and the
-  # threat-conditional defender spawn (calm desired 0, hostile 1) is
-  # provable, not probabilistic. Array.from (not Array.fill) because
-  # fill would alias one shared part object across the body. Placed at
-  # spawn+-(3,3): terrain risk is acceptable, walls sit at room edges,
-  # not next to a spawn.
-  surgeryInsertRaiders = writeShellScript "surgery-insert-raiders" ''
+  # Insert offsets are the 8 approach directions at range 3 from the
+  # spawn (one per raider, so wave-mates never fight for the same
+  # approach tile); terrain risk is acceptable — walls sit at room
+  # edges, not next to a spawn. Array.from (not Array.fill) because
+  # fill would alias one shared part object across the body.
+  surgeryInsertWave = writeShellScript "surgery-insert-wave" ''
     set -euo pipefail
-    CMD='storage.db.users.findOne({usernameLower: "${email}"}).then(u => storage.db["rooms.objects"].findOne({type: "spawn", user: u._id})).then(s => { const mk = (name, dx, dy) => ({type: "creep", name: name, room: s.room, x: s.x + dx, y: s.y + dy, user: "raiders", body: [].concat(Array.from({length: 24}, () => ({type: "tough", hits: 100})), Array.from({length: 25}, () => ({type: "move", hits: 100})), [{type: "attack", hits: 100}]), hits: 5000, hitsMax: 5000, spawning: false, fatigue: 0, store: {energy: 0}, storeCapacity: 0, notifyWhenAttacked: false, actionLog: {attacked: null, healed: null, attack: null, rangedAttack: null, rangedMassAttack: null, rangedHeal: null, harvest: null, heal: null, repair: null, build: null, say: null, upgradeController: null, reserveController: null}}); return Promise.all([storage.db["rooms.objects"].insert(mk("raider-itest-1", 3, 3)), storage.db["rooms.objects"].insert(mk("raider-itest-2", -3, -3)), storage.db.users.update({_id: "raiders"}, {$set: {active: 10000}})]); }).then(r => "RAIDERS-OK:" + JSON.stringify(r.map(d => (d && d._id) || d)))'
+    WAVE="$1"
+    COUNT="$2"
+    CMD='storage.db.users.findOne({usernameLower: "${email}"}).then(u => storage.db["rooms.objects"].findOne({type: "spawn", user: u._id})).then(s => { const offs = [[3, 3], [-3, -3], [3, -3], [-3, 3], [0, 3], [3, 0], [0, -3], [-3, 0]]; const mk = (name, dx, dy) => ({type: "creep", name: name, room: s.room, x: s.x + dx, y: s.y + dy, user: "raiders", body: [].concat(Array.from({length: 24}, () => ({type: "tough", hits: 100})), Array.from({length: 25}, () => ({type: "move", hits: 100})), [{type: "attack", hits: 100}]), hits: 5000, hitsMax: 5000, spawning: false, fatigue: 0, store: {energy: 0}, storeCapacity: 0, notifyWhenAttacked: false, actionLog: {attacked: null, healed: null, attack: null, rangedAttack: null, rangedMassAttack: null, rangedHeal: null, harvest: null, heal: null, repair: null, build: null, say: null, upgradeController: null, reserveController: null}}); return Promise.all([].concat(Array.from({length: '"$COUNT"'}, (_, i) => storage.db["rooms.objects"].insert(mk("raider-w'"$WAVE"'-" + (i + 1), offs[i][0], offs[i][1]))), [storage.db.users.update({_id: "raiders"}, {$set: {active: 10000}})])); }).then(r => "WAVE-OK:" + JSON.stringify(r.map(d => (d && d._id) || d)))'
     OUT=$( (printf '%s\n' "$CMD"; sleep 3) | ${netcat-openbsd}/bin/nc -N -w 6 127.0.0.1 21026 || true)
     echo "$OUT"
     case "$OUT" in
-      *RAIDERS-OK:*) exit 0 ;;
+      *WAVE-OK:*) exit 0 ;;
       *) exit 1 ;;
     esac
   '';
@@ -442,13 +467,16 @@ let
   # actionLog.attack (the engine writes actionLog.attack only when an
   # attack intent actually PROCESSES), the itest spawn's hits +
   # actionLog.attacked (persistent evidence that survives the raiders'
-  # corpses), and the raiders user's memory (Memory.raiders — the fsm:
-  # did the brain ever enter razing?). Printed
-  # during and after the fight so a pollRaiderMarched failure carries
-  # its own diagnosis instead of a bare timeout.
+  # corpses), and the raiders user's memory: Memory.raiders (the live
+  # fsm) plus Memory.trace — the flight recorder, one {t, event, fsm,
+  # action, rc} line per change per raider, latched past death. The
+  # 4000-char window fits the recorder for a full escalation. Printed
+  # during and after every wave so a failure carries its own diagnosis
+  # instead of a bare timeout — and a PASSING ordeal documents what
+  # the losing waves' FSMs were doing.
   forensicsRaiders = writeShellScript "forensics-raiders" ''
     set -euo pipefail
-    CMD='Promise.all([storage.db["rooms.objects"].find({user: "raiders"}), storage.db.users.findOne({usernameLower: "${email}"}).then(u => storage.db["rooms.objects"].findOne({type: "spawn", user: u._id})), storage.env.get("memory:raiders")]).then(rsm => "FORENSICS:" + JSON.stringify({raiders: rsm[0].map(c => ({n: c.name, r: c.room, x: c.x, y: c.y, hits: c.hits, fatigue: c.fatigue, atk: c.actionLog && c.actionLog.attack})), spawn: rsm[1] && {r: rsm[1].room, x: rsm[1].x, y: rsm[1].y, hits: rsm[1].hits, hitsMax: rsm[1].hitsMax, attacked: rsm[1].actionLog && rsm[1].actionLog.attacked}, mem: rsm[2] && String(rsm[2]).slice(0, 400)}))'
+    CMD='Promise.all([storage.db["rooms.objects"].find({user: "raiders"}), storage.db.users.findOne({usernameLower: "${email}"}).then(u => storage.db["rooms.objects"].findOne({type: "spawn", user: u._id})), storage.env.get("memory:raiders")]).then(rsm => "FORENSICS:" + JSON.stringify({raiders: rsm[0].map(c => ({n: c.name, r: c.room, x: c.x, y: c.y, hits: c.hits, fatigue: c.fatigue, atk: c.actionLog && c.actionLog.attack})), spawn: rsm[1] && {r: rsm[1].room, x: rsm[1].x, y: rsm[1].y, hits: rsm[1].hits, hitsMax: rsm[1].hitsMax, attacked: rsm[1].actionLog && rsm[1].actionLog.attacked}, mem: rsm[2] && String(rsm[2]).slice(0, 4000)}))'
     OUT=$( (printf '%s\n' "$CMD"; sleep 2) | ${netcat-openbsd}/bin/nc -N -w 5 127.0.0.1 21026 || true)
     echo "$OUT" | grep -o "FORENSICS:.*" || echo "$OUT"
   '';
@@ -459,12 +487,8 @@ let
   # shell, so the whole fight resolving inside a few 50ms ticks cannot
   # hide it from a seconds-granularity poll. This is the probe the
   # scarecrow could never pass: a stationary target moves nothing.
-  # damageTaken is printed but NOT asserted: the live run demonstrated
-  # the tower downs both raiders at spawn range 1 before a blow lands
-  # (forensics: tombstones adjacent to the spawn, damageTaken 0) —
-  # raider damage is not a fact this world produces. The arc's
-  # remaining links are carried by the tower trace (engaged),
-  # hostilesDowned (cleared), and roleCounts.defender (answered).
+  # The OFFENSE (damageTaken >= 1) is asserted by the wave loop, not
+  # here — this probe carries only the movement link of the arc.
   pollRaiderMarched = writeShellScript "poll-raider-marched" ''
     set -euo pipefail
     TOKEN=$(${curl}/bin/curl -sS -X POST "${url}/api/auth/signin" \
@@ -523,15 +547,20 @@ let
     ' > /dev/null
   '';
 
-  # One-shot probe: the threat is CLEARED and the clearing was
-  # OBSERVED — stats.combat.hostilesDowned >= 2 (both raiders were
-  # seen to vanish from the spawn room; NPC creeps never cross room
-  # edges — engine tick.js exempts them — so gone = dead) AND
-  # stats.hostiles == 0 (nothing hostile remains now). The downed
-  # counter is what the old absence-only probe lacked: hostiles==0 was
-  # also true before the fight ever happened.
-  pollThreatCleared = writeShellScript "poll-threat-cleared" ''
+  # One-shot probe, parameterized: wave RESOLVED — the threat is
+  # CLEARED and the clearing was OBSERVED. $1 = the cumulative downed
+  # total expected so far (sum of all wave sizes): stats.combat
+  # .hostilesDowned >= $1 (every raider of every wave was seen to
+  # vanish from the spawn room; NPC creeps never cross room edges —
+  # engine tick.js exempts them — so gone = dead) AND stats.hostiles
+  # == 0 (nothing hostile remains now, safe to escalate). The downed
+  # counter is what an absence-only probe would lack: hostiles==0 was
+  # also true before the fight ever happened. The final wave's call
+  # doubles as the old pollThreatCleared: cumulative arithmetic,
+  # nothing hardcoded.
+  pollWaveResolved = writeShellScript "poll-wave-resolved" ''
     set -euo pipefail
+    EXPECT="$1"
     TOKEN=$(${curl}/bin/curl -sS -X POST "${url}/api/auth/signin" \
       -H "Content-Type: application/json" \
       --data '{"email":"${email}","password":"${password}"}' \
@@ -548,9 +577,29 @@ let
     }
     H=$(decode stats.hostiles)
     DOWNED=$(decode stats.combat.hostilesDowned)
-    echo "hostiles: $H (downed: $DOWNED, towers: $(decode stats.towers))"
+    echo "hostiles: $H (downed: $DOWNED of $EXPECT expected, towers: $(decode stats.towers))"
     [ "$H" != absent ] && [ "$DOWNED" != absent ] \
-      && [ "$DOWNED" -ge 2 ] && [ "$H" -eq 0 ]
+      && [ "$DOWNED" -ge "$EXPECT" ] && [ "$H" -eq 0 ]
+  '';
+
+  # One-shot reader: print stats.combat.damageTaken (just the number) —
+  # the wave loop's blood test. Cumulative and latched by the shell's
+  # tick diff, so damage that lands and heals inside one 50ms tick
+  # still counts forever. Fails (exit 1) only if the stat is absent.
+  readDamageTaken = writeShellScript "read-damage-taken" ''
+    set -euo pipefail
+    TOKEN=$(${curl}/bin/curl -sS -X POST "${url}/api/auth/signin" \
+      -H "Content-Type: application/json" \
+      --data '{"email":"${email}","password":"${password}"}' \
+      | ${jq}/bin/jq -r '.token // empty')
+    [ -n "$TOKEN" ]
+    DATA=$(${curl}/bin/curl -sS -H "X-Token: $TOKEN" \
+      "${url}/api/user/memory?path=stats.combat.damageTaken" | ${jq}/bin/jq -r '.data // empty')
+    case "$DATA" in
+      gz:*) ;;
+      *) echo "no stats.combat.damageTaken in memory (got: $DATA)" >&2; exit 1 ;;
+    esac
+    printf '%s' "''${DATA#gz:}" | ${coreutils}/bin/base64 -d | ${gzip}/bin/zcat
   '';
 
   # One-shot probe: stats.roleCounts.defender >= 1 — the
@@ -558,8 +607,13 @@ let
   # count is 0 under calm and 1 under hostile (DesiredCounts in
   # dox/creeps.dox), so a defender EXISTING is itself proof the spawn
   # walk read threat=hostile on some tick: no other path creates one.
-  # The raiders' pooled 10000 hits hold the threat window past the
-  # longest possible in-flight worker spawn, so the slot is guaranteed.
+  # Threat-window arithmetic under waves: each raider is 5000 hits and
+  # the tower downs ONE target at <= 600/tick, so a wave of n holds
+  # threat=hostile >= ceil(5000n/600) ticks; from wave 2 up (>= 17
+  # ticks) that outlasts the longest possible in-flight worker spawn
+  # (5 parts x 3 ticks = 15) and the slot is guaranteed — wave 1's ~9
+  # ticks may only miss if a worker spawn is mid-flight, and the probe
+  # accepts a defender born during ANY wave (threat is threat).
   pollDefenderSpawned = writeShellScript "poll-defender-spawned" ''
     set -euo pipefail
     TOKEN=$(${curl}/bin/curl -sS -X POST "${url}/api/auth/signin" \
@@ -686,11 +740,13 @@ testers.runNixOSTest {
   # Worst-case sum of subtest deadlines: tutorial-1..3 (3 x 600s +
   # 1500s) plus the turnover phases (900s + 600s + 600s + 300s) =
   # 5700s, plus the defense arc (RCL surgery 60s + 300s, tower build
-  # 2500s + feed 300s, raiders 60s + 120s + 120s + 300s + 300s + 300s,
-  # repair 60s + 120s + 300s, heartbeat 300s ≈ 5140s) ≈ 10840s of
-  # deadlines, plus boot and deploy — far past the driver's default
-  # 3600s global timeout.
-  globalTimeout = 14400;
+  # 2500s + feed 300s, raider waves 8 x (60s insert + ~4s forensics +
+  # 300s resolve) ≈ 2910s + 120s + 120s + 300s + 300s, repair 60s +
+  # 120s + 300s, heartbeat 300s ≈ 7690s) ≈ 13390s of deadlines, plus
+  # boot and deploy. The wave worst case only accrues on the FAILURE
+  # path (a resolving wave clears in seconds at 50ms ticks), but the
+  # global timeout must cover the honest conviction run too.
+  globalTimeout = 18000;
 
   nodes.machine = {
     # Server spawns storage/backend/engine children plus runner/processor
@@ -958,36 +1014,86 @@ testers.runNixOSTest {
                 raise Exception("timed out waiting for the tower to receive energy")
             time.sleep(2)
 
-    with subtest("live raiders attack and the colony answers"):
-        # Insert two 50-part tank raiders driven by the generated
-        # invader brain (the "raiders" NPC's users.code), then prove the whole arc
-        # from durable evidence: the raiders MARCHED (stats.combat
-        # hostileMoves — the probe the scarecrow could never pass),
-        # the defense ENGAGED (tower trace hostile*/attack/rc=0),
-        # the threat CLEARED with the kills OBSERVED (hostilesDowned >=
-        # 2 and hostiles == 0), the threat-conditional defender spawn
-        # FIRED (a defender exists at all only because the spawn walk
-        # read threat=hostile), and the colony still stands at desired
-        # strength.
-        deadline = time.time() + 60
-        while True:
-            status, out = machine.execute("${surgeryInsertRaiders} 2>&1")
-            print(f">>> raider surgery: {out.strip()}")
-            if status == 0:
-                print(">>> raiders inserted")
-                break
-            if time.time() > deadline:
-                raise Exception("raider insertion was never acknowledged by the CLI")
-            time.sleep(5)
-        # Forensic witness: snapshot the raiders mid-fight — position,
-        # hits, fatigue, actionLog.attack (set only when an attack
-        # intent PROCESSES), the spawn's hits + actionLog.attacked, and
-        # the raiders user's memory (the fsm). The corpses clear in ticks;
-        # these lines are the only cross-examination that survives.
-        for i in range(10):
+    with subtest("live raiders draw blood (escalating waves) and the colony answers"):
+        # The raider offense case: no fixed raider count is ASSUMED
+        # sufficient — the ordeal escalates force until damage lands.
+        # Wave n inserts n tank raiders (wave sizes 1, 2, ..., cap) and
+        # lets the wave fully resolve (cumulative hostilesDowned reaches
+        # the running total, no hostiles remain); then the blood test:
+        # stats.combat.damageTaken >= 1 ends the escalation — offense
+        # PROVEN at the minimum force that draws blood. The tower
+        # processes ONE target per tick at <= 600 damage, so if the
+        # sword works at all some n <= 8 saturates that throughput and
+        # survivors stand adjacent with tail-protected ATTACK parts:
+        # blood MUST land. Reaching the cap with zero damage leaves no
+        # physics excuse — the wave loop FAILS and the flight recorder
+        # (Memory.trace in the raiders' memory, dumped by forensics)
+        # names the statute: fsm stuck in marching = observation bug;
+        # razing with rc != 0 = rejected intent; razing with rc 0 and
+        # no damage = the engine dropped a processed intent.
+        # Precedent (run #6): conviction at cap with razing/rc -12 on
+        # every swing — the engine's SAFE MODE refusal (masquerading
+        # as ERR_NO_BODYPART), not a brain bug; lifted since by the
+        # RCL3 surgery's safeMode: null.
+        total_downed = 0
+        blood_wave = 0
+        for wave in range(1, ${toString raiderWaveCap} + 1):
+            size = wave
+            deadline = time.time() + 60
+            while True:
+                status, out = machine.execute(f"${surgeryInsertWave} {wave} {size} 2>&1")
+                print(f">>> wave {wave} surgery ({size} raider(s)): {out.strip()}")
+                if status == 0:
+                    print(f">>> wave {wave} inserted")
+                    break
+                if time.time() > deadline:
+                    raise Exception(f"wave {wave} insertion was never acknowledged by the CLI")
+                time.sleep(5)
+            total_downed += size
+            # Forensic witness: snapshot the raiders mid-fight —
+            # position, hits, fatigue, actionLog.attack (set only when
+            # an attack intent PROCESSES), the spawn's hits +
+            # actionLog.attacked, and the raiders user's memory (fsm +
+            # flight recorder). The corpses clear in ticks; these lines
+            # are the cross-examination that survives.
+            for i in range(3):
+                status, out = machine.execute("${forensicsRaiders} 2>&1")
+                print(f">>> forensics[w{wave}.{i}]: {out.strip()}")
+                time.sleep(1)
+            deadline = time.time() + 300
+            while True:
+                status, out = machine.execute(f"${pollWaveResolved} {total_downed} 2>&1")
+                print(f">>> poll: {out.strip()}")
+                if status == 0:
+                    print(f">>> wave {wave} resolved ({total_downed} cumulative raiders downed)")
+                    break
+                if time.time() > deadline:
+                    print(">>> TIMEOUT — forensics at time of death:")
+                    status, out = machine.execute("${forensicsRaiders} 2>&1")
+                    print(f">>> forensics[final]: {out.strip()}")
+                    print(">>> TIMEOUT — server log tail for diagnosis:")
+                    print(machine.succeed("journalctl -u screeps --no-pager | tail -n 100"))
+                    raise Exception(f"wave {wave} never resolved ({total_downed} downed expected)")
+                time.sleep(2)
+            # Post-wave forensics: even a losing wave documents its FSM
+            # trajectory in the recorder before the next escalation.
             status, out = machine.execute("${forensicsRaiders} 2>&1")
-            print(f">>> forensics[{i}]: {out.strip()}")
-            time.sleep(1)
+            print(f">>> forensics[w{wave}.post]: {out.strip()}")
+            damage = int(machine.succeed("${readDamageTaken}").strip())
+            print(f">>> damageTaken after wave {wave}: {damage}")
+            if damage >= 1:
+                blood_wave = wave
+                print(f">>> SUCCESS: first blood at wave {wave} ({size} raider(s)) — offense proven")
+                break
+        if blood_wave == 0:
+            print(">>> CONVICTION — recorder dump for root cause:")
+            status, out = machine.execute("${forensicsRaiders} 2>&1")
+            print(f">>> forensics[conviction]: {out.strip()}")
+            print(machine.succeed("journalctl -u screeps --no-pager | tail -n 100"))
+            raise Exception(
+                "no raider damage through wave cap ${toString raiderWaveCap} — "
+                "attack path convicted by exhaustion; the trace above names the statute"
+            )
         deadline = time.time() + 120
         while True:
             status, out = machine.execute("${pollRaiderMarched} 2>&1")
@@ -996,9 +1102,6 @@ testers.runNixOSTest {
                 print(">>> SUCCESS: raiders marched on the spawn (hostileMoves latched)")
                 break
             if time.time() > deadline:
-                print(">>> TIMEOUT — forensics at time of death:")
-                status, out = machine.execute("${forensicsRaiders} 2>&1")
-                print(f">>> forensics[final]: {out.strip()}")
                 print(">>> TIMEOUT — server log tail for diagnosis:")
                 print(machine.succeed("journalctl -u screeps --no-pager | tail -n 100"))
                 raise Exception("timed out waiting for raider movement in stats.combat")
@@ -1014,18 +1117,6 @@ testers.runNixOSTest {
                 print(">>> TIMEOUT — server log tail for diagnosis:")
                 print(machine.succeed("journalctl -u screeps --no-pager | tail -n 100"))
                 raise Exception("timed out waiting for a tower attack in Memory.trace")
-            time.sleep(2)
-        deadline = time.time() + 300
-        while True:
-            status, out = machine.execute("${pollThreatCleared} 2>&1")
-            print(f">>> poll: {out.strip()}")
-            if status == 0:
-                print(">>> SUCCESS: both raiders observed down, no hostiles remain")
-                break
-            if time.time() > deadline:
-                print(">>> TIMEOUT — server log tail for diagnosis:")
-                print(machine.succeed("journalctl -u screeps --no-pager | tail -n 100"))
-                raise Exception("timed out waiting for the threat to clear")
             time.sleep(2)
         deadline = time.time() + 300
         while True:

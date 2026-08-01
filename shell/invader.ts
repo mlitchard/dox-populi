@@ -109,6 +109,42 @@ function execute(
   return result;
 }
 
+// ---------------------------------------------------------------------------
+// Flight recorder — the colony shell's Memory.trace discipline exactly
+// (shell/main.ts recordTrace): per-raider entries {t, event, fsm, action,
+// rc}, appended ONLY when the tuple changes — a steady state is one line,
+// not one per tick. rc is the raw Screeps API return code captured AFTER
+// execute (null = no call made: idle, or unresolvable target). ONE
+// deliberate difference from the colony: NO dead-trace pruning. A dead
+// raider's fsm memory is reclaimed, but its trace LATCHES forever — the
+// fight resolves in ticks and the corpses clear; the trace is the
+// tombstone that talks. Pure telemetry: nothing reads it to decide.
+// ---------------------------------------------------------------------------
+
+const TRACE_LIMIT = 50; // max entries per raider
+
+function recordTrace(
+  name: string,
+  event: string,
+  fsm: string,
+  action: string,
+  rc: number | null
+): void {
+  const traces = (Memory.trace ??= {});
+  const log = (traces[name] ??= []);
+  const last = log[log.length - 1];
+  if (
+    last &&
+    last.event === event &&
+    last.fsm === fsm &&
+    last.action === action &&
+    last.rc === rc
+  )
+    return;
+  log.push({ t: Game.time, event, fsm, action, rc });
+  if (log.length > TRACE_LIMIT) log.shift();
+}
+
 // Recovery state for a raider with missing/invalid fsm memory: the first
 // field of the invaderBehaviors record, which is the machine's initial
 // state by spec construction (the field-order contract documented in
@@ -118,7 +154,7 @@ const invaderInitialState: InvaderState = validInvaderState(
 );
 
 export const loop = (): void => {
-  // Reclaim memory of dead raiders.
+  // Reclaim memory of dead raiders — but NOT their traces (see above).
   const raiders = (Memory.raiders ??= {});
   for (const name in raiders) {
     if (!(name in Game.creeps)) delete raiders[name];
@@ -138,6 +174,8 @@ export const loop = (): void => {
     const event = emitInvaderEvent(obs);
     const next = invaderTransition(state, event, invaderContext).target;
     raiders[name] = { fsm: next };
-    execute(invaderBehaviors[next], creep, obs);
+    const behavior = invaderBehaviors[next];
+    const rc = execute(behavior, creep, obs);
+    recordTrace(name, event, next, behavior.action, rc);
   }
 };

@@ -9,9 +9,11 @@
 // — 12 variants, spelled as the exact concatenation of the dimension
 // values. TowerEvent is the product threat (hostile|calm) x integrity
 // (Damage|Intact) x reserve (ReserveOk|ReserveLow). The defender
-// machine's event type is ThreatLevel itself (hostile|calm). One event
-// per actor per tick, no priority, no masking: every fact rides every
-// event.
+// machine's event type is ThreatLevel itself (hostile|calm). The
+// ENEMY's InvaderEvent (dox/invader submodule) is the product foe
+// reach (foe|noFoe) x struct reach (Struct|NoStruct) x spawn sight
+// (Spawn|NoSpawn). One event per actor per tick, no priority, no
+// masking: every fact rides every event.
 //
 // Test strategy, two sweeps:
 //  1. Transitions: every state x every event against a policy oracle
@@ -53,6 +55,15 @@ import type {
   StateBehaviors,
   TowerStateBehaviors,
 } from "../generated/index";
+// The ENEMY brain gets the same church: dox/invader/ is its own
+// submodule (generated/invader.ts), so its vocabulary imports come
+// from there, not from index.
+import { invaderTransition, invaderContext, invaderBehaviors } from "../generated/invader";
+import type {
+  InvaderState,
+  InvaderEvent,
+  InvaderStateBehaviors,
+} from "../generated/invader";
 
 let failures = 0;
 
@@ -73,6 +84,10 @@ const SITES = ["Site", "NoSite"] as const;
 const THREATS = ["hostile", "calm"] as const;
 const INTEGRITIES = ["Damage", "Intact"] as const;
 const RESERVES = ["ReserveOk", "ReserveLow"] as const;
+// InvaderEvent product: foe reach x struct reach x spawn sight.
+const FOES = ["foe", "noFoe"] as const;
+const STRUCTS = ["Struct", "NoStruct"] as const;
+const SPAWNSIGHTS = ["Spawn", "NoSpawn"] as const;
 
 type Store = (typeof STORES)[number];
 type Sinks = (typeof SINKS)[number];
@@ -80,6 +95,9 @@ type Sites = (typeof SITES)[number];
 type Threat = (typeof THREATS)[number];
 type Integrity = (typeof INTEGRITIES)[number];
 type Reserve = (typeof RESERVES)[number];
+type Foe = (typeof FOES)[number];
+type Struct = (typeof STRUCTS)[number];
+type SpawnSight = (typeof SPAWNSIGHTS)[number];
 
 // The THREATS dimension IS the ThreatLevel union (the defender's whole
 // event vocabulary and the tower event's first fact share one spelling)
@@ -90,6 +108,8 @@ const creepEvent = (st: Store, sk: Sinks, si: Sites): CreepEvent =>
   `${st}${sk}${si}`;
 const towerEvent = (th: Threat, integ: Integrity, rs: Reserve): TowerEvent =>
   `${th}${integ}${rs}`;
+const invaderEvent = (f: Foe, s: Struct, sp: SpawnSight): InvaderEvent =>
+  `${f}${s}${sp}`;
 
 // Helper: run a transition and return the target state.
 function hTx(state: HarvesterState, event: CreepEvent): HarvesterState {
@@ -106,6 +126,9 @@ function dTx(state: DefenderState, event: ThreatLevel): DefenderState {
 }
 function tTx(state: TowerState, event: TowerEvent): TowerState {
   return towerTransition(state, event, towerContext).target;
+}
+function iTx(state: InvaderState, event: InvaderEvent): InvaderState {
+  return invaderTransition(state, event, invaderContext).target;
 }
 
 // ── Policy oracles: the spec's tables, restated independently ────────
@@ -183,6 +206,20 @@ function towerOracle(th: Threat, integ: Integrity, rs: Reserve): TowerState {
   return "guarding";
 }
 
+// Invader (the ENEMY brain, dox/invader/invader.dox): creeps outrank
+// structures outrank the march; nothing in reach and no spawn to march
+// on -> loiter. STATE-INDEPENDENT pure policy — all four states carry
+// the identical eight transitions (tower precedent), so the oracle
+// reads only the event facts. Answer the sword before the masonry:
+// a defender blocking the path must not let the raider die chewing a
+// wall.
+function invaderOracle(f: Foe, s: Struct, sp: SpawnSight): InvaderState {
+  if (f === "foe") return "slaughtering";
+  if (s === "Struct") return "razing";
+  if (sp === "Spawn") return "marching";
+  return "loitering";
+}
+
 // ── Behavior oracles: what each state DOES ───────────────────────────
 // Typed as the generated StateBehaviors/TowerStateBehaviors so tsc
 // enforces exhaustiveness and variant spelling; the runtime compare
@@ -204,6 +241,16 @@ const towerBehaviorOracle: TowerStateBehaviors = {
   guarding: { action: "idle", target: "none" },
   attacking: { action: "attack", target: "hostile" },
   repairing: { action: "repair", target: "damagedStructure" },
+};
+
+// Field order mirrors the spec's InvaderStateBehaviors record — the
+// FIRST field is the machine's initial state (the hands' recovery
+// state comes from Object.keys(invaderBehaviors)[0]).
+const invaderBehaviorOracle: InvaderStateBehaviors = {
+  marching: { action: "march", target: "hostileSpawn" },
+  slaughtering: { action: "attack", target: "foeInReach" },
+  razing: { action: "attack", target: "structInReach" },
+  loitering: { action: "idle", target: "none" },
 };
 
 // ── Exhaustive sweeps: every state x every event, oracle vs generated ─
@@ -256,6 +303,21 @@ for (const state of ["guarding", "attacking", "repairing"] as const) {
       }
 }
 
+console.log("Invader: exhaustive 4 states x 8 events");
+for (const state of [
+  "marching",
+  "slaughtering",
+  "razing",
+  "loitering",
+] as const) {
+  for (const f of FOES)
+    for (const s of STRUCTS)
+      for (const sp of SPAWNSIGHTS) {
+        const ev = invaderEvent(f, s, sp);
+        assert(`invader ${state} + ${ev}`, iTx(state, ev), invaderOracle(f, s, sp));
+      }
+}
+
 // ── Exhaustive behavior sweep: every state's action+target vs oracle ─
 
 console.log("Behaviors: every creep state's action + target");
@@ -283,6 +345,20 @@ for (const state of Object.keys(towerBehaviorOracle) as (keyof TowerStateBehavio
     `tower ${state}.target`,
     towerBehaviors[state].target,
     towerBehaviorOracle[state].target
+  );
+}
+
+console.log("Behaviors: every invader state's action + target");
+for (const state of Object.keys(invaderBehaviorOracle) as (keyof InvaderStateBehaviors)[]) {
+  assert(
+    `invader ${state}.action`,
+    invaderBehaviors[state].action,
+    invaderBehaviorOracle[state].action
+  );
+  assert(
+    `invader ${state}.target`,
+    invaderBehaviors[state].target,
+    invaderBehaviorOracle[state].target
   );
 }
 
