@@ -1,9 +1,9 @@
 import std
 
-| The ENEMY brain: a deterministic raider for the seed's NPC Invader
-| user (uid "2"). This submodule generates its own module
+| The ENEMY brain: a deterministic raider for the flake-seeded NPC
+| "raiders" user. This submodule generates its own module
 | (generated/invader.ts) with its own hands (shell/invader.ts), bundled
-| separately and injected by the flake's seed step as uid 2's
+| separately and injected by the flake's seed step as that user's
 | users.code — the enemy is world content, but its decision logic is
 | spec, checked by the same church as the colony brain. Stage 2 of the
 | invader trajectory (docs/evolution-plan.md) repackages the SAME

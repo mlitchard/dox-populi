@@ -7,9 +7,13 @@
 # is built (builder + spec-driven extension placement work), (4) the
 # colony survives generational turnover (creeps age out, replacements
 # respawn, progress continues), and (5) the defense arc — world surgery
-# over the server CLI forces RCL 3, the tower gets built and fed, an
-# inserted invader dies to it, CLI-inflicted battle damage gets
-# repaired, and the economy keeps beating afterward.
+# over the server CLI forces RCL 3, the tower gets built and fed, then
+# LIVE raiders (the seeded "raiders" NPC runs the generated invader brain) are
+# inserted and must be observed to MARCH and LAND BLOWS before the
+# defense ENGAGES (tower trace), the threat CLEARS (downed count, not
+# just absence), the threat-conditional defender spawn fires, and the
+# colony recovers; CLI-inflicted battle damage gets repaired, and the
+# economy keeps beating afterward.
 # Fully pure — runs in plain `nix flake check`.
 { testers
 , writeShellScript
@@ -59,16 +63,18 @@ let
     exit 1
   '';
 
-  # One-shot probe: read Memory.stats.creeps, a per-creep record of
-  # {role, event, fsm, action, parts} written by the shell every tick.
-  # Succeeds when a harvester's event carries the fullSinksFull* prefix
-  # (store full AND every sink saturated — both fullSinksFullSite and
-  # fullSinksFullNoSite qualify) while its fsm is "supporting" — proof
+  # One-shot probe: Memory.trace holds an entry with a fullSinksFull*
+  # event (store full AND every sink saturated — both fullSinksFullSite
+  # and fullSinksFullNoSite qualify) whose fsm is "supporting" — proof
   # that the product event vocabulary observes the compound saturation
   # FACT in the real game runtime AND the full+saturated->assist policy
-  # (harvester supporting state, action=upgrade) fires. This probe runs
-  # BEFORE the tower exists, so saturation here means spawn + extension
-  # only — reachability unchanged from tutorial 4.
+  # fires. State names are disjoint across machines, so fsm=="supporting"
+  # can only be a harvester (the spec's namespace rule doubles as the
+  # role filter). The flight recorder latches the moment durably — the
+  # old stats.creeps version of this probe had to catch a ~1-2s
+  # transient window and passed by recurrence, not by proof. This probe
+  # runs BEFORE the tower exists, so saturation here means spawn +
+  # extension only — reachability unchanged from tutorial 4.
   pollHarvesterSupporting = writeShellScript "poll-harvester-supporting" ''
     set -euo pipefail
     TOKEN=$(${curl}/bin/curl -sS -X POST "${url}/api/auth/signin" \
@@ -77,20 +83,18 @@ let
       | ${jq}/bin/jq -r '.token // empty')
     [ -n "$TOKEN" ]
     DATA=$(${curl}/bin/curl -sS -H "X-Token: $TOKEN" \
-      "${url}/api/user/memory?path=stats.creeps" | ${jq}/bin/jq -r '.data // empty')
+      "${url}/api/user/memory?path=trace" | ${jq}/bin/jq -r '.data // empty')
     case "$DATA" in
       gz:*) ;;
-      *) echo "no stats.creeps in memory yet (got: $DATA)" >&2; exit 1 ;;
+      *) echo "no trace in memory yet (got: $DATA)" >&2; exit 1 ;;
     esac
-    JSON=$(printf '%s' "''${DATA#gz:}" | ${coreutils}/bin/base64 -d | ${gzip}/bin/zcat)
-    echo "creep stats: $JSON"
-    # Succeed if ANY harvester observes fullSinksFull* and supports.
-    printf '%s' "$JSON" | ${jq}/bin/jq -e '
-      to_entries | map(select(
-        .value.role == "harvester"
-        and (.value.event | startswith("fullSinksFull"))
-        and .value.fsm == "supporting"
-      )) | length > 0
+    T=$(printf '%s' "''${DATA#gz:}" | ${coreutils}/bin/base64 -d | ${gzip}/bin/zcat)
+    echo "supporting trace: $(printf '%s' "$T" | ${jq}/bin/jq -c \
+      '[.[] | .[] | select(.fsm == "supporting")]')"
+    printf '%s' "$T" | ${jq}/bin/jq -e '
+      [.[] | .[] | select((.event | startswith("fullSinksFull"))
+                          and .fsm == "supporting")]
+      | length > 0
     ' > /dev/null
   '';
 
@@ -300,24 +304,45 @@ let
     esac
   '';
 
-  # Insert a hostile creep owned by the stock seed's Invader NPC user
-  # (user id "2" — verified against the dev-world db: users._id "2" has
-  # username "Invader"). Document shape mirrors a REAL Invader-owned
-  # creep from .server-data/db.json: type, name, room, x, y, user,
-  # body[].{type,hits}, hits/hitsMax (100 per part), spawning, fatigue,
-  # store, storeCapacity, notifyWhenAttacked, actionLog. Deliberately
-  # omitted: ageTime (no natural death — the tower kill is the proof),
-  # boost/strongholdId (stronghold-specific), meta/$loki (LokiJS adds
-  # them on insert). Placed at spawn+(3,3): terrain risk is acceptable,
-  # walls sit at room edges, not next to a spawn. The Invader user's
-  # script is the empty seed stub, so the creep just stands there.
-  surgeryInsertInvader = writeShellScript "surgery-insert-invader" ''
+  # Insert TWO hostile creeps owned by the flake-seeded NPC "raiders"
+  # user, whose users.code runs the generated raider brain (dox/invader
+  # -> shell/invader.ts), so these creeps MARCH toward the spawn and
+  # ATTACK — the scarecrow is retired. NOT uid 2 (stock Invader): the
+  # ENGINE special-cases that user's creeps — run #4 forensics showed
+  # inserted uid-2 raiders marched AWAY from the spawn under engine
+  # invader AI while memory:2 stayed empty (users.code never ran), with
+  # uid 2's stock invaderCore stronghold spawning defenderN noise on
+  # top. The surgery also re-arms the user's `active` flag in the same
+  # CLI session: `active` is server-managed (the boot normalizes
+  # whatever the seed ships — observed live: seeded active: true read
+  # back as 0), and the runner roster is {active != 0 AND cpu > 0};
+  # a hand-set active: 10000 was observed to stick and put the brain
+  # on the roster (memory:raiders written, correct loitering FSM).
+  # Document shape mirrors a REAL NPC-owned creep; deliberately
+  # omitted: ageTime (no natural death — the colony's kill is the
+  # proof), boost/strongholdId, meta/$loki (LokiJS adds them).
+  # Body: 24 tough + 25 move + 1 attack = 50 parts, 5000 hits, full
+  # speed. Part ORDER is armor doctrine: combat damage strips parts
+  # front-to-back, so the single attack part goes LAST and stays
+  # functional until the final 100 hits instead of being stripped at
+  # ~2500 cumulative damage while the raider is still en route.
+  # TWO tanks are threat-window arithmetic, not drama: the tower
+  # deals at most 600/tick to ONE target, so 10000 pooled hits keep the
+  # threat alive >= 17 ticks — longer than the longest possible
+  # in-flight worker spawn (5 parts x 3 ticks = 15), so the spawn walk
+  # is GUARANTEED a free tick while threat=hostile and the
+  # threat-conditional defender spawn (calm desired 0, hostile 1) is
+  # provable, not probabilistic. Array.from (not Array.fill) because
+  # fill would alias one shared part object across the body. Placed at
+  # spawn+-(3,3): terrain risk is acceptable, walls sit at room edges,
+  # not next to a spawn.
+  surgeryInsertRaiders = writeShellScript "surgery-insert-raiders" ''
     set -euo pipefail
-    CMD='storage.db.users.findOne({usernameLower: "${email}"}).then(u => storage.db["rooms.objects"].findOne({type: "spawn", user: u._id})).then(s => storage.db["rooms.objects"].insert({type: "creep", name: "invader-itest", room: s.room, x: s.x + 3, y: s.y + 3, user: "2", body: [{type: "attack", hits: 100}, {type: "move", hits: 100}], hits: 200, hitsMax: 200, spawning: false, fatigue: 0, store: {energy: 0}, storeCapacity: 0, notifyWhenAttacked: false, actionLog: {attacked: null, healed: null, attack: null, rangedAttack: null, rangedMassAttack: null, rangedHeal: null, harvest: null, heal: null, repair: null, build: null, say: null, upgradeController: null, reserveController: null}})).then(r => "INVADER-OK:" + JSON.stringify((r && r._id) || r))'
+    CMD='storage.db.users.findOne({usernameLower: "${email}"}).then(u => storage.db["rooms.objects"].findOne({type: "spawn", user: u._id})).then(s => { const mk = (name, dx, dy) => ({type: "creep", name: name, room: s.room, x: s.x + dx, y: s.y + dy, user: "raiders", body: [].concat(Array.from({length: 24}, () => ({type: "tough", hits: 100})), Array.from({length: 25}, () => ({type: "move", hits: 100})), [{type: "attack", hits: 100}]), hits: 5000, hitsMax: 5000, spawning: false, fatigue: 0, store: {energy: 0}, storeCapacity: 0, notifyWhenAttacked: false, actionLog: {attacked: null, healed: null, attack: null, rangedAttack: null, rangedMassAttack: null, rangedHeal: null, harvest: null, heal: null, repair: null, build: null, say: null, upgradeController: null, reserveController: null}}); return Promise.all([storage.db["rooms.objects"].insert(mk("raider-itest-1", 3, 3)), storage.db["rooms.objects"].insert(mk("raider-itest-2", -3, -3)), storage.db.users.update({_id: "raiders"}, {$set: {active: 10000}})]); }).then(r => "RAIDERS-OK:" + JSON.stringify(r.map(d => (d && d._id) || d)))'
     OUT=$( (printf '%s\n' "$CMD"; sleep 3) | ${netcat-openbsd}/bin/nc -N -w 6 127.0.0.1 21026 || true)
     echo "$OUT"
     case "$OUT" in
-      *INVADER-OK:*) exit 0 ;;
+      *RAIDERS-OK:*) exit 0 ;;
       *) exit 1 ;;
     esac
   '';
@@ -325,6 +350,11 @@ let
   # Battle-damage the extension (hits 1000 -> 1; hits/hitsMax verified
   # on a real extension document). desiredExtensions is 1, so the
   # {room, type} query hits exactly the one structure.
+  # KEPT despite the live raiders: the raider spec answers foes before
+  # structures, and this colony always has creeps standing, so raider
+  # structure damage is plausible but NOT provable — and a probe that
+  # must be able to fail cannot lean on "maybe". The synthetic wound
+  # stays as the deterministic repair proof.
   surgeryDamageExtension = writeShellScript "surgery-damage-extension" ''
     set -euo pipefail
     CMD='storage.db.users.findOne({usernameLower: "${email}"}).then(u => storage.db["rooms.objects"].findOne({type: "spawn", user: u._id})).then(s => storage.db["rooms.objects"].update({room: s.room, type: "extension"}, {$set: {hits: 1}})).then(r => "DAMAGE-OK:" + JSON.stringify(r))'
@@ -407,16 +437,64 @@ let
     ' > /dev/null
   '';
 
+  # Forensic witness, not a probe: one CLI snapshot of the fight —
+  # every raiders-user creep's room/position/hits/fatigue/
+  # actionLog.attack (the engine writes actionLog.attack only when an
+  # attack intent actually PROCESSES), the itest spawn's hits +
+  # actionLog.attacked (persistent evidence that survives the raiders'
+  # corpses), and the raiders user's memory (Memory.raiders — the fsm:
+  # did the brain ever enter razing?). Printed
+  # during and after the fight so a pollRaiderMarched failure carries
+  # its own diagnosis instead of a bare timeout.
+  forensicsRaiders = writeShellScript "forensics-raiders" ''
+    set -euo pipefail
+    CMD='Promise.all([storage.db["rooms.objects"].find({user: "raiders"}), storage.db.users.findOne({usernameLower: "${email}"}).then(u => storage.db["rooms.objects"].findOne({type: "spawn", user: u._id})), storage.env.get("memory:raiders")]).then(rsm => "FORENSICS:" + JSON.stringify({raiders: rsm[0].map(c => ({n: c.name, r: c.room, x: c.x, y: c.y, hits: c.hits, fatigue: c.fatigue, atk: c.actionLog && c.actionLog.attack})), spawn: rsm[1] && {r: rsm[1].room, x: rsm[1].x, y: rsm[1].y, hits: rsm[1].hits, hitsMax: rsm[1].hitsMax, attacked: rsm[1].actionLog && rsm[1].actionLog.attacked}, mem: rsm[2] && String(rsm[2]).slice(0, 400)}))'
+    OUT=$( (printf '%s\n' "$CMD"; sleep 2) | ${netcat-openbsd}/bin/nc -N -w 5 127.0.0.1 21026 || true)
+    echo "$OUT" | grep -o "FORENSICS:.*" || echo "$OUT"
+  '';
+
+  # One-shot probe: stats.combat proves the raiders MARCHED —
+  # hostileMoves >= 1 (a raider changed position: the armed brain
+  # drives movement). The counter is a cumulative diff latched by the
+  # shell, so the whole fight resolving inside a few 50ms ticks cannot
+  # hide it from a seconds-granularity poll. This is the probe the
+  # scarecrow could never pass: a stationary target moves nothing.
+  # damageTaken is printed but NOT asserted: the live run demonstrated
+  # the tower downs both raiders at spawn range 1 before a blow lands
+  # (forensics: tombstones adjacent to the spawn, damageTaken 0) —
+  # raider damage is not a fact this world produces. The arc's
+  # remaining links are carried by the tower trace (engaged),
+  # hostilesDowned (cleared), and roleCounts.defender (answered).
+  pollRaiderMarched = writeShellScript "poll-raider-marched" ''
+    set -euo pipefail
+    TOKEN=$(${curl}/bin/curl -sS -X POST "${url}/api/auth/signin" \
+      -H "Content-Type: application/json" \
+      --data '{"email":"${email}","password":"${password}"}' \
+      | ${jq}/bin/jq -r '.token // empty')
+    [ -n "$TOKEN" ]
+    DATA=$(${curl}/bin/curl -sS -H "X-Token: $TOKEN" \
+      "${url}/api/user/memory?path=stats.combat" | ${jq}/bin/jq -r '.data // empty')
+    case "$DATA" in
+      gz:*) ;;
+      *) echo "no stats.combat in memory yet (got: $DATA)" >&2; exit 1 ;;
+    esac
+    C=$(printf '%s' "''${DATA#gz:}" | ${coreutils}/bin/base64 -d | ${gzip}/bin/zcat)
+    echo "combat: $(printf '%s' "$C" | ${jq}/bin/jq -c \
+      '{hostileMoves, damageTaken, hostilesDowned}')"
+    printf '%s' "$C" | ${jq}/bin/jq -e '
+      .hostileMoves >= 1
+    ' > /dev/null
+  '';
+
   # One-shot probe: Memory.trace holds a tower entry with a hostile*
-  # event, action=attack, rc=0 — durable proof the tower SAW the
-  # invader and FIRED. stats.hostiles is a ONE-TICK transient here: a
-  # point-blank tower deals 600 to the 200-hit invader, so the sighting
-  # and the kill land in the same 50ms tick and no seconds-granularity
-  # poll can be required to catch it (the first itest run proved this
-  # by timing out on stats.hostiles while the colony hummed along).
-  # The flight recorder appends on change and never forgets the
-  # engagement. Tower-vocabulary entries (hostile*/calm*) are printed
-  # each poll for diagnosis.
+  # event, action=attack, rc=0 — durable proof the tower SAW a raider
+  # and FIRED. stats.hostiles remains transient-prone: even 10000
+  # pooled raider hits fall in ~17 ticks (~1s at 50ms ticks), so the
+  # engagement window can slip between seconds-granularity polls (the
+  # first itest run proved this by timing out on stats.hostiles while
+  # the colony hummed along). The flight recorder appends on change and
+  # never forgets the engagement. Tower-vocabulary entries
+  # (hostile*/calm*) are printed each poll for diagnosis.
   pollTowerEngaged = writeShellScript "poll-tower-engaged" ''
     set -euo pipefail
     TOKEN=$(${curl}/bin/curl -sS -X POST "${url}/api/auth/signin" \
@@ -445,12 +523,14 @@ let
     ' > /dev/null
   '';
 
-  # One-shot probe: stats.hostiles == 0 AFTER pollTowerEngaged latched
-  # the attack — the threat is cleared. Together: the trace proves the
-  # tower saw and shot (rc=0 on a 600-damage attack against 200 hits),
-  # this proves nothing hostile remains. NPC creeps (user "2") never
-  # cross room edges (engine tick.js exempts them), so "gone" = dead.
-  pollInvaderDead = writeShellScript "poll-invader-dead" ''
+  # One-shot probe: the threat is CLEARED and the clearing was
+  # OBSERVED — stats.combat.hostilesDowned >= 2 (both raiders were
+  # seen to vanish from the spawn room; NPC creeps never cross room
+  # edges — engine tick.js exempts them — so gone = dead) AND
+  # stats.hostiles == 0 (nothing hostile remains now). The downed
+  # counter is what the old absence-only probe lacked: hostiles==0 was
+  # also true before the fight ever happened.
+  pollThreatCleared = writeShellScript "poll-threat-cleared" ''
     set -euo pipefail
     TOKEN=$(${curl}/bin/curl -sS -X POST "${url}/api/auth/signin" \
       -H "Content-Type: application/json" \
@@ -467,8 +547,35 @@ let
       esac
     }
     H=$(decode stats.hostiles)
-    echo "hostiles: $H (towers: $(decode stats.towers))"
-    [ "$H" != absent ] && [ "$H" -eq 0 ]
+    DOWNED=$(decode stats.combat.hostilesDowned)
+    echo "hostiles: $H (downed: $DOWNED, towers: $(decode stats.towers))"
+    [ "$H" != absent ] && [ "$DOWNED" != absent ] \
+      && [ "$DOWNED" -ge 2 ] && [ "$H" -eq 0 ]
+  '';
+
+  # One-shot probe: stats.roleCounts.defender >= 1 — the
+  # threat-conditional population policy FIRED. The defender's desired
+  # count is 0 under calm and 1 under hostile (DesiredCounts in
+  # dox/creeps.dox), so a defender EXISTING is itself proof the spawn
+  # walk read threat=hostile on some tick: no other path creates one.
+  # The raiders' pooled 10000 hits hold the threat window past the
+  # longest possible in-flight worker spawn, so the slot is guaranteed.
+  pollDefenderSpawned = writeShellScript "poll-defender-spawned" ''
+    set -euo pipefail
+    TOKEN=$(${curl}/bin/curl -sS -X POST "${url}/api/auth/signin" \
+      -H "Content-Type: application/json" \
+      --data '{"email":"${email}","password":"${password}"}' \
+      | ${jq}/bin/jq -r '.token // empty')
+    [ -n "$TOKEN" ]
+    DATA=$(${curl}/bin/curl -sS -H "X-Token: $TOKEN" \
+      "${url}/api/user/memory?path=stats.roleCounts" | ${jq}/bin/jq -r '.data // empty')
+    case "$DATA" in
+      gz:*) ;;
+      *) echo "no stats.roleCounts in memory yet (got: $DATA)" >&2; exit 1 ;;
+    esac
+    COUNTS=$(printf '%s' "''${DATA#gz:}" | ${coreutils}/bin/base64 -d | ${gzip}/bin/zcat)
+    echo "roleCounts: $COUNTS"
+    printf '%s' "$COUNTS" | ${jq}/bin/jq -e '(.defender // 0) >= 1' > /dev/null
   '';
 
   # One-shot probe: colony integrity after the fight — every role still
@@ -498,13 +605,17 @@ let
     ' > /dev/null
   '';
 
-  # One-shot probe: Memory.trace holds a tower entry with a *Damage
+  # One-shot probe: Memory.trace holds a tower entry with a *Damage*
   # event, action=repair, rc=0 — durable proof the tower SAW the
   # CLI-inflicted damage and REPAIRED it. Same transient trap as the
-  # invader: tower repair is 800/tick at close range, the 999 missing
+  # raiders: tower repair is 800/tick at close range, the 999 missing
   # hits vanish in one tick, so stats.damaged is a one-tick blip that
   # a seconds-granularity poll cannot be required to catch. The flight
-  # recorder latches it instead.
+  # recorder latches it instead. The jq filter is contains("Damage"),
+  # not endswith: TowerEvent is the 3-fact threat x integrity x reserve
+  # product, so events end in ReserveOk/ReserveLow and the integrity
+  # fact sits mid-string (calmDamageReserveOk); no Intact variant can
+  # false-positive.
   pollTowerRepairSeen = writeShellScript "poll-tower-repair-seen" ''
     set -euo pipefail
     TOKEN=$(${curl}/bin/curl -sS -X POST "${url}/api/auth/signin" \
@@ -527,7 +638,7 @@ let
       '[.[] | .[] | select(.event | startswith("hostile") or startswith("calm"))]') \
 (damaged now: $(decode stats.damaged))"
     printf '%s' "$T" | ${jq}/bin/jq -e '
-      [.[] | .[] | select((.event | endswith("Damage"))
+      [.[] | .[] | select((.event | contains("Damage"))
                           and .action == "repair" and .rc == 0)]
       | length > 0
     ' > /dev/null
@@ -574,9 +685,9 @@ testers.runNixOSTest {
 
   # Worst-case sum of subtest deadlines: tutorial-1..3 (3 x 600s +
   # 1500s) plus the turnover phases (900s + 600s + 600s + 300s) =
-  # 5700s, plus the tutorial-5 defense arc (RCL surgery 60s + 300s,
-  # tower build 2500s + feed 300s, invader 60s + 120s + 300s + 300s,
-  # repair 60s + 120s + 300s, heartbeat 300s ≈ 4720s) ≈ 10400s of
+  # 5700s, plus the defense arc (RCL surgery 60s + 300s, tower build
+  # 2500s + feed 300s, raiders 60s + 120s + 120s + 300s + 300s + 300s,
+  # repair 60s + 120s + 300s, heartbeat 300s ≈ 5140s) ≈ 10840s of
   # deadlines, plus boot and deploy — far past the driver's default
   # 3600s global timeout.
   globalTimeout = 14400;
@@ -847,30 +958,57 @@ testers.runNixOSTest {
                 raise Exception("timed out waiting for the tower to receive energy")
             time.sleep(2)
 
-    with subtest("invader dies to the tower"):
-        # Insert a 2-part hostile creep owned by the Invader NPC user
-        # near the spawn, then require: the tower ENGAGED it —
-        # Memory.trace holds hostile*/attack/rc=0 (durable; the
-        # sighting and the 600-vs-200 one-shot kill share a single
-        # tick, so transient stats can never be required) — and the
-        # threat CLEARED (stats.hostiles == 0). Afterward the colony
-        # must still stand at desired strength.
+    with subtest("live raiders attack and the colony answers"):
+        # Insert two 50-part tank raiders driven by the generated
+        # invader brain (the "raiders" NPC's users.code), then prove the whole arc
+        # from durable evidence: the raiders MARCHED (stats.combat
+        # hostileMoves — the probe the scarecrow could never pass),
+        # the defense ENGAGED (tower trace hostile*/attack/rc=0),
+        # the threat CLEARED with the kills OBSERVED (hostilesDowned >=
+        # 2 and hostiles == 0), the threat-conditional defender spawn
+        # FIRED (a defender exists at all only because the spawn walk
+        # read threat=hostile), and the colony still stands at desired
+        # strength.
         deadline = time.time() + 60
         while True:
-            status, out = machine.execute("${surgeryInsertInvader} 2>&1")
-            print(f">>> invader surgery: {out.strip()}")
+            status, out = machine.execute("${surgeryInsertRaiders} 2>&1")
+            print(f">>> raider surgery: {out.strip()}")
             if status == 0:
-                print(">>> invader inserted")
+                print(">>> raiders inserted")
                 break
             if time.time() > deadline:
-                raise Exception("invader insertion was never acknowledged by the CLI")
+                raise Exception("raider insertion was never acknowledged by the CLI")
             time.sleep(5)
+        # Forensic witness: snapshot the raiders mid-fight — position,
+        # hits, fatigue, actionLog.attack (set only when an attack
+        # intent PROCESSES), the spawn's hits + actionLog.attacked, and
+        # the raiders user's memory (the fsm). The corpses clear in ticks;
+        # these lines are the only cross-examination that survives.
+        for i in range(10):
+            status, out = machine.execute("${forensicsRaiders} 2>&1")
+            print(f">>> forensics[{i}]: {out.strip()}")
+            time.sleep(1)
+        deadline = time.time() + 120
+        while True:
+            status, out = machine.execute("${pollRaiderMarched} 2>&1")
+            print(f">>> poll: {out.strip()}")
+            if status == 0:
+                print(">>> SUCCESS: raiders marched on the spawn (hostileMoves latched)")
+                break
+            if time.time() > deadline:
+                print(">>> TIMEOUT — forensics at time of death:")
+                status, out = machine.execute("${forensicsRaiders} 2>&1")
+                print(f">>> forensics[final]: {out.strip()}")
+                print(">>> TIMEOUT — server log tail for diagnosis:")
+                print(machine.succeed("journalctl -u screeps --no-pager | tail -n 100"))
+                raise Exception("timed out waiting for raider movement in stats.combat")
+            time.sleep(2)
         deadline = time.time() + 120
         while True:
             status, out = machine.execute("${pollTowerEngaged} 2>&1")
             print(f">>> poll: {out.strip()}")
             if status == 0:
-                print(">>> SUCCESS: tower saw the invader and fired (trace latched)")
+                print(">>> SUCCESS: tower saw a raider and fired (trace latched)")
                 break
             if time.time() > deadline:
                 print(">>> TIMEOUT — server log tail for diagnosis:")
@@ -879,15 +1017,27 @@ testers.runNixOSTest {
             time.sleep(2)
         deadline = time.time() + 300
         while True:
-            status, out = machine.execute("${pollInvaderDead} 2>&1")
+            status, out = machine.execute("${pollThreatCleared} 2>&1")
             print(f">>> poll: {out.strip()}")
             if status == 0:
-                print(">>> SUCCESS: invader dead — tower defense works")
+                print(">>> SUCCESS: both raiders observed down, no hostiles remain")
                 break
             if time.time() > deadline:
                 print(">>> TIMEOUT — server log tail for diagnosis:")
                 print(machine.succeed("journalctl -u screeps --no-pager | tail -n 100"))
-                raise Exception("timed out waiting for the tower to kill the invader")
+                raise Exception("timed out waiting for the threat to clear")
+            time.sleep(2)
+        deadline = time.time() + 300
+        while True:
+            status, out = machine.execute("${pollDefenderSpawned} 2>&1")
+            print(f">>> poll: {out.strip()}")
+            if status == 0:
+                print(">>> SUCCESS: threat-conditional defender spawned")
+                break
+            if time.time() > deadline:
+                print(">>> TIMEOUT — server log tail for diagnosis:")
+                print(machine.succeed("journalctl -u screeps --no-pager | tail -n 100"))
+                raise Exception("timed out waiting for a defender in roleCounts")
             time.sleep(2)
         deadline = time.time() + 300
         while True:
@@ -899,7 +1049,7 @@ testers.runNixOSTest {
             if time.time() > deadline:
                 print(">>> TIMEOUT — server log tail for diagnosis:")
                 print(machine.succeed("journalctl -u screeps --no-pager | tail -n 100"))
-                raise Exception("timed out waiting for role counts after the invader fight")
+                raise Exception("timed out waiting for role counts after the raider fight")
             time.sleep(2)
 
     with subtest("tower repairs battle damage (world surgery)"):

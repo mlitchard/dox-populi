@@ -586,6 +586,49 @@ export const loop = (): void => {
   // hostiles/damaged are the spawn-room observation counts (0 when no
   // spawn exists).
   const spawnObs = spawn ? observeRoom(spawn.room, obsCache) : null;
+
+  // Combat observation: cumulative counters diffed against the previous
+  // tick's snapshot, which rides stats.combat itself (Memory persists
+  // between ticks — the births/deaths pattern, so no second Memory root).
+  // Pure bookkeeping, no policy, nothing reads it back:
+  //  - hostileMoves: observed hostile position changes (a raider that
+  //    marches, latched forever);
+  //  - damageTaken: summed observed hit-point drops on own creeps and
+  //    own-room structures (a raider that lands blows, latched);
+  //  - hostilesDowned: hostiles that vanished from the spawn room — NPC
+  //    creeps never cross room edges, so gone means dead.
+  // Snapshot rebuild is from live objects only; dead entries fall out
+  // naturally. A structure first seen damaged counts its drop from
+  // hitsMax (structures enter observation at full health).
+  const prevCombat = Memory.stats?.combat;
+  const hostileSnap: Record<string, { x: number; y: number; hits: number }> =
+    {};
+  const hitsSnap: Record<string, number> = {};
+  let hostileMoves = prevCombat?.hostileMoves ?? 0;
+  let damageTaken = prevCombat?.damageTaken ?? 0;
+  let hostilesDowned = prevCombat?.hostilesDowned ?? 0;
+  if (spawnObs) {
+    for (const h of spawnObs.hostiles) {
+      hostileSnap[h.id] = { x: h.pos.x, y: h.pos.y, hits: h.hits };
+      const p = prevCombat?.hostiles[h.id];
+      if (p && (p.x !== h.pos.x || p.y !== h.pos.y)) hostileMoves += 1;
+    }
+    for (const id in prevCombat?.hostiles ?? {}) {
+      if (!(id in hostileSnap)) hostilesDowned += 1;
+    }
+    for (const name in Game.creeps) {
+      const c = Game.creeps[name];
+      hitsSnap[name] = c.hits;
+      const before = prevCombat?.hits[name] ?? c.hitsMax;
+      if (c.hits < before) damageTaken += before - c.hits;
+    }
+    for (const s of spawnObs.damaged) {
+      hitsSnap[s.id] = s.hits;
+      const before = prevCombat?.hits[s.id] ?? s.hitsMax;
+      if (s.hits < before) damageTaken += before - s.hits;
+    }
+  }
+
   Memory.stats = {
     spawnEnergy: spawn ? spawn.store[RESOURCE_ENERGY] : 0,
     controllerProgress: spawn?.room.controller?.progress ?? 0,
@@ -603,5 +646,12 @@ export const loop = (): void => {
     towers: towerStats,
     hostiles: spawnObs ? spawnObs.hostiles.length : 0,
     damaged: spawnObs ? spawnObs.damaged.length : 0,
+    combat: {
+      hostileMoves,
+      damageTaken,
+      hostilesDowned,
+      hostiles: hostileSnap,
+      hits: hitsSnap,
+    },
   };
 };

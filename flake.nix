@@ -83,8 +83,9 @@
       };
 
       # The ENEMY bundle: dox/invader (spec) → generated/invader.ts →
-      # shell/invader.ts (hands) → this JS, injected as NPC user 2's
-      # users.code by the seed step in apps.server. Stage 1 of the invader
+      # shell/invader.ts (hands) → this JS, injected as the seeded NPC
+      # "raiders" user's users.code by the seed step in apps.server (NOT
+      # uid 2 — the engine owns that user's creeps). Stage 1 of the invader
       # trajectory (docs/evolution-plan.md): the raider's decision logic
       # goes through the same check → generate → typecheck pipeline as the
       # colony brain — the enemy is world content, but its brain is spec.
@@ -252,7 +253,7 @@
       packages.${system} = {
         inherit generated main;
         # The enemy bundle (shell/invader.ts + generated/invader.*), seeded
-        # as NPC uid 2's users.code. Exported so CI gets a cheap build
+        # as the NPC "raiders" user's users.code. Exported so CI gets a cheap build
         # witness — otherwise it only builds inside the itest job.
         invader-main = invaderMain;
         screeps-server = screepsServer;
@@ -524,16 +525,32 @@
             if [ ! -s "$DATA/db.json" ]; then
               cp "$LAUNCHER/init_dist/db.json" "$DATA/db.json"
               chmod u+w "$DATA/db.json"
-              # Arm the NPC Invader user (id 2) with the spec-driven raider
-              # brain (dox/invader → shell/invader.ts → invaderMain). A
-              # script must exist regardless — without one, engine_runner
-              # spams "Unknown module 'main'" every tick — but this one
-              # makes inserted invader creeps march on the spawn and attack
-              # what they reach. Patched offline so no runtime step is
-              # needed; an EXISTING world keeps its old code until
-              # reset-local or explicit users.code surgery.
+              # Seed a DEDICATED NPC user ("raiders") armed with the
+              # spec-driven raider brain (dox/invader → shell/invader.ts →
+              # invaderMain). NOT the stock Invader (uid 2): the ENGINE
+              # special-cases user-2 creeps (itest forensics: inserted
+              # uid-2 raiders marched AWAY from the target spawn under
+              # engine invader AI while users.code never ran — memory:2
+              # stayed empty), and uid 2's stock invaderCore stronghold
+              # (W5N4) matures into ramparts/towers/defenderN spawns
+              # that muddy every combat probe. A fresh user has none of
+              # that baggage: the doc mirrors a simplebot user (roster
+              # fields cpu/cpuAvailable + meta, which LokiJS updates
+              # require) minus the bot field, so the runner executes
+              # users.code — our bundle. The `active` roster flag is
+              # server-managed (boot normalizes the seeded value; the
+              # raider surgery re-arms it at insertion time), so the
+              # seed's active: true is a best-effort default, not the
+              # mechanism. The uid-2 empty stub stays: stock ships NO
+              # users.code for the Invader user, and when the server
+              # promotes it onto the roster (active flips to 1 on world
+              # population) the runner spams "Unknown module 'main'"
+              # every tick without one. Patched offline so no runtime
+              # step is needed; an EXISTING world keeps its old db until
+              # reset-local.
               ${pkgs.jq}/bin/jq --rawfile invader ${invaderMain}/invader.js \
-                '(.collections[] | select(.name == "users.code")) |= (.data += [{_id: "InvaderCode", user: "2", branch: "default", activeWorld: true, modules: {main: $invader}, meta: {revision: 0, created: 0, version: 0}, "$loki": (.maxId + 1)}] | .maxId += 1)' \
+                '(.collections[] | select(.name == "users")) |= (.data += [{_id: "raiders", username: "Raiders", usernameLower: "raiders", cpu: 100, cpuAvailable: 10000, active: true, gcl: 1, registeredDate: "2016-11-14T14:04:21.156Z", badge: {type: 1, color1: "#f00", color2: "#000", color3: "#f00", flip: false, param: 0}, meta: {revision: 0, created: 0, version: 0}, "$loki": (.maxId + 1)}] | .maxId += 1)
+                 | (.collections[] | select(.name == "users.code")) |= (.data += [{_id: "RaiderCode", user: "raiders", branch: "default", activeWorld: true, modules: {main: $invader}, meta: {revision: 0, created: 0, version: 0}, "$loki": (.maxId + 1)}, {_id: "InvaderStub", user: "2", branch: "default", activeWorld: true, modules: {main: "module.exports.loop = function () {};"}, meta: {revision: 0, created: 0, version: 0}, "$loki": (.maxId + 2)}] | .maxId += 2)' \
                 "$DATA/db.json" > "$DATA/db.json.tmp"
               mv -f "$DATA/db.json.tmp" "$DATA/db.json"
             fi

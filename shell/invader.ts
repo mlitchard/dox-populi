@@ -1,6 +1,8 @@
-// dox-populi invader shell: the ENEMY's "hands". This bundle runs as NPC
-// user 2's users.code on the private server — the flake's seed step
-// injects it, so the raider is world content. Same church, second
+// dox-populi invader shell: the ENEMY's "hands". This bundle runs as the
+// seeded "raiders" NPC user's users.code on the private server — the
+// flake's seed step injects both the user and the code, so the raider is
+// world content. (NOT uid 2: the engine special-cases the stock Invader
+// user's creeps and bars it from the runner roster.) Same church, second
 // congregation: ALL raider decision logic lives in dox/invader/
 // invader.dox; this file only observes, transitions, and executes. The
 // only switches below are over InvaderAction and InvaderTargetKind.
