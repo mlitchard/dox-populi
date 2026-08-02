@@ -54,6 +54,9 @@ declare global {
     };
     // Tower FSM state, keyed by tower id — towers have no built-in memory.
     towers?: Record<string, { fsm: TowerState }>;
+    // Refill-hysteresis latch bit per tower id (spec: towerContext
+    // energyTarget/refillTarget law) — true while a refill campaign runs.
+    towerRefill?: Record<string, boolean>;
     // Raider FSM state, keyed by creep name — lives in the seeded
     // "raiders" NPC user's memory, written only by shell/invader.ts
     // (the enemy bundle). The

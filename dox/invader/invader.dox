@@ -136,6 +136,117 @@ invaderContext: InvaderContext
   attackRange: invaderAttackRange
   repathTicks: invaderRepathTicks
 
+| ------------------------------------------------------------------
+| RAID LAW: when a raid happens is WORLD BEHAVIOR, spec-owned.
+| Consumed by shell/raidmod.ts — a server mod (mods.json) that
+| replaces the engine's native genInvaders cron (which spawns uid-2
+| engine-AI puppets) with raids of "raiders"-owned creeps driven by
+| THIS brain. The mod is hands: it sums the engine-maintained
+| invaderHarvested counter on a room's sources and, at the goal,
+| inserts the escalating raid's creeps with raidBody at the room's
+| exit squares.
+| Native-parity semantics the mod preserves mechanically:
+|   - per-room override: room.invaderGoal || raidGoal
+|   - invaderGoal == 1 means "raid NOW" (the director's dial);
+|     a huge value means "never" (the itest sterilizer)
+|   - no raid while the controller's safeMode is running (the
+|     engine refuses hostile actions there — the ERR_NO_BODYPART
+|     masquerade; raiding into it is futile by statute)
+| One deliberate departure from native (user ruling 2026-08-01, after
+| a natural raid razed an undefended colony in ~5s of wall clock):
+| the FAIR-FIGHT CLAUSE — a room is not raid-eligible until it fields
+| at least minTowers FULLY-LOADED towers (energy >= towerFullEnergy;
+| second user ruling 2026-08-01). A colony with no standing defense —
+| or a standing tower still loading its magazine — gets built, not
+| buried. The invaderGoal == 1 director's dial bypasses the tower
+| gate too (native parity: 1 means RAID NOW, unconditionally — it is
+| a test/director instrument, not policy).
+| Second departure (user ruling 2026-08-01): ESCALATION — raids on a
+| room grow relentlessly. Raid n has sizeStart + sizeStep * n
+| raiders (n counted from 0 in room.raidWave, a mod-maintained
+| per-room counter incremented after each raid and cleared to 0 by
+| deploy-local provisioning when a colony is placed). The world
+| either spawns the ever-increasing numbers of raiders, or fails to
+| — the itest observes exactly that, with no surgical hand on the
+| scale.
+| Third departure (user ruling 2026-08-01): RELENTLESS WAR — native
+| resets the harvested counter after each raid and holds fire while
+| a raid is still alive; this law does NEITHER. Once a room's
+| harvested energy crosses the goal, the threshold stays crossed and
+| a new wave lands on EVERY cron check (every checkSeconds real
+| seconds), each one bigger than the last, until the colony falls or
+| the room's controller stops being owned. This is the durability
+| test of a single tower: the escalation arithmetic guarantees the
+| waves eventually exceed any fixed defense — how long the tower
+| stands IS the measurement.
+|
+|   raidGoal         — harvested-energy threshold (native goal is
+|                      ~100k; 50k means a colony mature enough to
+|                      have built its defenses)
+|   raidSizeStart    — creeps in a room's first raid
+|   raidSizeStep     — extra creeps added to each successive raid
+|   raidCheckSeconds — cron cadence (real seconds, backend clock)
+|   raidMinTowers    — towers the target room must field before it
+|                      is raid-eligible (the fair-fight clause)
+|   raidTowerFullEnergy — energy a tower must hold to COUNT toward
+|                      minTowers (user ruling 2026-08-01: the
+|                      fair-fight bar is a FULL magazine — you do not
+|                      jump a man still loading). 1000 = the engine's
+|                      TOWER_CAPACITY; repeats dox/creeps
+|                      towerRefillTarget (amend both together). The
+|                      goal == 1 dial bypasses this gate like every
+|                      other.
+
+type RaidPolicy
+  goal: Integer
+  sizeStart: Integer
+  sizeStep: Integer
+  checkSeconds: Integer
+  minTowers: Integer
+  towerFullEnergy: Integer
+
+raidGoal: Integer
+  50000
+
+raidSizeStart: Integer
+  4
+
+raidSizeStep: Integer
+  2
+
+raidCheckSeconds: Integer
+  10
+
+raidMinTowers: Integer
+  1
+
+raidTowerFullEnergy: Integer
+  1000
+
+raidPolicy: RaidPolicy
+  goal: raidGoal
+  sizeStart: raidSizeStart
+  sizeStep: raidSizeStep
+  checkSeconds: raidCheckSeconds
+  minTowers: raidMinTowers
+  towerFullEnergy: raidTowerFullEnergy
+
+| RaiderPart variant names are EXACT Screeps body-part strings
+| (literal bridge, colony BodyPart precedent) — the mod maps each to
+| {type, hits: 100} with no switch. raidBody is the wave body proven
+| by the itest's escalating-wave ordeal: 24 tough + 25 move +
+| 1 attack = 50 parts, full speed. Part ORDER is armor doctrine:
+| combat damage strips parts front-to-back, so the single attack
+| part rides LAST and stays functional until the final 100 hits.
+
+union RaiderPart
+  tough
+  move
+  attack
+
+raidBody: [RaiderPart]
+  [RaiderPart.tough, RaiderPart.tough, RaiderPart.tough, RaiderPart.tough, RaiderPart.tough, RaiderPart.tough, RaiderPart.tough, RaiderPart.tough, RaiderPart.tough, RaiderPart.tough, RaiderPart.tough, RaiderPart.tough, RaiderPart.tough, RaiderPart.tough, RaiderPart.tough, RaiderPart.tough, RaiderPart.tough, RaiderPart.tough, RaiderPart.tough, RaiderPart.tough, RaiderPart.tough, RaiderPart.tough, RaiderPart.tough, RaiderPart.tough, RaiderPart.move, RaiderPart.move, RaiderPart.move, RaiderPart.move, RaiderPart.move, RaiderPart.move, RaiderPart.move, RaiderPart.move, RaiderPart.move, RaiderPart.move, RaiderPart.move, RaiderPart.move, RaiderPart.move, RaiderPart.move, RaiderPart.move, RaiderPart.move, RaiderPart.move, RaiderPart.move, RaiderPart.move, RaiderPart.move, RaiderPart.move, RaiderPart.move, RaiderPart.move, RaiderPart.move, RaiderPart.move, RaiderPart.attack]
+
 | Raider policy: creeps outrank structures outrank the march; nothing
 | in reach and no spawn to march on -> loiter. The mapping is
 | STATE-INDEPENDENT — all four states carry the IDENTICAL eight

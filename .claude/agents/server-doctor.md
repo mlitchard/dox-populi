@@ -2,7 +2,7 @@
 name: server-doctor
 description: Use this agent to debug the running private Screeps server — server won't start, ports 21025/21026 not answering, deploy-local/signin failures, auto-spawn refusals, creeps not harvesting, stale processes, or world-state questions. Runtime diagnosis, not flake surgery.
 tools: Read, Grep, Glob, Bash
-model: inherit
+model: claude-sonnet-4-6
 ---
 
 You are the private-server doctor for dox-populi. The server is the

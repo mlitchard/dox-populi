@@ -104,10 +104,13 @@ union CreepState
 |   site status  — Site      construction sites exist
 |                  NoSite    no construction sites exist
 |
-| "Energy sink" = spawn + extensions + towers BELOW their energy
-| threshold (see towerContext: a tower is a sink only while its energy
-| < energyTarget — the same one filter drives delivery targeting AND
-| this observation, so the fact can never contradict the action).
+| "Energy sink" = spawn + extensions + BELOW-FULL towers (see
+| towerContext: a tower is a sink whenever its energy is below
+| refillTarget — full capacity, the same bar the raid law's
+| fair-fight clause reads. The refill LATCH does not gate sink
+| membership; it only ranks it — see the energySink selector. The
+| same one below-full filter drives delivery targeting AND this
+| observation, so the fact can never contradict the action).
 |
 | NAMING CONTRACT (exact casing is load-bearing): each variant is the
 | literal concatenation storeLevel + sinkStatus + siteStatus. The shell
@@ -180,9 +183,12 @@ union Action
 
 | The FIXED target-selector vocabulary. The shell resolves each kind:
 |   source           — closest active energy source
-|   energySink       — closest spawn|extension|below-threshold tower
-|                      with free energy capacity (towers count only
-|                      while energy < towerContext.energyTarget)
+|   energySink       — closest sink with room for energy (spawn |
+|                      extension | below-refillTarget tower), EXCEPT
+|                      while any tower holds the refill latch (energy
+|                      dropped below towerContext.energyTarget, not
+|                      yet back at refillTarget): then the closest
+|                      LATCHED tower outranks every other sink
 |   controller       — the room controller
 |   constructionSite — first construction site
 |   hostile          — closest hostile creep from the actor's pos
@@ -1124,9 +1130,9 @@ defenderMachine: Machine DefenderState ThreatLevel CreepContext
 | last 10 energy belongs to the gun; a drained tower's attack is still
 | a harmless no-op), and refill remains delivery-driven, no tower
 | decision required. attackReserve < energyTarget is load-bearing: a
-| ReserveLow tower is BELOW the sink threshold, so it is already back
-| in the delivery target set — the wait ends by the ordinary delivery
-| path, guaranteed.
+| ReserveLow tower is below the LATCH trigger, so it holds the
+| delivery PRIORITY (see the refill decision below) — the wait ends
+| by the emergency refill campaign, guaranteed.
 
 union TowerEvent
   hostileDamageReserveOk
@@ -1138,16 +1144,37 @@ union TowerEvent
   calmIntactReserveOk
   calmIntactReserveLow
 
-| The threshold-sink decision. A tower is an energy SINK only while its
-| energy < energyTarget. The shell uses this ONE filter for BOTH
-| delivery targeting (TargetKind.energySink resolution) and the
-| SinksFull observation, so the observed fact can never contradict the
-| available action. Why a threshold and not full capacity (1000): the
-| 500..1000 band is attack/repair buffer that nobody eagerly refills —
-| with full-capacity sink semantics, every point of repair drain would
-| reopen the sink set and flap saturation forever (a leaky sink that
-| keeps the harvesters chasing it). Below 500 the tower is a real
-| delivery target; above it, it's on its own buffer.
+| The refill decision (user rulings 2026-08-01 + 2026-08-02, which
+| together supersede both the plain threshold sink AND the first
+| latch-gated reading). TWO separate questions, two separate answers:
+|
+|   IS the tower a delivery target?  YES whenever energy <
+|   refillTarget (full capacity, 1000) — the same "has room?" rule
+|   every spawn and extension answers, and the same bar the raid
+|   law's fair-fight clause reads. A tower at 990 is an ordinary
+|   sink and gets topped back to full by the ordinary delivery
+|   rotation.
+|
+|   HOW URGENTLY?  The hysteresis LATCH: it opens the moment energy
+|   drops below energyTarget (the low-water trigger, 500) and closes
+|   only when delivery brings the tower back to refillTarget. While
+|   open, refilling that tower is THE delivery priority — the
+|   energySink selector answers with the closest latched tower
+|   before any spawn or extension. Why a latch and not a plain
+|   threshold for the priority: threshold-priority would flap — one
+|   shot fired at 501 demotes, one delivery promotes. The latch
+|   opens only on a real 500-point drain and holds the front of the
+|   line until full — one emergency campaign per drain.
+|
+| The first reading made the latch gate sink MEMBERSHIP itself; live
+| evidence convicted it: a full tower that fires ONE shot sits at
+| 990 — below the fair-fight bar, above the reopen line — and no
+| creep ever feeds it again. Deadlock: the raid gate demands full,
+| the latch forbids refill. Membership-until-full dissolves it. The
+| shell holds the latch bit per tower id (Memory.towerRefill); the
+| below-full filter is the ONE filter for BOTH delivery targeting
+| and the SinksFull observation, so the observed fact can never
+| contradict the available action.
 |
 | TowerContext carries desired alongside energyTarget: Paradox rejects
 | single-field product types (error 23; the alternative, wrap, would
@@ -1158,11 +1185,22 @@ union TowerEvent
 
 type TowerContext
   energyTarget: Integer
+  refillTarget: Integer
   desired: Integer
   attackReserve: Integer
 
 towerEnergyTarget: Integer
   500
+
+| refillTarget: where a refill campaign ENDS — full capacity (the
+| engine's TOWER_CAPACITY, 1000). Once the latch opens at
+| energyTarget, creeps keep the tower first in line until it reads
+| this. Also the raid law's fair-fight bar: dox/invader RaidPolicy
+| .towerFullEnergy repeats this number — a room is only raid-eligible
+| behind a FULL magazine (amend both together).
+
+towerRefillTarget: Integer
+  1000
 
 | attackReserve: the repair floor — calm-time repair runs only while
 | energy >= this; below it the tower guards and waits for delivery.
@@ -1176,6 +1214,7 @@ towerAttackReserve: Integer
 
 towerContext: TowerContext
   energyTarget: towerEnergyTarget
+  refillTarget: towerRefillTarget
   desired: desiredTowers
   attackReserve: towerAttackReserve
 

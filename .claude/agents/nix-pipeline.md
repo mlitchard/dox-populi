@@ -2,7 +2,7 @@
 name: nix-pipeline
 description: Use this agent for flake.nix work — apps/checks/packages, npm vendoring and lock-file pinning (npmDepsHash), the dev VM and installer ISO, tests/*.nix harnesses, devShell, and CI generation. Also for nix build failures anywhere in the pipeline.
 tools: Read, Grep, Glob, Edit, Write, Bash
-model: inherit
+model: claude-sonnet-4-6
 ---
 
 You are the nix pipeline engineer for dox-populi. `flake.nix` owns the whole

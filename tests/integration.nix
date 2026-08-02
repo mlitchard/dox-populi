@@ -6,18 +6,23 @@
 # (2) the controller gains progress (upgrader works), (3) an extension
 # is built (builder + spec-driven extension placement work), (4) the
 # colony survives generational turnover (creeps age out, replacements
-# respawn, progress continues), and (5) the defense arc — world surgery
-# over the server CLI forces RCL 3, the tower gets built and fed, then
-# LIVE raiders (the seeded "raiders" NPC runs the generated invader
-# brain) are inserted in ESCALATING WAVES (1, 2, ... up to a cap) until
-# damage is OBSERVED to land — the raiders MARCH and DRAW BLOOD
-# (damageTaken >= 1 at the minimum sufficient force, or the attack path
-# is convicted by exhaustion at the cap with the raiders' flight
-# recorder naming the root cause) — before the defense ENGAGES (tower
-# trace), the threat CLEARS (cumulative downed count, not just
-# absence), the threat-conditional defender spawn fires, and the
-# colony recovers; CLI-inflicted battle damage gets repaired, and the
-# economy keeps beating afterward.
+# respawn, progress continues), and (5) the war arc. Surgery doctrine
+# (user ruling 2026-08-02, amending the total no-surgery ruling): the
+# test SEEDS the war's start conditions in ONE arming write — the
+# controller to RCL 3, safe mode off, the harvested counter past
+# raidGoal, and the TOWER ITSELF standing at the spec's first
+# towerOffsets cell with a full magazine — because the natural climb
+# (45k upgrade energy + ~20000 safe-mode ticks + a 5000-energy build)
+# proves only patience, not war. Everything AFTER the arming write is
+# observation and tick pacing, nothing else. With a FULL tower
+# standing, every gate is open at once, and the raid MOD
+# opens the RELENTLESS WAR (spec raid-law): an escalating wave on
+# every cron check, forever — the durability test of a single tower.
+# The test asserts exactly one thing about that war, by user ruling:
+# FIRST BLOOD (cumulative damageTaken >= 1) — and no more. How long
+# the tower stands against the unending escalation is the live
+# server's show; an itest cannot wait for a doom that arrives by
+# arithmetic.
 # Fully pure — runs in plain `nix flake check`.
 { testers
 , writeShellScript
@@ -37,14 +42,6 @@ let
   email = "itest";
   password = "itest-password";
   url = "http://127.0.0.1:21025";
-
-  # Wave cap for the escalating raider offense ordeal. Melee raiders
-  # need adjacent tiles to swing, and a spawn's adjacency ring has at
-  # most 8 walkable slots — the 9th raider can add nothing the first 8
-  # could not, so 8 is the natural ceiling of the escalation, not a
-  # tuning knob. Reaching the cap with damageTaken still 0 CONVICTS the
-  # attack path by exhaustion (the wave loop fails, recorder dumped).
-  raiderWaveCap = 8;
 
   # One-shot probe: sign in, read Memory.stats.spawnEnergy (the loop's
   # telemetry) via GET /api/user/memory, which returns
@@ -285,114 +282,69 @@ let
   '';
 
   # -------------------------------------------------------------------
-  # Tutorial-5 world surgery. The server CLI on 21026 is a JS REPL over
-  # TCP with the storage.db collections in scope. setTickDuration below
-  # uses fire-and-forget `nc -q 2`; surgery needs the RESPONSE (both
-  # for the success marker and for the log), so these use the session
+  # CLI scripts. The server CLI on 21026 is a JS REPL over TCP with
+  # the storage.db collections in scope. setTickDuration below uses
+  # fire-and-forget `nc -q 2`; the rest need the RESPONSE (both for
+  # the success marker and for the log), so they use the session
   # pattern `(printf 'CMD\n'; sleep 3) | nc -N -w 6` — hold the write
   # side open long enough for the REPL to evaluate, then read until the
   # server closes or -w times out. Each script is ONE chained-promise
-  # session: the itest user (usernameLower — screepsmod-auth stores
-  # both username and usernameLower on register) resolves to their
-  # spawn document, and the spawn's room names the surgery target — the
-  # room is dynamic, never hardcoded. A marker string returned from the
-  # final .then is the success signal the shell greps for.
+  # expression whose final .then returns a marker string the shell
+  # greps for. Surgery doctrine (user ruling 2026-08-02): exactly ONE
+  # script writes — armWarConditions, the war arc's seeded start.
+  # Every other CLI script READS ONLY, and the raid MOD alone raises
+  # every raider that ever appears.
   # -------------------------------------------------------------------
 
-  # Raise the itest room's controller to RCL 3 (towers unlock at 3)
-  # AND lift SAFE MODE. Field shapes verified against a real dev-world
-  # controller document (.server-data/db.json): {room, type, x, y,
-  # level, progress, downgradeTime, user, ...} — no progressTotal on
-  # the doc, so only level + progress are $set (progress zeroed:
-  # level-3 progress restarts from scratch).
-  # safeMode: null is the raid ordeal's level ground: initial spawn
-  # placement grants the room ~20000 ticks of safe mode, and the
-  # engine returns ERR_NO_BODYPART (-12) for EVERY hostile creep
-  # action in a safe-moded room — upstream engine/src/game/creeps.js:
-  # `if(this.room.controller && !this.room.controller.my &&
-  # this.room.controller.safeMode) return C.ERR_NO_BODYPART;` (same
-  # check in rangedAttack/rangedMassAttack/heal/rangedHeal). Itest run
-  # #6 convicted the attack path by exhaustion (8 waves, 36 raiders,
-  # zero damage) and the flight recorder named this statute: every
-  # raider reached razing/slaughtering and swung with rc -12 while
-  # holding a live tail-protected ATTACK part. Tower fire and repair
-  # are unaffected (the room is the colony's own), so the defense arc
-  # proved nothing about this until raiders needed to hit BACK.
-  surgeryRcl3 = writeShellScript "surgery-rcl3" ''
+  # The arming write — the war arc's seeded start conditions, in one
+  # expression (user ruling: lift the gates, BUILD THE TOWER, start
+  # the wave — all three seeded):
+  #   - controller to RCL 3 (tower legality) with safe mode cleared
+  #     (typeof null is not "number", so the mod's deferral passes)
+  #   - every source gets invaderHarvested 50000 — the raid law's
+  #     goal (mirrors dox/invader raidPolicy.goal; amend together);
+  #     RELENTLESS WAR never resets it, so the threshold stays
+  #     crossed forever
+  #   - a TOWER standing at the spec's first towerOffsets cell
+  #     (offsetSouthwest: spawn-2,+2 — amend with the spec), owned by
+  #     the itest user, full magazine (store.energy 1000 =
+  #     towerFullEnergy — the fair-fight bar) — modern store shape,
+  #     TOWER_HITS 3000. Insert is idempotent (skipped if any tower
+  #     already stands) so the retry loop can't stack towers.
+  # After this write EVERY gate is open: genRaiders owes a wave
+  # within one cron check.
+  armWarConditions = writeShellScript "arm-war-conditions" ''
     set -euo pipefail
-    CMD='storage.db.users.findOne({usernameLower: "${email}"}).then(u => storage.db["rooms.objects"].findOne({type: "spawn", user: u._id})).then(s => storage.db["rooms.objects"].update({room: s.room, type: "controller"}, {$set: {level: 3, progress: 0, safeMode: null}})).then(r => "RCL3-OK:" + JSON.stringify(r))'
+    CMD='storage.db.users.findOne({usernameLower: "${email}"}).then(u => Promise.all([u, storage.db["rooms.objects"].findOne({type: "controller", user: u._id}), storage.db["rooms.objects"].findOne({type: "spawn", user: u._id})])).then(ucs => Promise.all([storage.db["rooms.objects"].update({_id: ucs[1]._id}, {$set: {level: 3, progress: 0, safeMode: null}}), storage.db["rooms.objects"].update({room: ucs[1].room, type: "source"}, {$set: {invaderHarvested: 50000}}), storage.db["rooms.objects"].findOne({type: "tower", user: ucs[0]._id}).then(tw => tw || storage.db["rooms.objects"].insert({type: "tower", room: ucs[2].room, x: ucs[2].x - 2, y: ucs[2].y + 2, user: ucs[0]._id, hits: 3000, hitsMax: 3000, store: {energy: 1000}, storeCapacityResource: {energy: 1000}, notifyWhenAttacked: false, actionLog: {attack: null, heal: null, repair: null}}))]).then(() => Promise.all([storage.db["rooms.objects"].findOne({_id: ucs[1]._id}), storage.db["rooms.objects"].find({type: "tower", user: ucs[0]._id})]))).then(ct => "ARMED:" + JSON.stringify({room: ct[0].room, level: ct[0].level, safeMode: ct[0].safeMode, towers: ct[1].map(t => ({x: t.x, y: t.y, e: t.store.energy}))})).catch(e => "ERR:" + (e && e.message || e))'
     OUT=$( (printf '%s\n' "$CMD"; sleep 3) | ${netcat-openbsd}/bin/nc -N -w 6 127.0.0.1 21026 || true)
     echo "$OUT"
     case "$OUT" in
-      *RCL3-OK:*) exit 0 ;;
+      *ARMED:*) exit 0 ;;
       *) exit 1 ;;
     esac
   '';
 
-  # Insert one WAVE of hostile creeps owned by the flake-seeded NPC
-  # "raiders" user, whose users.code runs the generated raider brain
-  # (dox/invader -> shell/invader.ts), so these creeps MARCH toward the
-  # spawn and ATTACK. Parameterized: $1 = wave index (names the raiders
-  # raider-w<wave>-<i>, unique across waves), $2 = wave size (how many
-  # raiders, one per approach offset). NOT uid 2 (stock Invader): the
-  # ENGINE special-cases that user's creeps — run #4 forensics showed
-  # inserted uid-2 raiders marched AWAY from the spawn under engine
-  # invader AI while memory:2 stayed empty (users.code never ran), with
-  # uid 2's stock invaderCore stronghold spawning defenderN noise on
-  # top. The surgery also re-arms the user's `active` flag in the same
-  # CLI session — in EVERY wave's session: `active` is server-managed
-  # (the boot normalizes whatever the seed ships — observed live:
-  # seeded active: true read back as 0), and the runner roster is
-  # {active != 0 AND cpu > 0}; a hand-set active: 10000 was observed
-  # to stick and put the brain on the roster (memory:raiders written,
-  # correct loitering FSM).
-  # Document shape mirrors a REAL NPC-owned creep; deliberately
-  # omitted: ageTime (no natural death — the colony's kill is the
-  # proof), boost/strongholdId, meta/$loki (LokiJS adds them).
-  # Body: 24 tough + 25 move + 1 attack = 50 parts, 5000 hits, full
-  # speed. Part ORDER is armor doctrine: combat damage strips parts
-  # front-to-back, so the single attack part goes LAST and stays
-  # functional until the final 100 hits instead of being stripped at
-  # ~2500 cumulative damage while the raider is still en route.
-  # Insert offsets are the 8 approach directions at range 3 from the
-  # spawn (one per raider, so wave-mates never fight for the same
-  # approach tile); terrain risk is acceptable — walls sit at room
-  # edges, not next to a spawn. Array.from (not Array.fill) because
-  # fill would alias one shared part object across the body.
-  surgeryInsertWave = writeShellScript "surgery-insert-wave" ''
+  # Natural-raid witness: the raid MOD (not the test) inserted raiders.
+  # Mod-spawned raiders carry the raider-g<gameTime>- name prefix, and
+  # the invader shell's flight recorder latches every raider's trace in
+  # the raiders user's memory forever (append-on-change, NO dead
+  # pruning) — so this probe survives the one-tick-transient trap: the
+  # corpses clear in ticks, the tombstone talks.
+  pollNaturalRaid = writeShellScript "poll-natural-raid" ''
     set -euo pipefail
-    WAVE="$1"
-    COUNT="$2"
-    CMD='storage.db.users.findOne({usernameLower: "${email}"}).then(u => storage.db["rooms.objects"].findOne({type: "spawn", user: u._id})).then(s => { const offs = [[3, 3], [-3, -3], [3, -3], [-3, 3], [0, 3], [3, 0], [0, -3], [-3, 0]]; const mk = (name, dx, dy) => ({type: "creep", name: name, room: s.room, x: s.x + dx, y: s.y + dy, user: "raiders", body: [].concat(Array.from({length: 24}, () => ({type: "tough", hits: 100})), Array.from({length: 25}, () => ({type: "move", hits: 100})), [{type: "attack", hits: 100}]), hits: 5000, hitsMax: 5000, spawning: false, fatigue: 0, store: {energy: 0}, storeCapacity: 0, notifyWhenAttacked: false, actionLog: {attacked: null, healed: null, attack: null, rangedAttack: null, rangedMassAttack: null, rangedHeal: null, harvest: null, heal: null, repair: null, build: null, say: null, upgradeController: null, reserveController: null}}); return Promise.all([].concat(Array.from({length: '"$COUNT"'}, (_, i) => storage.db["rooms.objects"].insert(mk("raider-w'"$WAVE"'-" + (i + 1), offs[i][0], offs[i][1]))), [storage.db.users.update({_id: "raiders"}, {$set: {active: 10000}})])); }).then(r => "WAVE-OK:" + JSON.stringify(r.map(d => (d && d._id) || d)))'
+    CMD='storage.env.get("memory:raiders").then(m => "NATRAID:" + ((("" + (m || "")).indexOf("raider-g") >= 0) ? "YES" : "NO")).catch(e => "ERR:" + (e && e.message || e))'
     OUT=$( (printf '%s\n' "$CMD"; sleep 3) | ${netcat-openbsd}/bin/nc -N -w 6 127.0.0.1 21026 || true)
     echo "$OUT"
     case "$OUT" in
-      *WAVE-OK:*) exit 0 ;;
+      *NATRAID:YES*) exit 0 ;;
       *) exit 1 ;;
     esac
   '';
 
-  # Battle-damage the extension (hits 1000 -> 1; hits/hitsMax verified
-  # on a real extension document). desiredExtensions is 1, so the
-  # {room, type} query hits exactly the one structure.
-  # KEPT despite the live raiders: the raider spec answers foes before
-  # structures, and this colony always has creeps standing, so raider
-  # structure damage is plausible but NOT provable — and a probe that
-  # must be able to fail cannot lean on "maybe". The synthetic wound
-  # stays as the deterministic repair proof.
-  surgeryDamageExtension = writeShellScript "surgery-damage-extension" ''
-    set -euo pipefail
-    CMD='storage.db.users.findOne({usernameLower: "${email}"}).then(u => storage.db["rooms.objects"].findOne({type: "spawn", user: u._id})).then(s => storage.db["rooms.objects"].update({room: s.room, type: "extension"}, {$set: {hits: 1}})).then(r => "DAMAGE-OK:" + JSON.stringify(r))'
-    OUT=$( (printf '%s\n' "$CMD"; sleep 3) | ${netcat-openbsd}/bin/nc -N -w 6 127.0.0.1 21026 || true)
-    echo "$OUT"
-    case "$OUT" in
-      *DAMAGE-OK:*) exit 0 ;;
-      *) exit 1 ;;
-    esac
-  '';
-
-  # One-shot probe: stats.controllerLevel >= 3 — the RCL3 surgery took
-  # effect and the shell observes the new level.
+  # One-shot probe: stats.controllerLevel >= 3 — the shell OBSERVES
+  # the seeded RCL 3 (towers unlock at 3): telemetry confirmation
+  # that the arming write landed in the world the brain actually
+  # sees, not just in the db.
   pollControllerLevel3 = writeShellScript "poll-controller-level3" ''
     set -euo pipefail
     TOKEN=$(${curl}/bin/curl -sS -X POST "${url}/api/auth/signin" \
@@ -414,10 +366,9 @@ let
     [ "$L" != absent ] && [ "$L" -ge 3 ]
   '';
 
-  # One-shot probe: stats.towersBuilt >= 1 — RCL 3 reached, the shell
-  # placed the spec-driven tower site, and the builders hauled 5000
-  # build-energy into it. towersBuilt/RCL/towers printed every poll
-  # for diagnosis while the build is in flight.
+  # One-shot probe: stats.towersBuilt >= 1 — the shell observes the
+  # seeded tower (FIND_MY_STRUCTURES count) and the tower machine is
+  # live. towersBuilt/RCL/towers printed every poll for diagnosis.
   pollTowerBuilt = writeShellScript "poll-tower-built" ''
     set -euo pipefail
     TOKEN=$(${curl}/bin/curl -sS -X POST "${url}/api/auth/signin" \
@@ -439,10 +390,13 @@ let
     [ "$N" != absent ] && [ "$N" -ge 1 ]
   '';
 
-  # One-shot probe: some tower in stats.towers has energy > 0 — the
-  # harvesters treat the below-target tower as an energy sink and feed
-  # it toward towerEnergyTarget (500).
-  pollTowerFed = writeShellScript "poll-tower-fed" ''
+  # One-shot probe: some tower in stats.towers reads FULL (>= 1000 =
+  # towerRefillTarget, the raid law's fair-fight bar — amend together).
+  # Under the amended refill law a below-full tower is an ordinary
+  # energy sink, so delivery tops it all the way up; the moment this
+  # probe passes, the last gate is open and the war is due within one
+  # raid-mod cron check.
+  pollTowerFull = writeShellScript "poll-tower-full" ''
     set -euo pipefail
     TOKEN=$(${curl}/bin/curl -sS -X POST "${url}/api/auth/signin" \
       -H "Content-Type: application/json" \
@@ -458,7 +412,7 @@ let
     JSON=$(printf '%s' "''${DATA#gz:}" | ${coreutils}/bin/base64 -d | ${gzip}/bin/zcat)
     echo "towers: $JSON"
     printf '%s' "$JSON" | ${jq}/bin/jq -e '
-      [.[] | select(.energy > 0)] | length > 0
+      [.[] | select(.energy >= 1000)] | length > 0
     ' > /dev/null
   '';
 
@@ -471,9 +425,9 @@ let
   # fsm) plus Memory.trace — the flight recorder, one {t, event, fsm,
   # action, rc} line per change per raider, latched past death. The
   # 4000-char window fits the recorder for a full escalation. Printed
-  # during and after every wave so a failure carries its own diagnosis
-  # instead of a bare timeout — and a PASSING ordeal documents what
-  # the losing waves' FSMs were doing.
+  # around each raid subtest so a failure carries its own diagnosis
+  # instead of a bare timeout — and a PASSING arc documents what the
+  # raiders' FSMs were doing.
   forensicsRaiders = writeShellScript "forensics-raiders" ''
     set -euo pipefail
     CMD='Promise.all([storage.db["rooms.objects"].find({user: "raiders"}), storage.db.users.findOne({usernameLower: "${email}"}).then(u => storage.db["rooms.objects"].findOne({type: "spawn", user: u._id})), storage.env.get("memory:raiders")]).then(rsm => "FORENSICS:" + JSON.stringify({raiders: rsm[0].map(c => ({n: c.name, r: c.room, x: c.x, y: c.y, hits: c.hits, fatigue: c.fatigue, atk: c.actionLog && c.actionLog.attack})), spawn: rsm[1] && {r: rsm[1].room, x: rsm[1].x, y: rsm[1].y, hits: rsm[1].hits, hitsMax: rsm[1].hitsMax, attacked: rsm[1].actionLog && rsm[1].actionLog.attacked}, mem: rsm[2] && String(rsm[2]).slice(0, 4000)}))'
@@ -481,110 +435,10 @@ let
     echo "$OUT" | grep -o "FORENSICS:.*" || echo "$OUT"
   '';
 
-  # One-shot probe: stats.combat proves the raiders MARCHED —
-  # hostileMoves >= 1 (a raider changed position: the armed brain
-  # drives movement). The counter is a cumulative diff latched by the
-  # shell, so the whole fight resolving inside a few 50ms ticks cannot
-  # hide it from a seconds-granularity poll. This is the probe the
-  # scarecrow could never pass: a stationary target moves nothing.
-  # The OFFENSE (damageTaken >= 1) is asserted by the wave loop, not
-  # here — this probe carries only the movement link of the arc.
-  pollRaiderMarched = writeShellScript "poll-raider-marched" ''
-    set -euo pipefail
-    TOKEN=$(${curl}/bin/curl -sS -X POST "${url}/api/auth/signin" \
-      -H "Content-Type: application/json" \
-      --data '{"email":"${email}","password":"${password}"}' \
-      | ${jq}/bin/jq -r '.token // empty')
-    [ -n "$TOKEN" ]
-    DATA=$(${curl}/bin/curl -sS -H "X-Token: $TOKEN" \
-      "${url}/api/user/memory?path=stats.combat" | ${jq}/bin/jq -r '.data // empty')
-    case "$DATA" in
-      gz:*) ;;
-      *) echo "no stats.combat in memory yet (got: $DATA)" >&2; exit 1 ;;
-    esac
-    C=$(printf '%s' "''${DATA#gz:}" | ${coreutils}/bin/base64 -d | ${gzip}/bin/zcat)
-    echo "combat: $(printf '%s' "$C" | ${jq}/bin/jq -c \
-      '{hostileMoves, damageTaken, hostilesDowned}')"
-    printf '%s' "$C" | ${jq}/bin/jq -e '
-      .hostileMoves >= 1
-    ' > /dev/null
-  '';
-
-  # One-shot probe: Memory.trace holds a tower entry with a hostile*
-  # event, action=attack, rc=0 — durable proof the tower SAW a raider
-  # and FIRED. stats.hostiles remains transient-prone: even 10000
-  # pooled raider hits fall in ~17 ticks (~1s at 50ms ticks), so the
-  # engagement window can slip between seconds-granularity polls (the
-  # first itest run proved this by timing out on stats.hostiles while
-  # the colony hummed along). The flight recorder appends on change and
-  # never forgets the engagement. Tower-vocabulary entries
-  # (hostile*/calm*) are printed each poll for diagnosis.
-  pollTowerEngaged = writeShellScript "poll-tower-engaged" ''
-    set -euo pipefail
-    TOKEN=$(${curl}/bin/curl -sS -X POST "${url}/api/auth/signin" \
-      -H "Content-Type: application/json" \
-      --data '{"email":"${email}","password":"${password}"}' \
-      | ${jq}/bin/jq -r '.token // empty')
-    [ -n "$TOKEN" ]
-    decode() {
-      local path="$1" data
-      data=$(${curl}/bin/curl -sS -H "X-Token: $TOKEN" \
-        "${url}/api/user/memory?path=$path" | ${jq}/bin/jq -r '.data // empty')
-      case "$data" in
-        gz:*) printf '%s' "''${data#gz:}" | ${coreutils}/bin/base64 -d | ${gzip}/bin/zcat ;;
-        *) printf 'absent' ;;
-      esac
-    }
-    T=$(decode trace)
-    if [ "$T" = absent ]; then echo "no trace in memory yet"; exit 1; fi
-    echo "tower trace: $(printf '%s' "$T" | ${jq}/bin/jq -c \
-      '[.[] | .[] | select(.event | startswith("hostile") or startswith("calm"))]') \
-(hostiles now: $(decode stats.hostiles))"
-    printf '%s' "$T" | ${jq}/bin/jq -e '
-      [.[] | .[] | select((.event | startswith("hostile"))
-                          and .action == "attack" and .rc == 0)]
-      | length > 0
-    ' > /dev/null
-  '';
-
-  # One-shot probe, parameterized: wave RESOLVED — the threat is
-  # CLEARED and the clearing was OBSERVED. $1 = the cumulative downed
-  # total expected so far (sum of all wave sizes): stats.combat
-  # .hostilesDowned >= $1 (every raider of every wave was seen to
-  # vanish from the spawn room; NPC creeps never cross room edges —
-  # engine tick.js exempts them — so gone = dead) AND stats.hostiles
-  # == 0 (nothing hostile remains now, safe to escalate). The downed
-  # counter is what an absence-only probe would lack: hostiles==0 was
-  # also true before the fight ever happened. The final wave's call
-  # doubles as the old pollThreatCleared: cumulative arithmetic,
-  # nothing hardcoded.
-  pollWaveResolved = writeShellScript "poll-wave-resolved" ''
-    set -euo pipefail
-    EXPECT="$1"
-    TOKEN=$(${curl}/bin/curl -sS -X POST "${url}/api/auth/signin" \
-      -H "Content-Type: application/json" \
-      --data '{"email":"${email}","password":"${password}"}' \
-      | ${jq}/bin/jq -r '.token // empty')
-    [ -n "$TOKEN" ]
-    decode() {
-      local path="$1" data
-      data=$(${curl}/bin/curl -sS -H "X-Token: $TOKEN" \
-        "${url}/api/user/memory?path=$path" | ${jq}/bin/jq -r '.data // empty')
-      case "$data" in
-        gz:*) printf '%s' "''${data#gz:}" | ${coreutils}/bin/base64 -d | ${gzip}/bin/zcat ;;
-        *) printf 'absent' ;;
-      esac
-    }
-    H=$(decode stats.hostiles)
-    DOWNED=$(decode stats.combat.hostilesDowned)
-    echo "hostiles: $H (downed: $DOWNED of $EXPECT expected, towers: $(decode stats.towers))"
-    [ "$H" != absent ] && [ "$DOWNED" != absent ] \
-      && [ "$DOWNED" -ge "$EXPECT" ] && [ "$H" -eq 0 ]
-  '';
-
   # One-shot reader: print stats.combat.damageTaken (just the number) —
-  # the wave loop's blood test. Cumulative and latched by the shell's
-  # tick diff, so damage that lands and heals inside one 50ms tick
+  # the FIRST-BLOOD test, the war arc's only assertion (user ruling
+  # 2026-08-01: first blood and no more). Cumulative and latched by the
+  # shell's tick diff, so damage that lands and heals inside one tick
   # still counts forever. Fails (exit 1) only if the stat is absent.
   readDamageTaken = writeShellScript "read-damage-taken" ''
     set -euo pipefail
@@ -602,129 +456,6 @@ let
     printf '%s' "''${DATA#gz:}" | ${coreutils}/bin/base64 -d | ${gzip}/bin/zcat
   '';
 
-  # One-shot probe: stats.roleCounts.defender >= 1 — the
-  # threat-conditional population policy FIRED. The defender's desired
-  # count is 0 under calm and 1 under hostile (DesiredCounts in
-  # dox/creeps.dox), so a defender EXISTING is itself proof the spawn
-  # walk read threat=hostile on some tick: no other path creates one.
-  # Threat-window arithmetic under waves: each raider is 5000 hits and
-  # the tower downs ONE target at <= 600/tick, so a wave of n holds
-  # threat=hostile >= ceil(5000n/600) ticks; from wave 2 up (>= 17
-  # ticks) that outlasts the longest possible in-flight worker spawn
-  # (5 parts x 3 ticks = 15) and the slot is guaranteed — wave 1's ~9
-  # ticks may only miss if a worker spawn is mid-flight, and the probe
-  # accepts a defender born during ANY wave (threat is threat).
-  pollDefenderSpawned = writeShellScript "poll-defender-spawned" ''
-    set -euo pipefail
-    TOKEN=$(${curl}/bin/curl -sS -X POST "${url}/api/auth/signin" \
-      -H "Content-Type: application/json" \
-      --data '{"email":"${email}","password":"${password}"}' \
-      | ${jq}/bin/jq -r '.token // empty')
-    [ -n "$TOKEN" ]
-    DATA=$(${curl}/bin/curl -sS -H "X-Token: $TOKEN" \
-      "${url}/api/user/memory?path=stats.roleCounts" | ${jq}/bin/jq -r '.data // empty')
-    case "$DATA" in
-      gz:*) ;;
-      *) echo "no stats.roleCounts in memory yet (got: $DATA)" >&2; exit 1 ;;
-    esac
-    COUNTS=$(printf '%s' "''${DATA#gz:}" | ${coreutils}/bin/base64 -d | ${gzip}/bin/zcat)
-    echo "roleCounts: $COUNTS"
-    printf '%s' "$COUNTS" | ${jq}/bin/jq -e '(.defender // 0) >= 1' > /dev/null
-  '';
-
-  # One-shot probe: colony integrity after the fight — every role still
-  # at desired strength (2/1/2 per the spec's spawnQueue; roles with
-  # zero live creeps have NO key, hence // 0). pollRolesRecovered minus
-  # the births arithmetic: respawn was proven in the turnover subtest,
-  # here only standing strength matters.
-  pollColonyIntact = writeShellScript "poll-colony-intact" ''
-    set -euo pipefail
-    TOKEN=$(${curl}/bin/curl -sS -X POST "${url}/api/auth/signin" \
-      -H "Content-Type: application/json" \
-      --data '{"email":"${email}","password":"${password}"}' \
-      | ${jq}/bin/jq -r '.token // empty')
-    [ -n "$TOKEN" ]
-    DATA=$(${curl}/bin/curl -sS -H "X-Token: $TOKEN" \
-      "${url}/api/user/memory?path=stats.roleCounts" | ${jq}/bin/jq -r '.data // empty')
-    case "$DATA" in
-      gz:*) ;;
-      *) echo "no stats.roleCounts in memory yet (got: $DATA)" >&2; exit 1 ;;
-    esac
-    COUNTS=$(printf '%s' "''${DATA#gz:}" | ${coreutils}/bin/base64 -d | ${gzip}/bin/zcat)
-    echo "roleCounts: $COUNTS"
-    printf '%s' "$COUNTS" | ${jq}/bin/jq -e '
-      ((.harvester // 0) >= 2)
-      and ((.upgrader // 0) >= 1)
-      and ((.builder // 0) >= 2)
-    ' > /dev/null
-  '';
-
-  # One-shot probe: Memory.trace holds a tower entry with a *Damage*
-  # event, action=repair, rc=0 — durable proof the tower SAW the
-  # CLI-inflicted damage and REPAIRED it. Same transient trap as the
-  # raiders: tower repair is 800/tick at close range, the 999 missing
-  # hits vanish in one tick, so stats.damaged is a one-tick blip that
-  # a seconds-granularity poll cannot be required to catch. The flight
-  # recorder latches it instead. The jq filter is contains("Damage"),
-  # not endswith: TowerEvent is the 3-fact threat x integrity x reserve
-  # product, so events end in ReserveOk/ReserveLow and the integrity
-  # fact sits mid-string (calmDamageReserveOk); no Intact variant can
-  # false-positive.
-  pollTowerRepairSeen = writeShellScript "poll-tower-repair-seen" ''
-    set -euo pipefail
-    TOKEN=$(${curl}/bin/curl -sS -X POST "${url}/api/auth/signin" \
-      -H "Content-Type: application/json" \
-      --data '{"email":"${email}","password":"${password}"}' \
-      | ${jq}/bin/jq -r '.token // empty')
-    [ -n "$TOKEN" ]
-    decode() {
-      local path="$1" data
-      data=$(${curl}/bin/curl -sS -H "X-Token: $TOKEN" \
-        "${url}/api/user/memory?path=$path" | ${jq}/bin/jq -r '.data // empty')
-      case "$data" in
-        gz:*) printf '%s' "''${data#gz:}" | ${coreutils}/bin/base64 -d | ${gzip}/bin/zcat ;;
-        *) printf 'absent' ;;
-      esac
-    }
-    T=$(decode trace)
-    if [ "$T" = absent ]; then echo "no trace in memory yet"; exit 1; fi
-    echo "tower trace: $(printf '%s' "$T" | ${jq}/bin/jq -c \
-      '[.[] | .[] | select(.event | startswith("hostile") or startswith("calm"))]') \
-(damaged now: $(decode stats.damaged))"
-    printf '%s' "$T" | ${jq}/bin/jq -e '
-      [.[] | .[] | select((.event | contains("Damage"))
-                          and .action == "repair" and .rc == 0)]
-      | length > 0
-    ' > /dev/null
-  '';
-
-  # One-shot probe: stats.damaged == 0 AFTER pollTowerRepairSeen
-  # latched the repair — no damaged structure remains (calm+Damage ->
-  # repairing per the spec's attack>repair priority). If the shell had
-  # never seen the damage at all, the repair would not fire and this
-  # would sit at damaged >= 1 forever — the pair of probes closes both
-  # failure modes.
-  pollRepaired = writeShellScript "poll-repaired" ''
-    set -euo pipefail
-    TOKEN=$(${curl}/bin/curl -sS -X POST "${url}/api/auth/signin" \
-      -H "Content-Type: application/json" \
-      --data '{"email":"${email}","password":"${password}"}' \
-      | ${jq}/bin/jq -r '.token // empty')
-    [ -n "$TOKEN" ]
-    decode() {
-      local path="$1" data
-      data=$(${curl}/bin/curl -sS -H "X-Token: $TOKEN" \
-        "${url}/api/user/memory?path=$path" | ${jq}/bin/jq -r '.data // empty')
-      case "$data" in
-        gz:*) printf '%s' "''${data#gz:}" | ${coreutils}/bin/base64 -d | ${gzip}/bin/zcat ;;
-        *) printf 'absent' ;;
-      esac
-    }
-    D=$(decode stats.damaged)
-    echo "damaged: $D (towers: $(decode stats.towers))"
-    [ "$D" != absent ] && [ "$D" -eq 0 ]
-  '';
-
   # Tick compression: the extension needs RCL 2 (200 controller progress)
   # and then 3000 build-energy — far too slow at the default 1s tick. The
   # server CLI on 21026 accepts system.setTickDuration(ms); best-effort
@@ -739,14 +470,16 @@ testers.runNixOSTest {
 
   # Worst-case sum of subtest deadlines: tutorial-1..3 (3 x 600s +
   # 1500s) plus the turnover phases (900s + 600s + 600s + 300s) =
-  # 5700s, plus the defense arc (RCL surgery 60s + 300s, tower build
-  # 2500s + feed 300s, raider waves 8 x (60s insert + ~4s forensics +
-  # 300s resolve) ≈ 2910s + 120s + 120s + 300s + 300s, repair 60s +
-  # 120s + 300s, heartbeat 300s ≈ 7690s) ≈ 13390s of deadlines, plus
-  # boot and deploy. The wave worst case only accrues on the FAILURE
-  # path (a resolving wave clears in seconds at 50ms ticks), but the
-  # global timeout must cover the honest conviction run too.
-  globalTimeout = 18000;
+  # 5700s, plus the SEEDED war arc: arming write 120s + RCL 3
+  # observation 120s + tower observation 180s + 180s, then the
+  # relentless war's single assertion: war opens 600s (every gate
+  # pre-opened; one 10s cron check away) + first blood 1200s (waves
+  # land every 10s, escalating — live evidence puts blood at wave 2)
+  # ≈ 2400s of post-turnover deadlines — ≈ 8100s total, plus boot
+  # and deploy. Deadlines only accrue on the FAILURE path (each phase
+  # exits the moment its probe passes), but the global timeout must
+  # cover the honest slow run.
+  globalTimeout = 9000;
 
   nodes.machine = {
     # Server spawns storage/backend/engine children plus runner/processor
@@ -805,6 +538,13 @@ testers.runNixOSTest {
     # only means slower ticks, never a failed test.
     status, out = machine.execute("${setTickDuration} 2>&1")
     print(f">>> system.setTickDuration(${toString tickMs}) via CLI (status {status}): {out.strip()}")
+
+    # No sterilizer, no dial. The raid mod is LIVE from boot
+    # (mods.json), and the FAIR-FIGHT CLAUSE is the only shield the
+    # early phases get: a room with no FULL tower is not raid-eligible
+    # (raidPolicy.minTowers + towerFullEnergy), so the tutorial acts
+    # run unmolested until the arming write seeds the full tower and
+    # opens every gate at once.
 
     with subtest("spawn acquires energy"):
         # Explicit poll loop so every observation is visible in the log.
@@ -953,255 +693,131 @@ testers.runNixOSTest {
                 raise Exception("timed out waiting for controller progress after death")
             time.sleep(2)
 
-    with subtest("controller forced to RCL 3 (world surgery)"):
-        # Towers unlock at RCL 3; grinding there honestly would dwarf
-        # every other deadline, so the server CLI raises the itest
-        # room's controller directly. The surgery script discovers the
-        # room from the itest user's spawn in the same REPL session —
-        # a short retry loop covers CLI connection flakiness.
-        deadline = time.time() + 60
+    with subtest("arming write seeds the war's start conditions"):
+        # User ruling 2026-08-02: the test STARTS the war arc with the
+        # necessary conditions instead of grinding the natural climb
+        # (45k upgrade energy + ~20000 safe-mode ticks proved only
+        # patience). ONE write: controller to RCL 3 with safe mode
+        # cleared, sources' invaderHarvested past raidGoal. The short
+        # retry loop covers CLI hiccups, not world time.
+        deadline = time.time() + 120
         while True:
-            status, out = machine.execute("${surgeryRcl3} 2>&1")
-            print(f">>> rcl3 surgery: {out.strip()}")
+            status, out = machine.execute("${armWarConditions} 2>&1")
+            print(f">>> arm: {out.strip()}")
             if status == 0:
-                print(">>> RCL3 surgery acknowledged")
+                print(">>> SUCCESS: war conditions seeded — RCL 3, safe mode off, raidGoal crossed, full tower standing")
                 break
             if time.time() > deadline:
-                raise Exception("RCL3 world surgery was never acknowledged by the CLI")
+                print(">>> TIMEOUT — server log tail for diagnosis:")
+                print(machine.succeed("journalctl -u screeps --no-pager | tail -n 100"))
+                raise Exception("timed out arming the war conditions via the CLI")
             time.sleep(5)
-        deadline = time.time() + 300
+        # The shell must OBSERVE the seeded level (stats.controllerLevel
+        # is telemetry, not db state) — proves the world took the write.
+        deadline = time.time() + 120
         while True:
             status, out = machine.execute("${pollControllerLevel3} 2>&1")
             print(f">>> poll: {out.strip()}")
             if status == 0:
-                print(">>> SUCCESS: shell observes controller at RCL 3")
+                print(">>> SUCCESS: shell observes RCL 3")
                 break
             if time.time() > deadline:
                 print(">>> TIMEOUT — server log tail for diagnosis:")
                 print(machine.succeed("journalctl -u screeps --no-pager | tail -n 100"))
-                raise Exception("timed out waiting for controllerLevel >= 3 after surgery")
+                raise Exception("timed out waiting for the shell to observe the seeded RCL 3")
             time.sleep(2)
 
-    with subtest("tower gets built and fed"):
-        # Tutorial-5 build proof: at RCL 3 the shell places the
-        # spec-driven tower site (towerOffsets) and the builders haul
-        # 5000 build-energy into it — the extension's 3000 had a 1500s
-        # deadline, so 5000 gets 2500s. Then the harvesters feed the
-        # below-target tower (an energy sink while energy <
-        # towerEnergyTarget = 500): energy > 0 within 300s.
-        deadline = time.time() + 2500
+    with subtest("shell observes the seeded tower, standing and full"):
+        # The arming write seeded the tower (spec's first towerOffsets
+        # cell, full magazine). These polls prove the BRAIN sees it:
+        # stats.towersBuilt counts FIND_MY_STRUCTURES towers and
+        # stats.towers carries its energy — the tower machine is now
+        # running the spec's tower FSM over a real structure. Full
+        # tower == fair-fight bar: the war's last gate is open. The
+        # refill law keeps it topped up between waves (below
+        # towerRefillTarget = ordinary sink; latch = priority only).
+        deadline = time.time() + 180
         while True:
             status, out = machine.execute("${pollTowerBuilt} 2>&1")
             print(f">>> poll: {out.strip()}")
             if status == 0:
-                print(">>> SUCCESS: tower built")
+                print(">>> SUCCESS: shell observes the tower")
                 break
             if time.time() > deadline:
                 print(">>> TIMEOUT — server log tail for diagnosis:")
                 print(machine.succeed("journalctl -u screeps --no-pager | tail -n 100"))
-                raise Exception("timed out waiting for the tower to be built")
+                raise Exception("timed out waiting for the shell to observe the seeded tower")
             time.sleep(2)
-        deadline = time.time() + 300
+        deadline = time.time() + 180
         while True:
-            status, out = machine.execute("${pollTowerFed} 2>&1")
+            status, out = machine.execute("${pollTowerFull} 2>&1")
             print(f">>> poll: {out.strip()}")
             if status == 0:
-                print(">>> SUCCESS: tower fed (energy > 0)")
+                print(">>> SUCCESS: tower reads full (energy >= 1000) — fair-fight bar met")
                 break
             if time.time() > deadline:
                 print(">>> TIMEOUT — server log tail for diagnosis:")
                 print(machine.succeed("journalctl -u screeps --no-pager | tail -n 100"))
-                raise Exception("timed out waiting for the tower to receive energy")
+                raise Exception("timed out waiting for the tower to read full energy")
             time.sleep(2)
 
-    with subtest("live raiders draw blood (escalating waves) and the colony answers"):
-        # The raider offense case: no fixed raider count is ASSUMED
-        # sufficient — the ordeal escalates force until damage lands.
-        # Wave n inserts n tank raiders (wave sizes 1, 2, ..., cap) and
-        # lets the wave fully resolve (cumulative hostilesDowned reaches
-        # the running total, no hostiles remain); then the blood test:
-        # stats.combat.damageTaken >= 1 ends the escalation — offense
-        # PROVEN at the minimum force that draws blood. The tower
-        # processes ONE target per tick at <= 600 damage, so if the
-        # sword works at all some n <= 8 saturates that throughput and
-        # survivors stand adjacent with tail-protected ATTACK parts:
-        # blood MUST land. Reaching the cap with zero damage leaves no
-        # physics excuse — the wave loop FAILS and the flight recorder
-        # (Memory.trace in the raiders' memory, dumped by forensics)
-        # names the statute: fsm stuck in marching = observation bug;
-        # razing with rc != 0 = rejected intent; razing with rc 0 and
-        # no damage = the engine dropped a processed intent.
-        # Precedent (run #6): conviction at cap with razing/rc -12 on
-        # every swing — the engine's SAFE MODE refusal (masquerading
-        # as ERR_NO_BODYPART), not a brain bug; lifted since by the
-        # RCL3 surgery's safeMode: null.
-        total_downed = 0
-        blood_wave = 0
-        for wave in range(1, ${toString raiderWaveCap} + 1):
-            size = wave
-            deadline = time.time() + 60
-            while True:
-                status, out = machine.execute(f"${surgeryInsertWave} {wave} {size} 2>&1")
-                print(f">>> wave {wave} surgery ({size} raider(s)): {out.strip()}")
-                if status == 0:
-                    print(f">>> wave {wave} inserted")
-                    break
-                if time.time() > deadline:
-                    raise Exception(f"wave {wave} insertion was never acknowledged by the CLI")
-                time.sleep(5)
-            total_downed += size
-            # Forensic witness: snapshot the raiders mid-fight —
-            # position, hits, fatigue, actionLog.attack (set only when
-            # an attack intent PROCESSES), the spawn's hits +
-            # actionLog.attacked, and the raiders user's memory (fsm +
-            # flight recorder). The corpses clear in ticks; these lines
-            # are the cross-examination that survives.
-            for i in range(3):
-                status, out = machine.execute("${forensicsRaiders} 2>&1")
-                print(f">>> forensics[w{wave}.{i}]: {out.strip()}")
-                time.sleep(1)
-            deadline = time.time() + 300
-            while True:
-                status, out = machine.execute(f"${pollWaveResolved} {total_downed} 2>&1")
-                print(f">>> poll: {out.strip()}")
-                if status == 0:
-                    print(f">>> wave {wave} resolved ({total_downed} cumulative raiders downed)")
-                    break
-                if time.time() > deadline:
-                    print(">>> TIMEOUT — forensics at time of death:")
-                    status, out = machine.execute("${forensicsRaiders} 2>&1")
-                    print(f">>> forensics[final]: {out.strip()}")
-                    print(">>> TIMEOUT — server log tail for diagnosis:")
-                    print(machine.succeed("journalctl -u screeps --no-pager | tail -n 100"))
-                    raise Exception(f"wave {wave} never resolved ({total_downed} downed expected)")
-                time.sleep(2)
-            # Post-wave forensics: even a losing wave documents its FSM
-            # trajectory in the recorder before the next escalation.
+    with subtest("the world makes war and draws first blood"):
+        # The raid MOD opens this war, or nobody does. Every gate is
+        # open — the arming write cleared safe mode and crossed
+        # raidGoal, the previous subtest proved a FULL tower stands —
+        # so genRaiders opens the RELENTLESS WAR within one cron check
+        # (checkSeconds 10): an escalating wave on every check (the
+        # harvested counter never resets, live raiders never hold off
+        # the next wave). The war arc asserts EXACTLY ONE THING, by
+        # user ruling (2026-08-01): FIRST BLOOD — cumulative
+        # damageTaken >= 1. Live evidence (W9N8): a fresh tower
+        # clean-sweeps wave 1, and blood lands from wave 2 on; under
+        # the amended refill law the tower is topped back to full
+        # between waves, so the escalation actually continues (the
+        # first latch-gated law deadlocked at 990 and wave 2 never
+        # came). Everything past first blood — how long the single
+        # tower stands against the unending escalation — is the live
+        # server's show, not an itest deadline.
+        deadline = time.time() + 600
+        while True:
+            status, out = machine.execute("${pollNaturalRaid} 2>&1")
+            print(f">>> poll: {out.strip()}")
+            if status == 0:
+                print(">>> SUCCESS: mod-raised raiders (raider-g*) latched in the flight recorder")
+                break
+            if time.time() > deadline:
+                print(">>> TIMEOUT — server log tail for diagnosis:")
+                print(machine.succeed("journalctl -u screeps --no-pager | tail -n 100"))
+                raise Exception("timed out waiting for the raid mod to open the war")
+            time.sleep(10)
+        # Forensic witness: snapshot the raiders mid-fight — position,
+        # hits, fatigue, actionLog.attack (set only when an attack
+        # intent PROCESSES), the spawn's hits + actionLog.attacked, and
+        # the raiders user's memory (fsm + flight recorder). The
+        # corpses clear in ticks; these lines are the cross-examination
+        # that survives.
+        for i in range(3):
             status, out = machine.execute("${forensicsRaiders} 2>&1")
-            print(f">>> forensics[w{wave}.post]: {out.strip()}")
-            damage = int(machine.succeed("${readDamageTaken}").strip())
-            print(f">>> damageTaken after wave {wave}: {damage}")
+            print(f">>> forensics[war.{i}]: {out.strip()}")
+            time.sleep(1)
+        deadline = time.time() + 1200
+        while True:
+            status, out = machine.execute("${readDamageTaken} 2>&1")
+            damage = int(out.strip()) if status == 0 and out.strip().isdigit() else -1
+            print(f">>> damageTaken: {out.strip()}")
             if damage >= 1:
-                blood_wave = wave
-                print(f">>> SUCCESS: first blood at wave {wave} ({size} raider(s)) — offense proven")
-                break
-        if blood_wave == 0:
-            print(">>> CONVICTION — recorder dump for root cause:")
-            status, out = machine.execute("${forensicsRaiders} 2>&1")
-            print(f">>> forensics[conviction]: {out.strip()}")
-            print(machine.succeed("journalctl -u screeps --no-pager | tail -n 100"))
-            raise Exception(
-                "no raider damage through wave cap ${toString raiderWaveCap} — "
-                "attack path convicted by exhaustion; the trace above names the statute"
-            )
-        deadline = time.time() + 120
-        while True:
-            status, out = machine.execute("${pollRaiderMarched} 2>&1")
-            print(f">>> poll: {out.strip()}")
-            if status == 0:
-                print(">>> SUCCESS: raiders marched on the spawn (hostileMoves latched)")
+                print(">>> SUCCESS: first blood drawn — the offense is real, no hand on the scale")
                 break
             if time.time() > deadline:
-                print(">>> TIMEOUT — server log tail for diagnosis:")
+                print(">>> TIMEOUT — recorder dump for root cause:")
+                status, out = machine.execute("${forensicsRaiders} 2>&1")
+                print(f">>> forensics[final]: {out.strip()}")
                 print(machine.succeed("journalctl -u screeps --no-pager | tail -n 100"))
-                raise Exception("timed out waiting for raider movement in stats.combat")
-            time.sleep(2)
-        deadline = time.time() + 120
-        while True:
-            status, out = machine.execute("${pollTowerEngaged} 2>&1")
-            print(f">>> poll: {out.strip()}")
-            if status == 0:
-                print(">>> SUCCESS: tower saw a raider and fired (trace latched)")
-                break
-            if time.time() > deadline:
-                print(">>> TIMEOUT — server log tail for diagnosis:")
-                print(machine.succeed("journalctl -u screeps --no-pager | tail -n 100"))
-                raise Exception("timed out waiting for a tower attack in Memory.trace")
-            time.sleep(2)
-        deadline = time.time() + 300
-        while True:
-            status, out = machine.execute("${pollDefenderSpawned} 2>&1")
-            print(f">>> poll: {out.strip()}")
-            if status == 0:
-                print(">>> SUCCESS: threat-conditional defender spawned")
-                break
-            if time.time() > deadline:
-                print(">>> TIMEOUT — server log tail for diagnosis:")
-                print(machine.succeed("journalctl -u screeps --no-pager | tail -n 100"))
-                raise Exception("timed out waiting for a defender in roleCounts")
-            time.sleep(2)
-        deadline = time.time() + 300
-        while True:
-            status, out = machine.execute("${pollColonyIntact} 2>&1")
-            print(f">>> poll: {out.strip()}")
-            if status == 0:
-                print(">>> SUCCESS: colony still at strength after the fight")
-                break
-            if time.time() > deadline:
-                print(">>> TIMEOUT — server log tail for diagnosis:")
-                print(machine.succeed("journalctl -u screeps --no-pager | tail -n 100"))
-                raise Exception("timed out waiting for role counts after the raider fight")
-            time.sleep(2)
-
-    with subtest("tower repairs battle damage (world surgery)"):
-        # CLI-damage the extension (hits -> 1), then require the tower
-        # to have SEEN and REPAIRED it — Memory.trace holds
-        # *Damage/repair/rc=0 (durable; 800 repair/tick up close heals
-        # the 999 missing hits in one tick, another one-tick transient)
-        # — and stats.damaged back to 0 (nothing left broken).
-        deadline = time.time() + 60
-        while True:
-            status, out = machine.execute("${surgeryDamageExtension} 2>&1")
-            print(f">>> damage surgery: {out.strip()}")
-            if status == 0:
-                print(">>> extension damaged")
-                break
-            if time.time() > deadline:
-                raise Exception("extension damage was never acknowledged by the CLI")
+                raise Exception(
+                    "relentless waves kept landing but drew no blood — "
+                    "the offense path is dead; the trace above names the statute"
+                )
             time.sleep(5)
-        deadline = time.time() + 120
-        while True:
-            status, out = machine.execute("${pollTowerRepairSeen} 2>&1")
-            print(f">>> poll: {out.strip()}")
-            if status == 0:
-                print(">>> SUCCESS: tower saw the damage and repaired (trace latched)")
-                break
-            if time.time() > deadline:
-                print(">>> TIMEOUT — server log tail for diagnosis:")
-                print(machine.succeed("journalctl -u screeps --no-pager | tail -n 100"))
-                raise Exception("timed out waiting for a tower repair in Memory.trace")
-            time.sleep(2)
-        deadline = time.time() + 300
-        while True:
-            status, out = machine.execute("${pollRepaired} 2>&1")
-            print(f">>> poll: {out.strip()}")
-            if status == 0:
-                print(">>> SUCCESS: tower repaired the extension")
-                break
-            if time.time() > deadline:
-                print(">>> TIMEOUT — server log tail for diagnosis:")
-                print(machine.succeed("journalctl -u screeps --no-pager | tail -n 100"))
-                raise Exception("timed out waiting for the tower repair")
-            time.sleep(2)
 
-    with subtest("economy heartbeat unbroken"):
-        # Fresh baseline AFTER all the surgery (the RCL3 surgery zeroed
-        # controller progress, so any earlier baseline is meaningless),
-        # then progress strictly above it — the whole defense arc left
-        # the upgrader pipeline beating.
-        heartbeat_baseline = int(machine.succeed("${readControllerProgress}").strip())
-        print(f">>> controller progress after the defense arc: {heartbeat_baseline}")
-        deadline = time.time() + 300
-        while True:
-            status, out = machine.execute(f"${pollProgressAfterDeath} {heartbeat_baseline} 2>&1")
-            print(f">>> poll: {out.strip()}")
-            if status == 0:
-                print(">>> SUCCESS: controller progress rose after the defense arc")
-                break
-            if time.time() > deadline:
-                print(">>> TIMEOUT — server log tail for diagnosis:")
-                print(machine.succeed("journalctl -u screeps --no-pager | tail -n 100"))
-                raise Exception("timed out waiting for post-defense controller progress")
-            time.sleep(2)
   '';
 }

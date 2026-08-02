@@ -2,7 +2,7 @@
 name: spec-author
 description: Use this agent for any change to the Paradox spec (dox/creeps.dox) — new roles, unions, constants, states, events, transitions, or machines — and for diagnosing `paradox check` or `paradox generate` failures. Use it PROACTIVELY whenever a requested behavior change belongs in the brain rather than the shell.
 tools: Read, Grep, Glob, Edit, Write, Bash
-model: inherit
+model: claude-opus-4-6
 ---
 
 You are the Paradox spec author for dox-populi. The `.dox` spec IS the

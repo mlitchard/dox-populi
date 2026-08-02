@@ -122,13 +122,19 @@ function step(state: CreepState, creep: Creep, obs: RoomObs): StepResult {
 
 // ---------------------------------------------------------------------------
 // Observation. "Energy sink" is vocabulary, not policy: a spawn, an
-// extension, or a BELOW-THRESHOLD tower that can still accept delivered
-// energy. The tower threshold is brain data (towerContext.energyTarget): a
-// tower is a sink only while its energy is below the target. hasFreeEnergy
-// is the ONE filter serving both delivery targeting (TargetKind.energySink)
-// and the sinksAllFull observation — the observed fact can never contradict
-// the available action. Room-level facts (sinks, sites, hostiles, damage)
-// are computed once per room per tick.
+// extension, or a BELOW-FULL tower — a tower has free energy whenever it
+// reads below towerContext.refillTarget (the spec's refill law, amended
+// 2026-08-02: membership is "has room?", same as every other sink). The
+// hysteresis LATCH ranks, never gates: it OPENS when a tower's energy
+// drops below energyTarget and CLOSES only when delivery brings it back
+// to refillTarget; while open, that tower outranks every other sink in
+// the energySink selector. The shell holds the latch bit per tower id in
+// Memory.towerRefill — mechanical evaluation of the spec's rule, no
+// policy here. hasFreeEnergy is the ONE filter serving both delivery
+// targeting (TargetKind.energySink) and the sinksAllFull observation — the
+// observed fact can never contradict the available action. Room-level
+// facts (sinks, sites, hostiles, damage) are computed once per room per
+// tick.
 // ---------------------------------------------------------------------------
 
 type EnergySink = StructureSpawn | StructureExtension | StructureTower;
@@ -138,9 +144,22 @@ const isEnergySink = (s: AnyOwnedStructure): s is EnergySink =>
   s.structureType === STRUCTURE_EXTENSION ||
   s.structureType === STRUCTURE_TOWER;
 
+// Stable within a tick: once the latch flips, re-evaluating with the new
+// bit yields the same answer (open: energy < refillTarget; closed:
+// energy < energyTarget — the flip itself proves the active inequality).
+const towerRefillLatch = (t: StructureTower): boolean => {
+  const latches = (Memory.towerRefill ??= {});
+  const energy = t.store[RESOURCE_ENERGY];
+  const open = latches[t.id]
+    ? energy < towerContext.refillTarget
+    : energy < towerContext.energyTarget;
+  latches[t.id] = open;
+  return open;
+};
+
 const hasFreeEnergy = (s: EnergySink): boolean =>
   s.structureType === STRUCTURE_TOWER
-    ? s.store[RESOURCE_ENERGY] < towerContext.energyTarget
+    ? s.store[RESOURCE_ENERGY] < towerContext.refillTarget
     : s.store.getFreeCapacity(RESOURCE_ENERGY) > 0;
 
 const isTower = (s: AnyOwnedStructure): s is StructureTower =>
@@ -241,8 +260,17 @@ function resolveTarget(
   switch (kind) {
     case "source":
       return pos.findClosestByPath(FIND_SOURCES);
-    case "energySink":
-      return pos.findClosestByPath(obs.sinks.filter(hasFreeEnergy));
+    case "energySink": {
+      // Refill-hysteresis PRIORITY (spec: towerContext refill law): the
+      // latch ranks the open set, never gates it — a latched tower
+      // (drained below energyTarget, not yet back at refillTarget)
+      // outranks every other sink; otherwise closest open sink wins.
+      const open = obs.sinks.filter(hasFreeEnergy);
+      const latchedTowers = open.filter(
+        (s): s is StructureTower => isTower(s) && towerRefillLatch(s)
+      );
+      return pos.findClosestByPath(latchedTowers.length > 0 ? latchedTowers : open);
+    }
     case "controller":
       return room.controller ?? null;
     case "constructionSite":
@@ -415,10 +443,15 @@ export const loop = (): void => {
   }
 
   // Reclaim memory of towers whose id no longer resolves — the tower
-  // analogue of dead-creep reclamation.
+  // analogue of dead-creep reclamation. The refill latch rides along.
   if (Memory.towers) {
     for (const id in Memory.towers) {
       if (!liveTowerIds.has(id)) delete Memory.towers[id];
+    }
+  }
+  if (Memory.towerRefill) {
+    for (const id in Memory.towerRefill) {
+      if (!liveTowerIds.has(id)) delete Memory.towerRefill[id];
     }
   }
 

@@ -102,6 +102,29 @@
           cp invader.js $out/
         '';
       };
+      # The raid LAW bundle: shell/raidmod.ts (hands) over the raid policy
+      # data in generated/invader.ts — a server mod (mods.json) for the
+      # backend process that deletes the native genInvaders cron (uid-2
+      # engine-AI raids) and installs genRaiders: when a room's harvested
+      # energy crosses the spec's raidGoal (native counter, native reset
+      # semantics, room.invaderGoal override honored — 1 = raid now,
+      # huge = never), it inserts "raiders"-owned creeps at the room's
+      # exit squares, driven by the same seeded users.code brain. This is
+      # what makes raids WORLD BEHAVIOR: server + deploy-local + client
+      # shows a raider battle with no CLI surgery.
+      raidMod = pkgs.stdenv.mkDerivation {
+        name = "dox-populi-raid-mod";
+        src = tsSrc;
+        nativeBuildInputs = [ pkgs.esbuild ];
+        buildPhase = ''
+          esbuild shell/raidmod.ts --bundle --format=cjs --platform=node \
+            --outfile=raidmod.js
+        '';
+        installPhase = ''
+          mkdir -p $out
+          cp raidmod.js $out/
+        '';
+      };
       # secrix CLI as a devShell command (llm-core pattern: tool packages
       # included in devShell packages, not reached via `nix run`).
       secrixApp = secrix.secrix self;
@@ -256,6 +279,10 @@
         # as the NPC "raiders" user's users.code. Exported so CI gets a cheap build
         # witness — otherwise it only builds inside the itest job.
         invader-main = invaderMain;
+        # The raid-law server mod (shell/raidmod.ts + generated raid
+        # policy), injected into mods.json each launch. Exported for the
+        # same reason: a cheap CI build witness.
+        raid-mod = raidMod;
         screeps-server = screepsServer;
         screeps-client = screepsClient;
         secrix = secrixCli;
@@ -517,8 +544,11 @@
             [ -e "$DATA/node_modules" ] || ln -s "$LAUNCHER/init_dist/node_modules" "$DATA/node_modules"
             # mods.json is regenerated every launch (like .screepsrc): the
             # versioned template plus nix-vendored mod entry paths.
+            # raidmod: the raid law (spec-driven raider raids replace the
+            # native uid-2 genInvaders cron) — see raidMod above.
             ${pkgs.jq}/bin/jq --arg auth "${serverMods}/node_modules/screepsmod-auth/index.js" \
-              '.mods += [$auth]' ${./server/mods.json} > "$DATA/mods.json.tmp"
+              --arg raid "${raidMod}/raidmod.js" \
+              '.mods += [$auth, $raid]' ${./server/mods.json} > "$DATA/mods.json.tmp"
             mv -f "$DATA/mods.json.tmp" "$DATA/mods.json"
             # Seed the world database on first run (screeps init's job).
             # -s: also replace a 0-byte stub left by a failed GUI launch.
@@ -926,6 +956,23 @@
                     '{room: $r, x: $x, y: $y, name: "Spawn1"}')")
                 if [ "$(printf '%s' "$RESULT" | $JQ -r '.ok // empty')" = "1" ]; then
                   echo "auto-placed Spawn1 in $ROOM at ($X,$Y)"
+                  # The engine's place-spawn endpoint welds newbie
+                  # protection onto the room: safeMode (gameTime + 20000,
+                  # honest world law, kept) AND invaderGoal: 1000000
+                  # (upstream backend-local lib/game/api/game.js). The
+                  # raid mod honors per-room invaderGoal overrides
+                  # (native parity), so that 1e6 would smother the
+                  # spec's raidGoal until a MILLION energy was harvested.
+                  # Clear it in the same breath, so every world born
+                  # through this pipeline lives under spec law from tick
+                  # one. raidWave: 0 resets the escalation counter — a
+                  # fresh colony faces raid sizes from sizeStart, not
+                  # the previous tenant's war. Best-effort like
+                  # setPassword above: worst case is late raids, never
+                  # a failed deploy.
+                  $JQ -rn --arg r "$ROOM" \
+                    '"storage.db.rooms.update({_id: \($r|@json)}, {$set: {invaderGoal: null, raidWave: 0}})"' \
+                    | ${pkgs.netcat-openbsd}/bin/nc -q 2 "$CLI_HOST" "$CLI_PORT" >/dev/null 2>&1 || true
                   PLACED=1
                   break
                 fi

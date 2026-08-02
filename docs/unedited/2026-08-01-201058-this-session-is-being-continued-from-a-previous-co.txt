@@ -1,0 +1,814 @@
+ ▐▛███▜▌   Claude Code v2.1.81
+▝▜█████▛▘  Opus 4.6 (1M context) · Claude Max
+  ▘▘ ▝▝    ~/gitlab/dox-populi
+
+✻ Conversation compacted (ctrl+o for history)
+
+
+● Alright — I reread the raider shell top to bottom with one question: what 
+  could make a creep stand at range 1 of a spawn and swing at air? Here's what
+  the file confesses:
+
+  Finding 1 — the shell throws away the verdict. execute() in shell/invader.ts
+  returns the ScreepsReturnCode from creep.attack(target)... and the loop
+  discards it. Every tick, the one number that would tell us "attack fired, rc
+  0" vs "attack fired, rc ERR_something" vs "attack never fired" goes straight
+  into the void. We built a courtroom with no stenographer.
+
+  Finding 2 — the observation path looks clean.
+  findInRange(FIND_HOSTILE_STRUCTURES, 1) with only the controller filtered —
+  Chebyshev range 1 includes diagonals, spawn should qualify. So statically, the
+   struct fact SHOULD fire at (22,26) next to spawn (21,25). But "should" ain't
+  evidence. Either:
+  - the event pipeline misfires (spawn not returned by FIND_HOSTILE_STRUCTURES
+  for an NPC user on this server build — plausible engine quirk), → forensics
+  would show fsm: marching forever, or
+  - the event fires, razing engages, and the intent gets rejected (engine
+  refusing attack intents from this user?), → fsm: razing, rc != 0.
+
+  Externally indistinguishable. And unsampleable — the whole fight is under a
+  second of real time. My 3-second CLI camera photographs tombstones, every
+  time.
+
+  What I want to do and why, before I touch anything:
+
+  Give the raider its own flight recorder — the exact Memory.trace pattern the
+  colony already uses, the one that cracked the tower one-shot case. In
+  shell/invader.ts, per creep per tick, append {t, event, fsm, rc} into the
+  raiders user's memory (append-on-change or ring-buffered, small). It latches 
+  past death — tombstones can't testify, but the memory doc can, and
+  forensicsRaiders already dumps memory:raiders, so the itest needs zero new
+  plumbing. One run, and the log either says marching forever (event misfire —
+  observation bug) or razing, rc:-7 or whatever (intent rejection — engine
+  behavior). Case closes itself.
+
+  That's the plan: one edit to shell/invader.ts (record the rc instead of
+  dropping it, trace into raiders memory), then typecheck, then YOU run the
+  itest like you've been doing. No spec change — this is telemetry, hands-layer
+  instrumentation, same church as Memory.stats.
+
+  Say the word and I write it. Or cross-examine me first — you usually do.
+
+✻ Churned for 4m 24s
+
+❯ you showed me data that demonstrated a successful run, all you need to do is  
+capture it and test against it                                                  
+
+● You're right, and I'll say it plain: run #5 IS the arc. Moved
+  (hostileMoves:4), engaged (tower fired), cleared (hostilesDowned:2,
+  tombstones), brain ran (memory:raiders written). The only red light is an
+  assertion demanding a fact the world didn't produce — damageTaken>=1. The test
+   should witness the run we HAVE, not the run I imagined. Let me look at the
+  probe.
+
+  Searched for 1 pattern (ctrl+o to expand)
+
+● Update(tests/integration.nix)
+  ⎿  File must be read first
+
+● Update(tests/integration.nix)
+  ⎿  File must be read first
+
+● Update(tests/integration.nix)
+  ⎿  File must be read first
+
+  Read 1 file (ctrl+o to expand)
+
+● Update(tests/integration.nix)
+  ⎿  Added 2 lines, removed 2 lines
+      444    # actionLog.attacked (persistent evidence that survives the 
+            raiders'                                                     
+      445    # corpses), and the raiders user's memory (Memory.raiders — 
+            the fsm:                                                     
+      446    # did the brain ever enter razing?). Printed                
+      447 -  # during and after the fight so a pollRaiderActed           
+          - failure carries its                                          
+      448 -  # own diagnosis instead of a bare timeout.                  
+      447 +  # during and after the fight so a pollRaiderMarched         
+          + failure carries                                              
+      448 +  # its own diagnosis instead of a bare timeout.              
+      449    forensicsRaiders = writeShellScript "forensics-raiders" ''  
+      450      set -euo pipefail                                         
+      451      CMD='Promise.all([storage.db["rooms.objects"].find({user: 
+            "raiders"}), storage.db.users.findOne({usernameLower:        
+           "${email}"}).then(u =>                                        
+           storage.db["rooms.objects"].findOne({type: "spawn", user:     
+           u._id})), storage.env.get("memory:raiders")]).then(rsm =>     
+           "FORENSICS:" + JSON.stringify({raiders: rsm[0].map(c => ({n:  
+           c.name, r: c.room, x: c.x, y: c.y, hits: c.hits, fatigue:     
+           c.fatigue, atk: c.actionLog && c.actionLog.attack})), spawn:  
+           rsm[1] && {r: rsm[1].room, x: rsm[1].x, y: rsm[1].y, hits:    
+           rsm[1].hits, hitsMax: rsm[1].hitsMax, attacked:               
+           rsm[1].actionLog && rsm[1].actionLog.attacked}, mem: rsm[2]   
+           && String(rsm[2]).slice(0, 400)}))'                           
+
+● Update(tests/integration.nix)
+  ⎿  Added 12 lines, removed 8 lines
+      453      echo "$OUT" | grep -o "FORENSICS:.*" || echo "$OUT"       
+      454    '';                                                         
+      455                                                                
+      456 -  # One-shot probe: stats.combat proves the raiders ACTED —   
+      456 +  # One-shot probe: stats.combat proves the raiders MARCHED — 
+      457    # hostileMoves >= 1 (a raider changed position: the armed   
+           brain                                                         
+      458 -  # drives movement) AND damageTaken >= 1 (own creep or       
+          -structure hit                                                 
+      459 -  # points dropped: it landed a blow). Both counters are      
+          -cumulative                                                    
+      460 -  # diffs latched by the shell, so the whole fight resolving  
+          -inside a                                                      
+      461 -  # few 50ms ticks cannot hide it from a seconds-granularity  
+          -poll.                                                         
+      462 -  # This is the probe the scarecrow could never pass: a       
+          -stationary                                                    
+      463 -  # target moved nothing and damaged nothing.                 
+      464 -  pollRaiderActed = writeShellScript "poll-raider-acted" ''   
+      458 +  # drives movement). The counter is a cumulative diff        
+          +latched by the                                                
+      459 +  # shell, so the whole fight resolving inside a few 50ms     
+          +ticks cannot                                                  
+      460 +  # hide it from a seconds-granularity poll. This is the      
+          +probe the                                                     
+      461 +  # scarecrow could never pass: a stationary target moves     
+          +nothing.                                                      
+      462 +  # damageTaken is printed but NOT asserted: the live run     
+          +demonstrated                                                  
+      463 +  # the tower downs both raiders at spawn range 1 before a    
+          +blow lands                                                    
+      464 +  # (forensics: tombstones adjacent to the spawn, damageTaken 
+          + 0) —                                                         
+      465 +  # raider damage is not a fact this world produces. The      
+          +arc's                                                         
+      466 +  # remaining links are carried by the tower trace (engaged), 
+      467 +  # hostilesDowned (cleared), and roleCounts.defender         
+          +(answered).                                                   
+      468 +  pollRaiderMarched = writeShellScript "poll-raider-marched"  
+          +''                                                            
+      469      set -euo pipefail                                         
+      470      TOKEN=$(${curl}/bin/curl -sS -X POST                      
+           "${url}/api/auth/signin" \                                    
+      471        -H "Content-Type: application/json" \                   
+
+● Update(tests/integration.nix)
+  ⎿  Added 1 line, removed 1 line
+      482      echo "combat: $(printf '%s' "$C" | ${jq}/bin/jq -c \      
+      483        '{hostileMoves, damageTaken, hostilesDowned}')"         
+      484      printf '%s' "$C" | ${jq}/bin/jq -e '                      
+      485 -      .hostileMoves >= 1 and .damageTaken >= 1                
+      485 +      .hostileMoves >= 1                                      
+      486      ' > /dev/null                                             
+      487    '';                                                         
+      488                                                                
+
+● Now the testScript side — the call site and its comment still speak the old
+  claim.
+
+  Read 1 file (ctrl+o to expand)
+
+● Update(tests/integration.nix)
+  ⎿  Added 3 lines, removed 3 lines
+      961      with subtest("live raiders attack and the colony          
+           answers"):                                                    
+      962          # Insert two 50-part tank raiders driven by the       
+           generated                                                     
+      963          # invader brain (the "raiders" NPC's users.code),     
+           then prove the whole arc                                      
+      964 -        # from durable evidence: the raiders ACTED            
+          - (stats.combat —                                              
+      965 -        # moved and landed blows:                             
+          -the probe the scarecrow could never                           
+      966 -        # pass),                                              
+          -the defense ENGAGED (tower trace hostile*/attack/rc=0),       
+      964 +        # from durable evidence: the raiders MARCHED          
+          + (stats.combat                                                
+      965 +        # hostileMoves — the probe the scarecrow could never  
+          + pass),                                                       
+      966 +        #                                                     
+          +the defense ENGAGED (tower trace hostile*/attack/rc=0),       
+      967          # the threat CLEARED with the kills OBSERVED          
+           (hostilesDowned >=                                            
+      968          # 2 and hostiles == 0), the threat-conditional        
+           defender spawn                                                
+      969          # FIRED (a defender exists at all only because the    
+           spawn walk                                                    
+
+● Update(tests/integration.nix)
+  ⎿  Added 2 lines, removed 2 lines
+      990              time.sleep(1)                                     
+      991          deadline = time.time() + 120                          
+      992          while True:                                           
+      993 -            status, out = machine.execute("${pollRaiderActed  
+          -} 2>&1")                                                      
+      993 +            status, out = machine.execute("${pollRaiderMarched
+          +} 2>&1")                                                      
+      994              print(f">>> poll: {out.strip()}")                 
+      995              if status == 0:                                   
+      996 -                print(">>> SUCCESS: raiders marched and dealt 
+          -damage (combat counters latched)")                            
+      996 +                print(">>> SUCCESS: raiders marched on the    
+          +spawn (hostileMoves latched)")                                
+      997                  break                                         
+      998              if time.time() > deadline:                        
+      999                  print(">>> TIMEOUT — forensics at time of     
+           death:")                                                      
+
+● Update(tests/integration.nix)
+  ⎿  Added 1 line, removed 1 line
+      1001                  print(f">>> forensics[final]:                
+            {out.strip()}")                                              
+      1002                  print(">>> TIMEOUT — server log tail for     
+            diagnosis:")                                                 
+      1003                  print(machine.succeed("journalctl -u screeps 
+             --no-pager | tail -n 100"))                                 
+      1004 -                raise Exception("timed out waiting for raider
+           - movement + damage in stats.combat")                         
+      1004 +                raise Exception("timed out waiting for raider
+           + movement in stats.combat")                                  
+      1005              time.sleep(2)                                    
+      1006          deadline = time.time() + 120                         
+      1007          while True:                                          
+
+  Searched for 1 pattern (ctrl+o to expand)
+
+● Clean sweep — no stale references. Here's the capture, on the record:
+
+  tests/integration.nix
+  - pollRaiderActed → pollRaiderMarched (tests/integration.nix:477): asserts
+  hostileMoves >= 1 only. damageTaken still printed every poll for the eye, just
+   not sworn to.
+  - Probe comment now testifies to what run #5 demonstrated: tower downs both
+  raiders at spawn range 1 before a blow lands — raider damage is not a fact
+  this world produces. The arc's links each have their own witness: marched
+  (hostileMoves), engaged (tower trace hostile*/attack/rc=0), cleared
+  (hostilesDowned>=2 + hostiles==0), answered (roleCounts.defender>=1), standing
+   (colony intact).
+  - testScript comment, success line, and timeout message all re-sworn to match.
+
+  And one thing stays on the docket, 'cause I don't bury evidence: with
+  damageTaken off the stand, the raider's offense — razing, the actual attack
+  call — is now unproven by any check. The FSM oracle sweep covers the brain's
+  policy, but no live witness ever saw a raider land a hit. That's the
+  flight-recorder case, filed for later if you ever want it. Today, the test
+  tells the truth about the world we have.
+
+  Your move: run the itest when ready — this time pollRaiderMarched passes on
+  the same evidence run #5 already produced, and the trial proceeds to the tower
+   trace and the defender.
+
+✻ Crunched for 2m 8s
+
+❯ why is damageTaken off the stand?                                             
+● Because you ruled run #5 a successful run and told me to test against the data
+   it produced — and damageTaken: 0 is what it produced. A probe that demands a
+  fact the world doesn't deliver isn't a check, it's a hunger strike. That's the
+   ruling I executed.
+
+  But you're cross-examining the right witness, so let me show you what's under
+  the ruling, 'cause I don't fully like it either.
+
+  The arithmetic doesn't acquit the zero. I wrote "the tower downs them before a
+   blow lands" — run the numbers and that story gets shaky:
+
+  - 50-part tank ≈ 5000 hits. Tower max 600 dmg/tick, ONE target per tick.
+  Raider-1 dies no earlier than tick ~9; raider-2 no earlier than ~17.
+  - They reached spawn range 1 after 2 diagonal steps each. Even with fatigue
+  slowing the march, raider-2 plausibly stood adjacent to that spawn for several
+   ticks.
+  - Armor doctrine puts the ATTACK part at the tail — damage strips from the
+  front, so the sword survives until near death. Several ticks × 30 dmg/ATTACK =
+   the spawn should've lost something. It lost nothing (attacked: null, hits
+  full).
+
+  And there's a fingerprint. hostileMoves: 4 — exactly 2 moves per raider, then
+  stillness. The march to the spawn proves FIND_HOSTILE_SPAWNS works. But if
+  findInRange(FIND_HOSTILE_STRUCTURES, 1) came back empty at adjacency, the
+  event stays noFoeNoStructSpawn → stuck in marching, moveTo a spawn it's
+  already touching — moves nothing, swings nothing, stands there getting shot
+  till it dies. That fits every number on the table. The alternative — razing
+  fired and the attack intent got rejected — fits too, and only a per-tick
+  record distinguishes them.
+
+  So here's my honest testimony: off the stand ≠ acquitted. I executed your
+  ruling, but my own church whispers this is the thing CLAUDE.md forbids —
+  softening a check around what might be a live bug in the raider's attack path.
+   Two clean options:
+
+  1. Ship as-is — the arc test is real (marched/engaged/cleared/answered are all
+   independently witnessed), raider offense stays an open case.
+  2. Flight recorder first — per-tick {t, event, fsm, rc} into memory:raiders
+  (latches past death, forensics already dumps it), one itest run tells us
+  marching-stuck vs rc-rejected, we fix the actual bug, and damageTaken >= 1
+  goes BACK on the stand as the stronger oath.
+
+  I argued option 1 was your instruction. If what you meant was "capture the
+  arc, don't abandon the damage question" — say the word and I write the
+  recorder. Which is it?
+
+✻ Sautéed for 1m 9s
+
+❯ ship as is, strengthening test is it's own task.                              
+
+● Ruling accepted. Filing it so it doesn't vanish into the fog.
+
+● One line for the case file too, so a future session doesn't re-litigate it
+  from scratch.
+
+  Wrote 1 memory (ctrl+o to expand)
+
+● Docket's set:
+
+  - Task #6 filed: flight recorder in shell/invader.ts → discriminate
+  marching-stuck vs rc-rejected → fix the real bug → damageTaken >= 1 back on
+  the stand. Full evidence chain in the task description and the case file, so
+  nobody re-litigates from zero.
+  - Shipping now: pollRaiderMarched asserts hostileMoves >= 1, damage printed as
+   courtesy testimony, the other four arc links each sworn by their own witness.
+
+  The test as written passes on the exact evidence run #5 produced, then
+  proceeds to tower trace → threat cleared → defender → colony intact. Fire the
+  itest when you're ready — that's your trigger to pull, same as the last two.
+
+✻ Cogitated for 35s
+
+❯ give me the commit message for this commit                                    
+
+● Let me see what's actually on the docket before I put words on it.
+
+● Bash(git status && git diff --stat && git diff --stat --cached)
+  ⎿  On branch 11-attack-defense
+     Changes to be committed:
+       (use "git restore --staged <file>..." to unstage)
+     … +17 lines (ctrl+o to expand)
+
+● Staged docket: the whole Act 3 arc — seed jq (raiders user + uid-2 stub),
+  combat telemetry in shell/main.ts + memory.d.ts, invader comment retargets,
+  and the itest raid subtests. Here's the message, in house style:
+
+  live raider arc: dedicated "raiders" NPC user + stats.combat telemetry +
+    itest proves marched→engaged→cleared→defender→intact
+
+  The engine special-cases uid-2 creeps (drives them with its own invader
+  AI; seeded users.code never runs) — so the flake now seeds a dedicated
+  "raiders" user carrying the invader bundle, plus an empty uid-2 stub so
+  the runner stops spamming "Unknown module 'main'". User docs REQUIRE
+  meta{} (LokiJS update throws without); `active` is server-managed, so
+  the raider surgery re-arms active:10000 in the same CLI session.
+
+  Shell latches cumulative stats.combat (hostileMoves/damageTaken/
+  hostilesDowned) so a <1s fight survives seconds-granularity polls.
+  pollRaiderMarched asserts hostileMoves only: the tower downs both
+  raiders at spawn range 1 with damageTaken 0 — raider offense is an
+  open case (flight recorder + reinstating damageTaken>=1 is its own
+  task), the arc's other links each have their own durable witness.
+
+  One flag before you swing the gavel: .claude/settings.local.json is riding in
+  this staging area. That's your local permissions file — you sure you want it
+  in a commit about raiders? Your call; everything else belongs.
+
+✻ Cogitated for 36s
+
+❯ produce prompt for the next step                                              
+
+● Next step on the docket is Task #6 — the raider offense case. Let me match the
+   house prompt format first.
+
+  Read 1 file (ctrl+o to expand)
+
+● Write(docs/session-prompt-raider-offense.md)
+  ⎿  User rejected update to docs/session-prompt-raider-offense.md
+      1 -# Session prompt: the raider offense case — escalating waves    
+        -until blood lands                                               
+      1 +# Session prompt: the raider offense case — flight recorder,    
+        +verdict, stronger oath                                          
+      2                                                                  
+      3  ## Problem                                                      
+      4                                                                  
+     ...
+      20  - `hostileMoves: 4` = 2 moves per raider, then **stillness**.  
+      21  - `memory:raiders` = `{"raiders":{}}` — brain ran, dead names  
+          pruned.                                                        
+      22                                                                 
+      23 -Two suspects, externally indistinguishable so far:             
+      23 +The arithmetic does NOT acquit the zero: a 50-part tank ≈ 5000 
+         + hits,                                                         
+      24 +tower ≤600 dmg/tick to ONE target, ATTACK part tail-protected  
+         +by armor                                                       
+      25 +doctrine (damage strips from the front) — raider-2 plausibly   
+         +stood at                                                       
+      26 +range 1 for several ticks with its sword intact and swung      
+         +nothing. This                                                  
+      27 +smells like a live bug, not physics.                           
+      28                                                                 
+      29 +Two suspects, externally indistinguishable:                    
+      30 +                                                               
+      31  - **(A) Struct fact misfire**:                                 
+          `findInRange(FIND_HOSTILE_STRUCTURES, 1)`                      
+      32 -  empty at adjacency (while `FIND_HOSTILE_SPAWNS` demonstrably 
+         - works —                                                       
+      33 -  the march proves it). Event stays `noFoeNoStructSpawn` →     
+         -stuck in                                                       
+      34 -  `marching`, moveTo a spawn it's already touching: moves      
+         -nothing,                                                       
+      35 -  swings nothing, dies.                                        
+      32 +  returns empty at adjacency (while `FIND_HOSTILE_SPAWNS`      
+         +demonstrably                                                   
+      33 +  works — the march proves it). Event stays                    
+         +`noFoeNoStructSpawn` →                                         
+      34 +  stuck in `marching`, moveTo a spawn it's already touching:   
+         +moves                                                          
+      35 +  nothing, swings nothing, dies. Fits every number on the      
+         +table.                                                         
+      36  - **(B) Intent rejection**: `razing` fires,                    
+          `creep.attack(spawn)` is                                       
+      37 -  called, the engine rejects or drops the intent (rc != 0, or  
+         -rc 0                                                           
+      38 -  discarded downstream).                                       
+      37 +  called, and the engine rejects the intent (rc != 0) for the  
+         +seeded                                                         
+      38 +  NPC user.                                                    
+      39                                                                 
+      40  The fight resolves in <1s of real time at 50ms ticks —         
+          external CLI                                                   
+      41 -sampling can NEVER see it (proven twice). Internal instruments 
+         - only.                                                         
+      41 +sampling can NEVER see it. Wrong instrument, proven twice now. 
+         + The                                                           
+      42 +answer is the same one that cracked the tower one-shot case: a 
+         + flight                                                        
+      43 +recorder.                                                      
+      44                                                                 
+      45 -## The test design (user ruling)                               
+      46 -                                                               
+      47 -**Escalating waves.** The itest does not assume any fixed      
+         -raider count                                                   
+      48 -is enough — it escalates force until damage happens:           
+      49 -                                                               
+      50 -1. Insert **1 raider**. Let the wave resolve (all raiders of   
+         -the wave                                                       
+      51 -   downed — cumulative `hostilesDowned` reaches the expected   
+         -running                                                        
+      52 -   total). Check `stats.combat.damageTaken`.                   
+      53 -2. Zero damage? Insert **2**. Resolve, check. Then 3, then n,  
+         -then                                                           
+      54 -   **n+1 — until damage lands.**                               
+      55 -3. The moment `damageTaken >= 1` latches: offense PROVEN,      
+         -proceed to                                                     
+      56 -   the rest of the arc (engaged / cleared / defender /         
+         -intact).                                                       
+      57 -4. A wave **cap** bounds the ordeal (melee raiders need        
+         -adjacent tiles;                                                
+      58 -   the spawn's adjacency ring has at most 8 slots minus        
+         -terrain — cap                                                  
+      59 -   ≤ 8 is the natural ceiling; decide in session, as a named   
+         -test                                                           
+      60 -   constant, not magic). Cap reached with zero damage = the    
+         -probe                                                          
+      61 -   FAILS and the attack path is convicted by exhaustion.       
+      62 -                                                               
+      63 -Why this design is sound: the tower processes ONE target per   
+         -tick at                                                        
+      64 -≤600 dmg. If the sword works at all, some n saturates that     
+         -throughput —                                                   
+      65 -survivors stand adjacent with tail-protected ATTACK parts and  
+         -blood                                                          
+      66 -MUST land. If NO n draws blood, no physics excuse remains: the 
+         - bug is                                                        
+      67 -proven, and the flight recorder (Act 1) names the statute.     
+      68 -                                                               
+      45  ## Plan                                                        
+      46                                                                 
+      47  ### Act 1 — instrument (hands-layer telemetry, no policy)      
+     ...
+       65  Add a flight recorder to shell/invader.ts, the exact          
+           `Memory.trace`                                                
+       66  precedent from the colony shell:                              
+       67                                                                
+       68 -- Per raider, record `{t, event, fsm, rc}` into the raiders   
+          -user's                                                        
+       69 -  memory — **append-on-change ONLY** (user ruling): a new     
+          -entry is                                                      
+       70 -  written only when `{event, fsm, rc}` differs from that      
+          -raider's last                                                 
+       71 -  recorded entry; a steady state is one line, not one per     
+          -tick (the                                                     
+       72 -  colony Memory.trace discipline exactly). It must LATCH PAST 
+          - DEATH                                                        
+       73 -  (do not prune a dead raider's trace with its FSM entry; the 
+          - trace is                                                     
+       74 -  the tombstone that talks).                                  
+       68 +- Per raider per tick, record `{t, event, fsm, rc}` into the  
+          +raiders                                                       
+       69 +  user's memory. Ring-buffer or append-on-change — small, but 
+          + it must                                                      
+       70 +  LATCH PAST DEATH (do not prune a dead raider's trace with   
+          +its FSM                                                       
+       71 +  entry; the trace is the tombstone that talks).              
+       72  - The loop currently DISCARDS `execute()`'s return            
+       73 -  (`ScreepsReturnCode | null`) — capture it. Ordering note:   
+          -memory is                                                     
+       73 +  (`ScreepsReturnCode | null`) — capture it. Note ordering:   
+          +memory is                                                     
+       74    written before execute today; the rc must be recorded AFTER 
+            execute.                                                     
+       75 -- Extend the `Memory.raiders`/trace declaration in            
+          -shell/memory.d.ts                                             
+       76 -  (tsc is the witness that shell and shape agree).            
+       75 +- Extend the `Memory.raiders`/trace declaration in            
+          +shell/memory.d.ts to                                          
+       76 +  match (tsc is the witness that shell and shape agree).      
+       77  - tests/integration.nix `forensicsRaiders` already dumps      
+       78 -  `memory:raiders` — widen the `.slice(0, 400)` if the trace  
+          -needs                                                         
+       79 -  room. The itest inherits the new bundle through the flake   
+          -seed step                                                     
+       80 -  automatically; the dev world needs reseed or users.code     
+          -surgery                                                       
+       81 -  (user's call).                                              
+       78 +  `memory:raiders` — widen the `.slice(0, 400)` if the trace  
+          +needs the                                                     
+       79 +  room. Zero other plumbing: the itest inherits the new       
+          +bundle through                                                
+       80 +  the flake seed step automatically.                          
+       81                                                                
+       82 -### Act 2 — the wave protocol in the itest                    
+       82 +### Act 2 — verdict (one run, two possible convictions)       
+       83                                                                
+       84 -Rework the raid subtest in tests/integration.nix:             
+       84 +Run the itest (user's trigger — the VM run is cheap/fast).    
+          +Read the                                                      
+       85 +trace in the forensics frames:                                
+       86                                                                
+       87 -- Parameterize the insertion surgery by wave size and wave    
+          -index                                                         
+       88 -  (unique names, e.g. `raider-w<wave>-<i>`; spread insert     
+          -positions so                                                  
+       89 -  raiders don't fight for the same approach tile).            
+       90 -- Python wave loop: insert wave n → poll wave resolution      
+          -(cumulative                                                   
+       91 -  `hostilesDowned` == sum of all wave sizes so far) → check   
+       92 -  `damageTaken` → break on blood, escalate on zero, fail at   
+          -cap with                                                      
+       93 -  the recorder dumped in the diagnosis.                       
+       94 -- Downstream probes adjust to cumulative arithmetic:          
+       95 -  `pollThreatCleared`'s `hostilesDowned >= 2` becomes the     
+          -computed                                                      
+       96 -  running total + `hostiles == 0`; defender spawn may fire    
+          -during any                                                    
+       97 -  wave (threat is threat); `pollColonyIntact` unchanged at    
+          -the end.                                                      
+       98 -- Print forensics between waves — each wave is also a         
+          -recorder run,                                                 
+       99 -  so even the PASSING trial documents which n drew first      
+          -blood and                                                     
+      100 -  what the losing waves' FSMs were doing.                     
+       87 +- `fsm: marching` forever ⇒ **(A)**, observation bug.         
+          +Investigate how                                               
+       88 +  this engine build answers `FIND_HOSTILE_STRUCTURES` at      
+          +adjacency for                                                 
+       89 +  a seeded NPC — consult the vendored server source UPSTREAM  
+          +(npm/                                                         
+       90 +  GitHub), never /nix/store. Fix in the shell observation (or 
+          + spec, if                                                     
+       91 +  the vocabulary is wrong) — wherever the actual fault lies.  
+       92 +- `fsm: razing, rc: <nonzero>` ⇒ **(B)**, intent rejection.   
+          +The rc                                                        
+       93 +  names the statute (ERR_NO_BODYPART, ERR_INVALID_TARGET,     
+          +...);                                                         
+       94 +  investigate engine intent processing for the seeded user.   
+       95 +- `fsm: razing, rc: 0`, still no damage ⇒ engine processed    
+          +the intent                                                    
+       96 +  and discarded it downstream — server-doctor territory, dig  
+          +into the                                                      
+       97 +  processor.                                                  
+       98                                                                
+       99 -### Act 3 — verdict and the stronger oath                     
+       99 +Fix the REAL bug. Never weaken a check to route around it —   
+          +that                                                          
+      100 +ruling was already made once, explicitly, as a scoped         
+          +deferral, not a                                               
+      101 +precedent.                                                    
+      102                                                                
+      103 -- **Blood at some n ≤ cap**: offense proven. The probe        
+          -asserts                                                       
+      104 -  `damageTaken >= 1` (the movement-only oath is retired).     
+          -Read the                                                      
+      105 -  recorder anyway: if waves 1..n-1 show `marching` stuck at   
+          -adjacency                                                     
+      106 -  or nonzero rc, that's a real bug worth a fix even though    
+          -brute force                                                   
+      107 -  eventually landed — file it honestly, fix in the correct    
+          -layer                                                         
+      108 -  (spec if vocabulary, shell if projection).                  
+      109 -- **Cap with zero damage**: the recorder discriminates —      
+      110 -  `fsm: marching` forever ⇒ (A) observation bug; `razing, rc  
+          -!= 0` ⇒                                                       
+      111 -  (B) named by the code; `razing, rc: 0` with no damage ⇒     
+          -engine                                                        
+      112 -  drops the processed intent — server-doctor digs into the    
+          -vendored                                                      
+      113 -  engine via UPSTREAM source (npm/GitHub), never /nix/store.  
+          -Fix the                                                       
+      114 -  real bug, rerun the ordeal. Never weaken a check to route   
+          -around it.                                                    
+      103 +### Act 3 — reinstate the stronger oath                       
+      104                                                                
+      105 +With raiders provably swinging:                               
+      106 +                                                              
+      107 +- Restore `damageTaken >= 1` to the probe (rename back toward 
+      108 +  `pollRaiderActed` — the test should claim exactly what it   
+          +checks).                                                      
+      109 +- Correct the probe comment: "raider damage is not a fact     
+          +this world                                                    
+      110 +  produces" dies the moment it becomes one.                   
+      111 +- Decide whether the recorder stays (precedent says yes: the  
+          +colony's                                                      
+      112 +  trace is permanent telemetry and the itest reads it) — if   
+          +it stays,                                                     
+      113 +  it is part of the telemetry contract; document it as such.  
+      114 +                                                              
+      115  ### Opportunistic (only if elbow-deep already)                
+      116                                                                
+      117  - tests/fsm-behavior.ts has NO oracle sweep for the invader   
+           machine —                                                     
+     ...
+      132    expression per line — no semicolons, no for-loops; errors   
+           are often                                                     
+      133    SILENT (add `.catch(e => "ERR:" + ...)` + marker grep).     
+      134  - `forensicsRaiders` (tests/integration.nix): raider          
+           positions/hits/                                               
+      135 -  actionLog.attack + spawn hits/attacked + `memory:raiders`.  
+      135 +  actionLog.attack + spawn hits/attacked + `memory:raiders`,  
+          +printed                                                       
+      136 +  10× during the fight and once at timeout.                   
+      137  - Full NPC-user case file (engine uid-2 curse, seeded-user    
+           recipe,                                                       
+      138 -  server-managed `active` re-armed at insertion, CLI quirks): 
+          - session                                                      
+      139 -  memory topic `screeps-npc-user.md`. The wave surgery must   
+          -keep the                                                      
+      140 -  `active: 10000` re-arm in every wave's CLI session.         
+      141 -- Tick knob 50ms: each wave resolves in ~1s wall-clock; the   
+          -wave loop's                                                   
+      142 -  poll budgets stay small.                                    
+      138 +  server-managed `active`, CLI quirks): the session memory    
+          +topic                                                         
+      139 +  `screeps-npc-user.md`.                                      
+      140 +- Dev world picks up a new invader bundle only on reseed      
+      141 +  (`reset-local`, user's call) or CLI users.code surgery; the 
+          + itest                                                        
+      142 +  needs neither.                                              
+      143                                                                
+      144  ## Constraints                                                
+      145                                                                
+      146  - Brain/hands law: the recorder is hands-layer TELEMETRY      
+           (Memory.stats                                                 
+      147 -  church), not policy. Wave escalation is TEST protocol       
+          -(world surgery                                                
+      148 -  + probes), not brain policy — the invader brain stays       
+          -deterministic                                                 
+      149 -  and dumb; the test varies force, not behavior.              
+      147 +  church), not policy. If the bug is in the event vocabulary, 
+          + the fix                                                      
+      148 +  is dox/invader/invader.dox; if in observation projection,   
+      149 +  shell/invader.ts. Enemy stays world content.                
+      150  - `Memory.stats`/trace shapes and tests/integration.nix       
+           probes change                                                 
+      151    together.                                                   
+      152  - Never hand-edit generated/ or vendor/; never read           
+           /nix/store.                                                   
+      153  - Cheap checks freely (`paradox check --path dox`, typecheck, 
+      154    fsm-behavior). `.#itest` boots a VM — the user runs it      
+           (established                                                  
+      155    pattern; it's fast). `reset-local` is the user's call.      
+      156 -- Probes must be able to FAIL — the cap is what keeps the     
+          -ordeal                                                        
+      157 -  honest.                                                     
+      156 +- Probes must be able to FAIL — the reinstated damage         
+          +assertion is the                                              
+      157 +  point of the whole session.                                 
+      158                                                                
+      159  ## Result                                                     
+      160                                                                
+      161 -- A per-tick record of what the raider brain saw, decided,    
+          -and got                                                       
+      162 -  back from the engine — durable past death, readable by      
+          -existing                                                      
+      163 -  forensics.                                                  
+      164 -- An itest that finds the MINIMUM force that draws blood and  
+          -asserts                                                       
+      165 -  `damageTaken >= 1` at it — offense proven by escalation, or 
+          - the                                                          
+      166 -  attack path convicted by exhaustion with the recorder       
+          -naming the                                                    
+      167 -  root cause.                                                 
+      168 -- The full arc, no link on faith: raiders moved AND drew      
+          -blood, the                                                    
+      169 -  defense answered, the threat cleared, the defender stood    
+          -up, the                                                       
+      170 -  colony healed.                                              
+      161 +- A per-tick record of what the raider brain saw, decided,    
+          +and got back                                                  
+      162 +  from the engine — durable past death, readable by existing  
+          +forensics.                                                    
+      163 +- The zero-damage mystery CLOSED with a named root cause and  
+          +a fix in                                                      
+      164 +  the correct layer.                                          
+      165 +- `damageTaken >= 1` back on the stand: the itest proves the  
+          +raiders                                                       
+      166 +  moved AND drew blood, the defense answered, the colony      
+          +healed — no                                                   
+      167 +  link asserted on faith.                                     
+      168                                                                
+      169  ## Files                                                      
+      170                                                                
+
+❯ almost, except the raider damage test needs to work like this, you create 1   
+raider, raider dies without giving damage. then 2 are made, not enough? okay    
+three then n then n + 1 until damage happens                                    
+
+● Write(docs/session-prompt-raider-offense.md)  ⎿  Wrote 173 lines to docs/session-prompt-raider-offense.md
+     # Session prompt: the raider offense case — escalating waves until
+     blood lands
+
+     ## Problem
+
+     The live-raider arc is green (branch 11-attack-defense): raiders
+     marched,
+     tower engaged, threat cleared, defender spawned, colony intact — every
+     link independently witnessed. But one charge was left on the docket,
+     by
+     explicit ruling: **the raider's offense is unproven.** No live
+     evidence
+     has ever shown a raider landing a blow, and the itest currently swears
+     only to movement (`pollRaiderMarched`: `hostileMoves >= 1`;
+     … +163 lines (ctrl+o to expand)
+
+  Wrote 1 memory (ctrl+o to expand)
+
+● Docket sealed, three witnesses in agreement:
+
+  - docs/session-prompt-raider-offense.md — the full brief: escalating-wave
+  ordeal (1, 2, 3, ... n+1 until blood; cap ≤ 8 = the spawn's adjacency ring;
+  cap + zero damage = attack path convicted by exhaustion), flight recorder as
+  Act 1, verdict tree as Act 3, house constraints intact.
+  - Task #6 — updated to the wave design, points at the prompt.
+  - Case file (screeps-npc-user.md) — the ruling recorded so no future session
+  re-litigates.
+
+  And I'll give your design its due on the record: it's stronger than my
+  recorder-first plan. Mine diagnosed; yours diagnoses AND self-heals — if the
+  sword works, escalation finds the minimum force that proves it, no bug-hunt
+  required; if it doesn't, the failure is a proof, not a timeout. The recorder
+  rides along as the coroner either way.
+
+  Next session opens with that prompt. This session's commit stands as discussed
+   — swing when ready.
+
+✻ Cooked for 1m 38s
+
+❯ only when the per raider per tick record changes should it be recorded        
+
+● Change-only it is — same discipline as the colony's trace: append when {event,
+   fsm, rc} differs from the raider's last entry, silence otherwise. A raider
+  chewing a spawn for 10 ticks is ONE line, not ten. Amending both records.
+
+● Update(docs/session-prompt-raider-offense.md)
+  ⎿  Added 7 lines, removed 4 lines
+      65  Add a flight recorder to shell/invader.ts, the exact           
+          `Memory.trace`                                                 
+      66  precedent from the colony shell:                               
+      67                                                                 
+      68 -- Per raider per tick                                          
+         -, record `{t, event, fsm, rc}` into the raiders                
+      69 -  user's memory. Ring-buffer or append-on-change — small, but  
+         -it must                                                        
+      70 -  LATCH PAST DEATH (do not prune a dead raider's trace with    
+         -its FSM                                                        
+      71 -  entry; the trace is the tombstone that talks).               
+      68 +- Per raider, record `{t, event, fsm, rc}` into the raiders    
+         + user's                                                        
+      69 +  memory — **append-on-change ONLY** (user ruling): a new      
+         +entry is                                                       
+      70 +  written only when `{event, fsm, rc}` differs from that       
+         +raider's last                                                  
+      71 +  recorded entry; a steady state is one line, not one per tick 
+         + (the                                                          
+      72 +  colony Memory.trace discipline exactly). It must LATCH PAST  
+         +DEATH                                                          
+      73 +  (do not prune a dead raider's trace with its FSM entry; the  
+         +trace is                                                       
+      74 +  the tombstone that talks).                                   
+      75  - The loop currently DISCARDS `execute()`'s return             
+      76    (`ScreepsReturnCode | null`) — capture it. Ordering note:    
+          memory is                                                      
+      77    written before execute today; the rc must be recorded AFTER  
+          execute.                                                       
+
+● Both amended — prompt and task now carry the append-on-change ruling
+  explicitly, with the colony trace named as precedent. The trace stays small
+  enough that forensicsRaiders' memory dump reads the whole story without
+  widening, and every line in it means something: a transition, a new verdict
+  from the engine, or death. No filler testimony.
+
+  The next-session brief is complete. Anything else before you commit, or does
+  the gavel come down?
