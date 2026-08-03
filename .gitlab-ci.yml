@@ -94,6 +94,8 @@ checks:itest:
     - apps:secrix
     - packages:default
     - packages:generated
+    - packages:invader-main
+    - packages:raid-mod
     - packages:screeps-server
     - packages:secrix
   script:
@@ -145,6 +147,18 @@ packages:generated:
   needs: []
   script:
     - nix build .#packages.x86_64-linux.generated --no-link --print-build-logs
+  stage: build
+packages:invader-main:
+  needs:
+    - packages:generated
+  script:
+    - nix build .#packages.x86_64-linux.invader-main --no-link --print-build-logs
+  stage: build
+packages:raid-mod:
+  needs:
+    - packages:generated
+  script:
+    - nix build .#packages.x86_64-linux.raid-mod --no-link --print-build-logs
   stage: build
 packages:screeps-client:
   needs: []

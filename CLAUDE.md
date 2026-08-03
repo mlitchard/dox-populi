@@ -40,6 +40,7 @@ events to the generated brain, and makes Screeps API calls — nothing else.
   only.
 - `.gitlab-ci.yml` is generated: `nix run .#gitlab-ci > .gitlab-ci.yml`.
   Never edit it by hand.
+- NEVER use `wc`. Forbidden, no exceptions.
 
 ## Repo map
 

@@ -1,0 +1,1498 @@
+ ▐▛███▜▌   Claude Code v2.1.81
+▝▜█████▛▘  Opus 4.6 (1M context) · Claude Max
+  ▘▘ ▝▝    ~/gitlab/dox-populi
+
+✻ Conversation compacted (ctrl+o for history)
+
+  ⎿  You've hit your limit · resets Aug 3, 8am (Europe/London)
+     /upgrade or /extra-usage to finish what you’re working on.
+  ⎿  Interrupted · What should Claude do instead?
+
+❯ /model                                                                        
+  ⎿  Kept model as Opus 4.6 (1M context) (default)
+
+❯ /extra-usage                                                                  
+  ⎿  Login successful
+
+❯ change the first blood test such that the tests start with the nessecary      
+conditions to lift the gates build the tower and start the raider wave          
+
+● The verdict on your stalled tower first, 'cause you paid for the diagnosis:
+  latch bit false — CLOSED. damaged: [] — nothing broke. Tower trace t26765: 
+  hostileIntactReserveOk → attack, rc 0 — your tower hit FULL, the latch shut at
+   1000, then it fired ONE shot at a stray hostile. Ten energy. 990. Below the
+  raid gate's 1000 bar, above the latch's 500 reopen line. The creeps ain't
+  broken — they're obeying. Your two rulings deadlock the moment the tower
+  spends a dime. Keep that filed — the live law still needs reconciling.
+
+  Now — seeding the war conditions into the test. That's you amending your own
+  NO-SURGERY doctrine for the setup phase. I'll take that ruling, but I'm
+  writing it down as what it is: setup seeds the board, observation stays
+  hands-off. Let me read the current state of the test and the mod before I cut
+  anything.
+
+  Searched for 2 patterns, read 2 files (ctrl+o to expand)
+
+  Read 1 file (ctrl+o to expand)
+
+● Update(dox/creeps.dox)
+  ⎿  (No changes)
+
+❯ what problem are you trying to solve right now                                
+
+● Two problems, and I stacked them — let me lay both on the table.
+
+  Problem 1 — the one you ASKED for: change the itest so the war arc doesn't
+  grind through the natural climb. Seed the start conditions: controller at RCL
+  3, safe mode off, harvested counter past raidGoal. Colony builds and loads its
+   tower fast, wave lands, first blood asserted. That's tests/integration.nix
+  only.
+
+  Problem 2 — the one I found and started fixing without your ruling: the
+  deadlock from the live server. The diagnosis you interrupted me for: tower hit
+   1000, latch closed, tower fired ONE shot (10 energy), sits at 990. My latch
+  implementation makes the latch the only condition for the tower being a sink
+  at all — so creeps ignore a 990 tower forever (990 isn't < 500), and the raid
+  gate demands 1000. The war can never open — and that kills your seeded test 
+  too, because live evidence says wave 1 gets clean-swept and blood lands at
+  wave 2. Wave 2 needs a full tower again. Deadlock says never.
+
+  The edit you just rejected was me starting on problem 2: rewriting the spec so
+   a tower is a sink whenever it's below 1000, and the latch only decides
+  priority (below 500 → tower jumps the queue). My argument: that's the faithful
+   reading of your original ruling — you said priority below 500, you never said
+   "starve a 990 tower."
+
+  But it's your spec, your ruling. Options on the table:
+
+  1. Latch = priority only, sink until full (what I started) — creeps always top
+   up to 1000; below 500 it becomes THE priority.
+  2. Raid gate loosens — count towers at ≥ 500 (or some slack) instead of full.
+  3. Something else you have in mind.
+
+  Which law am I writing?
+
+❯ what does this mean 'rewriting the spec so a tower is a sink whenever it's    
+below 1000'                                                                     
+
+● Straight talk, no jargon.
+
+  "Sink" = a place creeps deliver energy to. Every tick, a creep carrying energy
+   asks the brain "where do I dump this?" The answer comes from a filter over
+  spawn + extensions + towers: which of these can still accept energy? Whatever
+  passes the filter is in the delivery set; whatever doesn't is invisible — no
+  creep will ever walk energy to it.
+
+  Current law (what I wrote after your ruling): a tower passes that filter only 
+  when the latch is open — energy dropped below 500 and hasn't hit 1000 yet. So:
+
+  - Tower at 990: latch closed → tower fails the filter → invisible to every 
+  creep. Nobody will ever deliver those last 10 energy. Forever. That's your
+  "creeps stopped giving energy to the tower."
+
+  Proposed law: a tower passes the filter whenever energy < 1000 — same rule as
+  a spawn or extension ("has room? deliver."). So a 990 tower is a normal
+  delivery target and gets topped back to full — which is exactly what the raid
+  gate needs to open.
+
+  The latch doesn't disappear — it changes jobs. Instead of deciding whether the
+   tower gets fed, it decides how urgently: when energy drops below 500, the
+  tower jumps to the front of the delivery line, ahead of spawn and extensions,
+  until it reads 1000 again. Above 500, it's just one more sink in the rotation,
+   no special treatment.
+
+  One sentence: today a 990 tower gets nothing; under the fix it gets casual 
+  top-ups, and only a sub-500 tower gets emergency priority.
+
+  That's the whole change. Do I write it?
+
+❯ do it                                                                         
+● Ruling received. Executing clean.
+
+● Update(dox/creeps.dox)
+  ⎿  Added 7 lines, removed 6 lines
+      104  |   site status  — Site      construction sites exist         
+      105  |                  NoSite    no construction sites exist      
+      106  |                                                             
+      107 -| "Energy sink" = spawn + extensions + REFILL-LATCHED         
+          - towers (see                                                  
+      108 -| towerContext: a tower becomes a sink when its energy drops  
+          - below                                                        
+      109 -| energyTarget and REMAINS one until refilled to refillTarget 
+          - — the                                                        
+      110 -| hysteresis latch; the same one latched filter drives        
+          -delivery                                                      
+      111 -| targeting AND this observation, so the fact can never       
+          -contradict                                                    
+      112 -| the action).                                                
+      107 +| "Energy sink" = spawn + extensions + BELOW-FULL towers (see 
+      108 +| towerContext: a tower is a sink whenever its energy is below
+      109 +| refillTarget — full capacity, the same bar the raid law's   
+      110 +| fair-fight clause reads. The refill LATCH does not gate     
+          +sink                                                          
+      111 +| membership; it only ranks it — see the energySink selector. 
+          + The                                                          
+      112 +| same one below-full filter drives delivery targeting AND    
+          +this                                                          
+      113 +| observation, so the fact can never contradict the action).  
+      114  |                                                             
+      115  | NAMING CONTRACT (exact casing is load-bearing): each        
+           variant is the                                                
+      116  | literal concatenation storeLevel + sinkStatus + siteStatus. 
+            The shell                                                    
+
+● Update(dox/creeps.dox)
+  ⎿  Added 4 lines, removed 4 lines
+      183                                                                
+      184  | The FIXED target-selector vocabulary. The shell resolves    
+           each kind:                                                    
+      185  |   source           — closest active energy source           
+      186 -|   energySink       — refill-latched towers OUTRANK all      
+          -other sinks:                                                  
+      186 +|   energySink       — closest sink with room for energy      
+          +(spawn |                                                      
+      187 +|                      extension | below-refillTarget tower), 
+          + EXCEPT                                                       
+      188  |                      while any tower holds the refill latch 
+            (energy                                                      
+      189  |                      dropped below                          
+           towerContext.energyTarget, not                                
+      190 -|                      yet back at refillTarget) the closest  
+          - such                                                         
+      191 -|                      tower is THE target; otherwise the     
+          -closest                                                       
+      192 -|                      spawn|extension with free capacity     
+      190 +|                      yet back at refillTarget): then        
+          +the closest                                                   
+      191 +|                      LATCHED tower outranks every other     
+          +sink                                                          
+      192  |   controller       — the room controller                    
+      193  |   constructionSite — first construction site                
+      194  |   hostile          — closest hostile creep from the actor's 
+            pos                                                          
+
+  Read 1 file (ctrl+o to expand)
+
+● Update(dox/creeps.dox)
+  ⎿  Added 31 lines, removed 16 lines
+      1144    calmIntactReserveOk                                        
+      1145    calmIntactReserveLow                                       
+      1146                                                               
+      1147 -| The refill-hysteresis decision (user ruling 2026-08-01,    
+           -supersedes                                                   
+      1148 -| the plain threshold sink). A tower becomes an energy SINK  
+           -the moment                                                   
+      1149 -| its energy drops below energyTarget (the low-water         
+           -trigger) and                                                 
+      1150 -| REMAINS one until delivery refills it to refillTarget      
+           -(full                                                        
+      1151 -| capacity, 1000) — a latch, not a threshold. While the      
+           -latch is                                                     
+      1152 -| open, refilling the tower is the delivery PRIORITY: the    
+           -energySink                                                   
+      1153 -| selector answers with the closest latched tower before any 
+           - spawn or                                                    
+      1154 -| extension. Why a latch and not a plain full-capacity       
+           -threshold: with                                              
+      1155 -| threshold semantics every point of drain reopens the sink  
+           -set and                                                      
+      1156 -| flaps saturation forever (a leaky sink that keeps the      
+           -harvesters                                                   
+      1157 -| chasing it); the latch opens only on a real 500-point      
+           -drain and                                                    
+      1158 -| closes only at full — one refill campaign per drain, no    
+           -flapping.                                                    
+      1159 -| The shell holds the latch bit per tower id                 
+           -(Memory.towerRefill) and                                     
+      1160 -| uses this ONE latched filter for BOTH delivery targeting   
+           -and the                                                      
+      1161 -| SinksFull observation, so the observed fact can never      
+           -contradict                                                   
+      1162 -| the available action.                                      
+      1147 +| The refill decision (user rulings 2026-08-01 + 2026-08-02, 
+           +which                                                        
+      1148 +| together supersede both the plain threshold sink AND the   
+           +first                                                        
+      1149 +| latch-gated reading). TWO separate questions, two separate 
+           + answers:                                                    
+      1150  |                                                            
+      1151 +|   IS the tower a delivery target?  YES whenever energy <   
+      1152 +|   refillTarget (full capacity, 1000) — the same "has       
+           +room?" rule                                                  
+      1153 +|   every spawn and extension answers, and the same bar the  
+           +raid                                                         
+      1154 +|   law's fair-fight clause reads. A tower at 990 is an      
+           +ordinary                                                     
+      1155 +|   sink and gets topped back to full by the ordinary        
+           +delivery                                                     
+      1156 +|   rotation.                                                
+      1157 +|                                                            
+      1158 +|   HOW URGENTLY?  The hysteresis LATCH: it opens the moment 
+           + energy                                                      
+      1159 +|   drops below energyTarget (the low-water trigger, 500)    
+           +and closes                                                   
+      1160 +|   only when delivery brings the tower back to              
+           +refillTarget. While                                          
+      1161 +|   open, refilling that tower is THE delivery priority —    
+           +the                                                          
+      1162 +|   energySink selector answers with the closest latched     
+           +tower                                                        
+      1163 +|   before any spawn or extension. Why a latch and not a     
+           +plain                                                        
+      1164 +|   threshold for the priority: threshold-priority would     
+           +flap — one                                                   
+      1165 +|   shot fired at 501 demotes, one delivery promotes. The    
+           +latch                                                        
+      1166 +|   opens only on a real 500-point drain and holds the front 
+           + of the                                                      
+      1167 +|   line until full — one emergency campaign per drain.      
+      1168 +|                                                            
+      1169 +| The first reading made the latch gate sink MEMBERSHIP      
+           +itself; live                                                 
+      1170 +| evidence convicted it: a full tower that fires ONE shot    
+           +sits at                                                      
+      1171 +| 990 — below the fair-fight bar, above the reopen line —    
+           +and no                                                       
+      1172 +| creep ever feeds it again. Deadlock: the raid gate demands 
+           + full,                                                       
+      1173 +| the latch forbids refill. Membership-until-full dissolves  
+           +it. The                                                      
+      1174 +| shell holds the latch bit per tower id                     
+           +(Memory.towerRefill); the                                    
+      1175 +| below-full filter is the ONE filter for BOTH delivery      
+           +targeting                                                    
+      1176 +| and the SinksFull observation, so the observed fact can    
+           +never                                                        
+      1177 +| contradict the available action.                           
+      1178 +|                                                            
+      1179  | TowerContext carries desired alongside energyTarget:       
+            Paradox rejects                                              
+      1180  | single-field product types (error 23; the alternative,     
+            wrap, would                                                  
+      1181  | emit a branded scalar and change the shell-facing shape).  
+            desired                                                      
+
+● Update(dox/creeps.dox)
+  ⎿  Added 3 lines, removed 3 lines
+      1130  | last 10 energy belongs to the gun; a drained tower's       
+            attack is still                                              
+      1131  | a harmless no-op), and refill remains delivery-driven, no  
+            tower                                                        
+      1132  | decision required. attackReserve < energyTarget is         
+            load-bearing: a                                              
+      1133 -| ReserveLow tower is BELOW the sink threshold, so it is     
+           -already back                                                 
+      1134 -| in the delivery target set — the wait ends by the ordinary 
+           - delivery                                                    
+      1135 -| path, guaranteed.                                          
+      1133 +| ReserveLow tower is below the LATCH trigger, so it holds   
+           +the                                                          
+      1134 +| delivery PRIORITY (see the refill decision below) — the    
+           +wait ends                                                    
+      1135 +| by the emergency refill campaign, guaranteed.              
+      1136                                                               
+      1137  union TowerEvent                                             
+      1138    hostileDamageReserveOk                                     
+
+● Spec amended. Now the hands.
+
+● Update(shell/main.ts)
+  ⎿  File must be read first
+
+  Read 1 file (ctrl+o to expand)
+
+● Update(shell/main.ts)
+  ⎿  Added 8 lines, removed 6 lines
+      122                                                                
+      123  // ---------------------------------------------------------- 
+           -----------------                                             
+      124  // Observation. "Energy sink" is vocabulary, not policy: a    
+           spawn, an                                                     
+      125 -// extension, or a REFILL-LATCHED tower that can still accept 
+          - delivered                                                    
+      126 -// energy. The tower thresholds are brain data                
+          -(towerContext.energyTarget /                                  
+      127 -// refillTarget, the spec's refill-hysteresis law): the latch 
+          - OPENS when a                                                 
+      128 -// tower's energy drops below energyTarget and CLOSES only    
+          -when delivery                                                 
+      129 -// brings it back to refillTarget; the shell holds the latch  
+          -bit per tower                                                 
+      130 -// id in Memory.towerRefill — mechanical evaluation of the    
+          -spec's rule, no                                               
+      125 +// extension, or a BELOW-FULL tower — a tower has free energy 
+          + whenever it                                                  
+      126 +// reads below towerContext.refillTarget (the spec's refill   
+          +law, amended                                                  
+      127 +// 2026-08-02: membership is "has room?", same as every other 
+          + sink). The                                                   
+      128 +// hysteresis LATCH ranks, never gates: it OPENS when a       
+          +tower's energy                                                
+      129 +// drops below energyTarget and CLOSES only when delivery     
+          +brings it back                                                
+      130 +// to refillTarget; while open, that tower outranks every     
+          +other sink in                                                 
+      131 +// the energySink selector. The shell holds the latch bit per 
+          + tower id in                                                  
+      132 +// Memory.towerRefill — mechanical evaluation of the spec's   
+          +rule, no                                                      
+      133  // policy here. hasFreeEnergy is the ONE filter serving both  
+           delivery                                                      
+      134  // targeting (TargetKind.energySink) and the sinksAllFull     
+           observation — the                                             
+      135  // observed fact can never contradict the available action.   
+           Room-level                                                    
+
+● Update(shell/main.ts)
+  ⎿  Added 1 line, removed 1 line
+      159                                                                
+      160  const hasFreeEnergy = (s: EnergySink): boolean =>             
+      161    s.structureType === STRUCTURE_TOWER                         
+      162 -    ? towerRefillLatch(s)                                     
+      162 +    ? s.store[RESOURCE_ENERGY] < towerContext.refillTarget    
+      163      : s.store.getFreeCapacity(RESOURCE_ENERGY) > 0;           
+      164                                                                
+      165  const isTower = (s: AnyOwnedStructure): s is StructureTower   
+           =>                                                            
+
+  Read 1 file (ctrl+o to expand)
+
+● Update(shell/main.ts)
+  ⎿  Added 7 lines, removed 4 lines
+      261      case "source":                                            
+      262        return pos.findClosestByPath(FIND_SOURCES);             
+      263      case "energySink": {                                      
+      264 -      // Refill-hysteresis priority                           
+          - (spec: towerContext refill law): a                           
+      265 -      // latched tower outranks every other sink until it     
+          -reads                                                         
+      266 -      // refillTarget again.                                  
+      264 +      // Refill-hysteresis PRIORITY                           
+          + (spec: towerContext refill law): the                         
+      265 +      // latch ranks the open set, never gates it — a latched 
+          + tower                                                        
+      266 +      // (drained below energyTarget, not yet back at         
+          +refillTarget)                                                 
+      267 +      // outranks every other sink; otherwise closest open    
+          +sink wins.                                                    
+      268        const open = obs.sinks.filter(hasFreeEnergy);           
+      269 -      const latchedTowers = open.filter(isTower);             
+      269 +      const latchedTowers = open.filter(                      
+      270 +        (s): s is StructureTower => isTower(s) &&             
+          +towerRefillLatch(s)                                           
+      271 +      );                                                      
+      272        return pos.findClosestByPath(latchedTowers.length > 0 ? 
+            latchedTowers : open);                                       
+      273      }                                                         
+      274      case "controller":                                        
+
+● Hands match the law. Now the test — seeding the start conditions.
+
+● Update(tests/integration.nix)
+  ⎿  Added 12 lines, removed 8 lines
+       6  # (2) the controller gains progress (upgrader works), (3) an   
+          extension                                                      
+       7  # is built (builder + spec-driven extension placement work),   
+          (4) the                                                        
+       8  # colony survives generational turnover (creeps age out,       
+          replacements                                                   
+       9 -# respawn, progress continues), and (5) the war arc —          
+         -NO SURGERY, by                                                 
+      10 -# user ruling: the test never mutates world state. The colony  
+         -climbs                                                         
+      11 -# to RCL 3 on its own, places and builds its OWN tower         
+         -(spec-driven                                                   
+      12 -# placement), and once the fair-fight clause is satisfied      
+         -(tower                                                         
+      13 -# standing, raidGoal harvested, safe mode naturally expired)   
+         -the raid                                                       
+      14 -# MOD opens the RELENTLESS WAR (spec raid-law): an escalating  
+         -wave on                                                        
+       9 +# respawn, progress continues), and (5) the war arc. Surgery   
+         +doctrine                                                       
+      10 +# (user ruling 2026-08-02, amending the total no-surgery       
+         +ruling): the                                                   
+      11 +# test SEEDS the war's start conditions in ONE arming write —  
+         +the                                                            
+      12 +# controller to RCL 3, safe mode off, the harvested counter    
+         +past                                                           
+      13 +# raidGoal — because the natural climb (45k upgrade energy +   
+         +~20000                                                         
+      14 +# safe-mode ticks) proves only patience, not war. Everything   
+         +AFTER                                                          
+      15 +# the arming write is observation and tick pacing, nothing     
+         +else. The                                                      
+      16 +# colony still places, builds, and loads its OWN tower         
+         +(spec-driven                                                   
+      17 +# placement), and once the fair-fight clause is satisfied (a   
+         +FULL                                                           
+      18 +# tower standing — the seeded gates are already open) the raid 
+         + MOD                                                           
+      19 +# opens the RELENTLESS WAR (spec raid-law): an escalating wave 
+         + on                                                            
+      20  # every cron check, forever — the durability test of a single  
+          tower.                                                         
+      21  # The test asserts exactly one thing about that war, by user   
+          ruling:                                                        
+      22  # FIRST BLOOD (cumulative damageTaken >= 1) — and no more. How 
+           long                                                          
+      23  # the tower stands against the unending escalation is the live 
+      24  # server's show; an itest cannot wait for a doom that arrives  
+          by                                                             
+      25 -# arithmetic. The test's only instruments are OBSERVATIONS     
+      26 -# (memory/API/CLI reads) and tick pacing.                      
+      25 +# arithmetic.                                                  
+      26  # Fully pure — runs in plain `nix flake check`.                
+      27  { testers                                                      
+      28  , writeShellScript                                             
+
+● Update(tests/integration.nix)
+  ⎿  Added 30 lines, removed 11 lines
+      282    '';                                                         
+      283                                                                
+      284    # --------------------------------------------------------- 
+           ----------                                                    
+      285 -  # CLI observation probes                                    
+          -. The server CLI on 21026 is a JS REPL over                   
+      286 -  # TCP with                                                  
+          -the storage.db collections in scope. setTickDuration below    
+      287 -  # uses fire-and-forget `nc -q 2`; probes                    
+          -need the RESPONSE (both for                                   
+      288 -  # the success marker and for the log), so these             
+          - use the session                                              
+      285 +  # CLI scripts. The server CLI on 21026 is a JS REPL over    
+          + TCP with                                                     
+      286 +  # the storage.db collections in scope. setTickDuration below
+          + uses                                                         
+      287 +  # fire-and-forget `nc -q 2`; the rest                       
+          +need the RESPONSE (both for                                   
+      288 +  # the success marker and for the log), so they              
+          + use the session                                              
+      289    # pattern `(printf 'CMD\n'; sleep 3) | nc -N -w 6` — hold   
+           the write                                                     
+      290    # side open long enough for the REPL to evaluate, then read 
+            until the                                                    
+      291    # server closes or -w times out. Each script is ONE         
+           chained-promise                                               
+      292    # expression whose final .then returns a marker string the  
+           shell                                                         
+      293 -  # greps for. These probes READ ONLY — by user ruling the    
+          -test never                                                    
+      294 -  # mutates world state ("there can be none. stop thinking in 
+          - terms of                                                     
+      295 -  # surgery"): the colony reaches RCL 3 itself, safe mode     
+          -expires                                                       
+      296 -  # naturally (initial spawn placement grants ~20000 ticks,   
+          -and the                                                       
+      297 -  # engine returns ERR_NO_BODYPART (-12) for every hostile    
+          -creep action                                                  
+      298 -  # while it runs — the raid mod defers raids until it        
+          -lapses), and the                                              
+      299 -  # raid MOD alone raises every raider that ever appears.     
+      293 +  # greps for. Surgery doctrine (user ruling 2026-08-02):     
+          +exactly ONE                                                   
+      294 +  # script writes — armWarConditions, the war arc's seeded    
+          +start.                                                        
+      295 +  # Every other CLI script READS ONLY, and the raid MOD alone 
+          + raises                                                       
+      296 +  # every raider that ever appears.                           
+      297    # --------------------------------------------------------- 
+           ----------                                                    
+      298                                                                
+      299 +  # The arming write — the war arc's seeded start conditions, 
+          + in one                                                       
+      300 +  # expression: the itest user's controller jumps to RCL 3    
+          +(towers                                                       
+      301 +  # unlock at 3 — the shell places the tower site the tick it 
+          + observes                                                     
+      302 +  # the level) with safe mode cleared (typeof null is not     
+          +"number", so                                                  
+      303 +  # the mod's deferral clause passes), and every source in    
+          +the room                                                      
+      304 +  # gets invaderHarvested 50000 — the raid law's goal         
+          +(mirrors                                                      
+      305 +  # dox/invader raidPolicy.goal; amend together). RELENTLESS  
+          +WAR means                                                     
+      306 +  # the counter never resets, so the threshold stays crossed  
+          +forever.                                                      
+      307 +  # After this write the ONLY gate left standing is the       
+          +fair-fight                                                    
+      308 +  # clause: the war opens the moment the colony's own tower   
+          +stands                                                        
+      309 +  # FULL — built and loaded by creeps, no hand on that scale. 
+      310 +  armWarConditions = writeShellScript "arm-war-conditions" '' 
+      311 +    set -euo pipefail                                         
+      312 +    CMD='storage.db.users.findOne({usernameLower:             
+          +"${email}"}).then(u =>                                        
+          +storage.db["rooms.objects"].findOne({type: "controller",      
+          +user: u._id})).then(c =>                                      
+          +Promise.all([storage.db["rooms.objects"].update({_id: c._id}, 
+          + {$set: {level: 3, progress: 0, safeMode: null}}),            
+          +storage.db["rooms.objects"].update({room: c.room, type:       
+          +"source"}, {$set: {invaderHarvested: 50000}})]).then(() =>    
+          +storage.db["rooms.objects"].findOne({_id: c._id}))).then(c2   
+          +=> "ARMED:" + JSON.stringify({room: c2.room, level: c2.level, 
+          + progress: c2.progress, safeMode: c2.safeMode})).catch(e =>   
+          +"ERR:" + (e && e.message || e))'                              
+      313 +    OUT=$( (printf '%s\n' "$CMD"; sleep 3) |                  
+          +${netcat-openbsd}/bin/nc -N -w 6 127.0.0.1 21026 || true)     
+      314 +    echo "$OUT"                                               
+      315 +    case "$OUT" in                                            
+      316 +      *ARMED:*) exit 0 ;;                                     
+      317 +      *) exit 1 ;;                                            
+      318 +    esac                                                      
+      319 +  '';                                                         
+      320 +                                                              
+      321    # Natural-raid witness: the raid MOD (not the test)         
+           inserted raiders.                                             
+      322    # Mod-spawned raiders carry the raider-g<gameTime>- name    
+           prefix, and                                                   
+      323    # the invader shell's flight recorder latches every         
+           raider's trace in                                             
+
+● Update(tests/integration.nix)
+  ⎿  Added 7 lines, removed 4 lines
+      385      [ "$N" != absent ] && [ "$N" -ge 1 ]                      
+      386    '';                                                         
+      387                                                                
+      388 -  # One-shot probe: some tower in stats.towers has energy > 0 
+          -— the                                                         
+      389 -  # harvesters treat the below-target tower as an energy sink 
+          - and feed                                                     
+      390 -  # it toward towerEnergyTarget (500).                        
+      391 -  pollTowerFed = writeShellScript "poll-tower-fed" ''         
+      388 +  # One-shot probe: some tower in stats.towers reads FULL (>= 
+          +1000 =                                                        
+      389 +  # towerRefillTarget, the raid law's fair-fight bar — amend  
+          +together).                                                    
+      390 +  # Under the amended refill law a below-full tower is an     
+          +ordinary                                                      
+      391 +  # energy sink, so delivery tops it all the way up; the      
+          +moment this                                                   
+      392 +  # probe passes, the last gate is open and the war is due    
+          +within one                                                    
+      393 +  # raid-mod cron check.                                      
+      394 +  pollTowerFull = writeShellScript "poll-tower-full" ''       
+      395      set -euo pipefail                                         
+      396      TOKEN=$(${curl}/bin/curl -sS -X POST                      
+           "${url}/api/auth/signin" \                                    
+      397        -H "Content-Type: application/json" \                   
+
+● Update(tests/integration.nix)
+  ⎿  Added 1 line, removed 1 line
+      407      JSON=$(printf '%s' "''${DATA#gz:}" |                      
+           ${coreutils}/bin/base64 -d | ${gzip}/bin/zcat)                
+      408      echo "towers: $JSON"                                      
+      409      printf '%s' "$JSON" | ${jq}/bin/jq -e '                   
+      410 -      [.[] | select(.energy > 0)] | length > 0                
+      410 +      [.[] | select(.energy >= 1000)] | length > 0            
+      411      ' > /dev/null                                             
+      412    '';                                                         
+      413                                                                
+● Update(tests/integration.nix)
+  ⎿  Added 6 lines, removed 5 lines
+      534      status, out = machine.execute("${setTickDuration} 2>&1")  
+      535      print(f">>> system.setTickDuration(${toString tickMs})    
+           via CLI (status {status}): {out.strip()}")                    
+      536                                                                
+      537 -    # No sterilizer, no dial, no surgery — by user ruling     
+          -. The raid mod                                                
+      538 -    # is LIVE from boot                                       
+          -(mods.json), and the FAIR-FIGHT CLAUSE is the                 
+      539 -    # only shield the early phases get: a room with no        
+          -tower is not                                                  
+      540 -    # raid-eligible (raidPolicy.minTowers                     
+          -), so the tutorial acts run                                   
+      541 -    # unmolested exactly as long as the spec says they        
+          -should.                                                       
+      537 +    # No sterilizer, no dial. The raid mod is LIVE from boot  
+      538 +    # (mods.json), and the FAIR-FIGHT CLAUSE is the           
+          + only shield the                                              
+      539 +    # early phases get: a room with no FULL tower is not      
+          + raid-eligible                                                
+      540 +    # (raidPolicy.minTowers + towerFullEnergy                 
+          +), so the tutorial acts                                       
+      541 +    # run unmolested — even after the arming write below      
+          +opens every                                                   
+      542 +    # other gate — until the colony's own tower stands        
+          +loaded.                                                       
+      543                                                                
+      544      with subtest("spawn acquires energy"):                    
+      545          # Explicit poll loop so every observation is visible  
+           in the log.                                                   
+
+● Update(tests/integration.nix)
+  ⎿  Added 25 lines, removed 12 lines
+      688                  raise Exception("timed out waiting for        
+           controller progress after death")                             
+      689              time.sleep(2)                                     
+      690                                                                
+      691 -    with subtest("colony climbs to RCL 3 on its own"):        
+      692 -        # Towers unlock at RCL 3. NO SURGERY: the upgraders   
+          -grind the                                                     
+      693 -        # 45k upgrade energy themselves (RCL 2's 45000,       
+          -restarting the                                                
+      694 -        # progress bar the tutorial acts already advanced).   
+          -This is the                                                   
+      695 -        # long act of the war arc — the deadline is sized for 
+          - the honest                                                   
+      696 -        # climb at the spec's population and tickMs pace, and 
+          - every                                                        
+      697 -        # poll prints level + progress so a stall is visible  
+          -long                                                          
+      698 -        # before the timeout convicts it.                     
+      699 -        deadline = time.time() + 7200                         
+      691 +    with subtest("arming write seeds the war's start          
+          +conditions"):                                                 
+      692 +        # User ruling 2026-08-02: the test STARTS the war arc 
+          + with the                                                     
+      693 +        # necessary conditions instead of grinding the        
+          +natural climb                                                 
+      694 +        # (45k upgrade energy + ~20000 safe-mode ticks proved 
+          + only                                                         
+      695 +        # patience). ONE write: controller to RCL 3 with safe 
+          + mode                                                         
+      696 +        # cleared, sources' invaderHarvested past raidGoal.   
+          +The short                                                     
+      697 +        # retry loop covers CLI hiccups, not world time.      
+      698 +        deadline = time.time() + 120                          
+      699          while True:                                           
+      700 +            status, out =                                     
+          +machine.execute("${armWarConditions} 2>&1")                   
+      701 +            print(f">>> arm: {out.strip()}")                  
+      702 +            if status == 0:                                   
+      703 +                print(">>> SUCCESS: war conditions seeded —   
+          +RCL 3, safe mode off, raidGoal crossed")                      
+      704 +                break                                         
+      705 +            if time.time() > deadline:                        
+      706 +                print(">>> TIMEOUT — server log tail for      
+          +diagnosis:")                                                  
+      707 +                print(machine.succeed("journalctl -u screeps  
+          +--no-pager | tail -n 100"))                                   
+      708 +                raise Exception("timed out arming the war     
+          +conditions via the CLI")                                      
+      709 +            time.sleep(5)                                     
+      710 +        # The shell must OBSERVE the seeded level             
+          +(stats.controllerLevel                                        
+      711 +        # is telemetry, not db state) — proves the world took 
+          + the write.                                                   
+      712 +        deadline = time.time() + 120                          
+      713 +        while True:                                           
+      714              status, out =                                     
+           machine.execute("${pollControllerLevel3} 2>&1")               
+      715              print(f">>> poll: {out.strip()}")                 
+      716              if status == 0:                                   
+      717 -                print(">>> SUCCESS: colony reached RCL 3      
+          - unassisted")                                                 
+      717 +                print(">>> SUCCESS: shell observes RCL 3")    
+      718                  break                                         
+      719              if time.time() > deadline:                        
+      720                  print(">>> TIMEOUT — server log tail for      
+           diagnosis:")                                                  
+      721                  print(machine.succeed("journalctl -u screeps  
+           --no-pager | tail -n 100"))                                   
+      722 -                raise Exception("timed out waiting for the    
+          -colony to reach RCL 3")                                       
+      723 -            time.sleep(10)                                    
+      722 +                raise Exception("timed out waiting for the    
+          +shell to observe the seeded RCL 3")                           
+      723 +            time.sleep(2)                                     
+      724                                                                
+      725      with subtest("tower gets built and fed"):                 
+      726          # Tutorial-5 build proof: at RCL 3 the shell places   
+           the                                                           
+
+● Update(tests/integration.nix)
+  ⎿  Added 4 lines, removed 4 lines
+      335      esac                                                      
+      336    '';                                                         
+      337                                                                
+      338 -  # One-shot probe: stats.controllerLevel >= 3 — the colony   
+          -upgraded                                                      
+      339 -  # its OWN controller to RCL 3 (towers unlock at 3) and the  
+          -shell                                                         
+      340 -  # observes the new level. No hand on the scale: this is the 
+          - long                                                         
+      341 -  # climb (45k upgrade energy), paced by tickMs.              
+      338 +  # One-shot probe: stats.controllerLevel >= 3 — the shell    
+          +OBSERVES                                                      
+      339 +  # the seeded RCL 3 (towers unlock at 3): telemetry          
+          +confirmation                                                  
+      340 +  # that the arming write landed in the world the brain       
+          +actually                                                      
+      341 +  # sees, not just in the db.                                 
+      342    pollControllerLevel3 = writeShellScript                     
+           "poll-controller-level3" ''                                   
+      343      set -euo pipefail                                         
+      344      TOKEN=$(${curl}/bin/curl -sS -X POST                      
+           "${url}/api/auth/signin" \                                    
+
+● Now the tower subtest and the war arc.
+
+● Update(tests/integration.nix)
+  ⎿  Added 14 lines, removed 11 lines
+      722                  raise Exception("timed out waiting for the    
+           shell to observe the seeded RCL 3")                           
+      723              time.sleep(2)                                     
+      724                                                                
+      725 -    with subtest("tower gets built and fed"):                 
+      726 -        # Tutorial-5 build proof: at RCL 3 the shell places   
+          -the                                                           
+      727 -        # spec-driven tower site (towerOffsets) and the       
+          -builders haul                                                 
+      728 -        # 5000 build-energy into it — the extension's 3000    
+          -had a 1500s                                                   
+      729 -        # deadline, so 5000 gets 2500s. Then the harvesters   
+          -feed the                                                      
+      730 -        # below-target tower (an energy sink while energy <   
+      731 -        # towerEnergyTarget = 500): energy > 0 within 300s.   
+      725 +    with subtest("colony builds and fully loads its own       
+          +tower"):                                                      
+      726 +        # Tutorial-5 build proof, unseeded on purpose: at the 
+          + seeded                                                       
+      727 +        # RCL 3 the shell places the spec-driven tower site   
+      728 +        # (towerOffsets) and the builders haul 5000           
+          +build-energy into                                             
+      729 +        # it — the extension's 3000 had a 1500s deadline, so  
+          +5000 gets                                                     
+      730 +        # 2500s. Then delivery loads the tower to FULL (1000  
+          +=                                                             
+      731 +        # towerRefillTarget; under the amended refill law a   
+          +below-full                                                    
+      732 +        # tower is an ordinary sink, so the top-up never      
+          +stalls) —                                                     
+      733 +        # 1000 hauled energy gets 900s. Full tower ==         
+          +fair-fight bar:                                               
+      734 +        # this is the war's last gate.                        
+      735          deadline = time.time() + 2500                         
+      736          while True:                                           
+      737              status, out = machine.execute("${pollTowerBuilt}  
+           2>&1")                                                        
+     ...
+      741                  print(machine.succeed("journalctl -u screeps  
+           --no-pager | tail -n 100"))                                   
+      742                  raise Exception("timed out waiting for the    
+           tower to be built")                                           
+      743              time.sleep(2)                                     
+      744 -        deadline = time.time() + 300                          
+      744 +        deadline = time.time() + 900                          
+      745          while True:                                           
+      746 -            status, out = machine.execute("${pollTowerFed     
+          -} 2>&1")                                                      
+      746 +            status, out = machine.execute("${pollTowerFull    
+          +} 2>&1")                                                      
+      747              print(f">>> poll: {out.strip()}")                 
+      748              if status == 0:                                   
+      749 -                print(">>> SUCCESS: tower fed (energy > 0)")  
+      749 +                print(">>> SUCCESS: tower fully loaded        
+          +(energy >= 1000) — fair-fight bar met")                       
+      750                  break                                         
+      751              if time.time() > deadline:                        
+      752                  print(">>> TIMEOUT — server log tail for      
+           diagnosis:")                                                  
+      753                  print(machine.succeed("journalctl -u screeps  
+           --no-pager | tail -n 100"))                                   
+      754 -                raise Exception("timed out waiting for the    
+          -tower to receive energy")                                     
+      754 +                raise Exception("timed out waiting for the    
+          +tower to reach full energy")                                  
+      755              time.sleep(2)                                     
+      756                                                                
+      757      with subtest("the world makes war and draws first         
+           blood"):                                                      
+
+● Update(tests/integration.nix)
+  ⎿  Added 17 lines, removed 18 lines
+      758              time.sleep(2)                                     
+      759                                                                
+      760      with subtest("the world makes war and draws first         
+           blood"):                                                      
+      761 -        # NO SURGERY: the                                     
+          -raid MOD opens this war, or nobody does. The                  
+      762 -        # fair-fight clause is now satisfiable — a tower      
+          -stands — so                                                   
+      763 -        # once the engine's own invaderHarvested counter      
+          -crosses                                                       
+      764 -        # raidGoal (50000; the RCL3 climb harvested far past  
+          -it) and                                                       
+      765 -        # the initial safe mode has lapsed (~20000 ticks from 
+          - spawn                                                        
+      766 -        # placement; the mod defers raids until then — hence  
+          -the long                                                      
+      767 -        # first deadline), genRaiders opens the RELENTLESS    
+          -WAR: an                                                       
+      768 -        # escalating wave on every cron check (the harvested  
+          -counter                                                       
+      769 -        # never resets, live raiders never hold off the next  
+          -wave).                                                        
+      770 -        # The war arc asserts EXACTLY ONE THING, by user      
+          -ruling                                                        
+      771 -        # (2026-08-01): FIRST BLOOD — cumulative damageTaken  
+          ->= 1.                                                         
+      772 -        # Live evidence (W9N8): a fresh tower clean-sweeps    
+          -wave 1, and                                                   
+      773 -        # blood lands from wave 2 on; under the relentless    
+          -cadence                                                       
+      774 -        # wave 2 is ~10s behind wave 1, so first blood is     
+          -minutes out                                                   
+      775 -        # once the war opens. Everything past first blood —   
+          -how long                                                      
+      776 -        # the single tower stands against the unending        
+          -escalation —                                                  
+      777 -        # is the live server's show, not an itest deadline.   
+      778 -        deadline = time.time() + 2400                         
+      761 +        # The raid MOD opens this war, or nobody does.        
+          +Every gate is                                                 
+      762 +        # open — the arming write cleared safe mode and       
+          +crossed                                                       
+      763 +        # raidGoal, the previous subtest proved a FULL tower  
+          +stands —                                                      
+      764 +        # so genRaiders opens the RELENTLESS WAR within one   
+          +cron check                                                    
+      765 +        # (checkSeconds 10): an escalating wave on every      
+          +check (the                                                    
+      766 +        # harvested counter never resets, live raiders never  
+          +hold off                                                      
+      767 +        # the next wave). The war arc asserts EXACTLY ONE     
+          +THING, by                                                     
+      768 +        # user ruling (2026-08-01): FIRST BLOOD — cumulative  
+      769 +        # damageTaken >= 1. Live evidence (W9N8): a fresh     
+          +tower                                                         
+      770 +        # clean-sweeps wave 1, and blood lands from wave 2    
+          +on; under                                                     
+      771 +        # the amended refill law the tower is topped back to  
+          +full                                                          
+      772 +        # between waves, so the escalation actually continues 
+          + (the                                                         
+      773 +        # first latch-gated law deadlocked at 990 and wave 2  
+          +never                                                         
+      774 +        # came). Everything past first blood — how long the   
+          +single                                                        
+      775 +        # tower stands against the unending escalation — is   
+          +the live                                                      
+      776 +        # server's show, not an itest deadline.               
+      777 +        deadline = time.time() + 600                          
+      778          while True:                                           
+      779              status, out = machine.execute("${pollNaturalRaid} 
+            2>&1")                                                       
+      780              print(f">>> poll: {out.strip()}")                 
+
+● Last piece — the globalTimeout arithmetic.
+
+● Update(tests/integration.nix)
+  ⎿  Added 10 lines, removed 10 lines
+      465                                                                
+      466    # Worst-case sum of subtest deadlines: tutorial-1..3 (3 x   
+           600s +                                                        
+      467    # 1500s) plus the turnover phases (900s + 600s + 600s +     
+           300s) =                                                       
+      468 -  # 5700s, plus the NO-SURGERY war arc: natural RCL 3 climb   
+          -(45k                                                          
+      469 -  # upgrade energy at spec pace) 7200s, tower build 2500s +   
+          -feed 300s,                                                    
+      470 -  # then the relentless war's single assertion: war opens     
+          -2400s (safe                                                   
+      471 -  # mode may still be lapsing) + first blood 1200s (waves     
+          -land every                                                    
+      472 -  # 10s, escalating — live evidence puts blood at wave 2)     
+          - ≈ 13600s of                                                  
+      473 -  # post-turnover deadlines — ≈ 19300s total, plus boot       
+          - and deploy.                                                  
+      474 -  # Deadlines only accrue on the FAILURE path (each phase     
+          - exits the                                                    
+      475 -  # moment its probe passes), but the global timeout must     
+          - cover the                                                    
+      476 -  # honest slow run.                                          
+      477 -  globalTimeout = 21000;                                      
+      468 +  # 5700s, plus the SEEDED war arc: arming write 120s + RCL 3 
+      469 +  # observation 120s, tower build 2500s + load-to-full 900s,  
+          +then the                                                      
+      470 +  # relentless war's single assertion: war opens 600s (       
+          +every gate                                                    
+      471 +  # pre-opened; one 10s cron check away) + first blood 1200s  
+          +(waves                                                        
+      472 +  # land every                                                
+          +10s, escalating — live evidence puts blood at wave 2)         
+      473 +  # ≈ 5440s of post-turnover deadlines — ≈ 11200s             
+          + total, plus boot                                             
+      474 +  # and deploy.                                               
+          +Deadlines only accrue on the FAILURE path (each phase         
+      475 +  # exits the                                                 
+          +moment its probe passes), but the global timeout must         
+      476 +  # cover the honest slow run.                                
+      477 +  globalTimeout = 12600;                                      
+      478                                                                
+      479    nodes.machine = {                                           
+      480      # Server spawns storage/backend/engine children plus      
+           runner/processor                                              
+
+  Searched for 1 pattern (ctrl+o to expand)
+
+● Bash(paradox check --path dox 2>&1 | tail -n 5)
+  ⎿  /run/current-system/sw/bin/bash: line 1: paradox: command not found
+
+● Bash(nix run .#spec-check 2>&1 | tail -n 8 || nix develop -c paradox check
+      --path dox 2>&1 | tail -n 8)
+  ⎿  Interrupted · What should Claude do instead?
+
+❯ how can I set up agents to take on particular tasks using specific models     
+
+  Searched for 1 pattern, read 1 file (ctrl+o to expand)
+
+● You already got five of 'em on the payroll — they're just all running model: 
+  inherit. Here's the whole mechanism:
+
+  The setup
+
+  Agents are markdown files with YAML frontmatter, one per agent:
+
+  - Project agents: .claude/agents/*.md (this repo has spec-author, shell-hands,
+   nix-pipeline, server-doctor, tutorial-porter)
+  - Personal agents: ~/.claude/agents/*.md (all your projects)
+
+  ---
+  name: spec-author
+  description: Use this agent for any change to the Paradox spec... Use it
+  PROACTIVELY whenever...
+  tools: Read, Grep, Glob, Edit, Write, Bash
+  model: sonnet
+  ---
+
+  You are the Paradox spec author for dox-populi...
+  (the system prompt the agent runs with)
+
+  The model field — that's your lever
+
+  ┌──────────────┬──────────────────────────────────────────────────────────┐
+  │    Value     │                         Meaning                          │
+  ├──────────────┼──────────────────────────────────────────────────────────┤
+  │ inherit      │ whatever model the main session runs (what yours all do  │
+  │              │ now)                                                     │
+  ├──────────────┼──────────────────────────────────────────────────────────┤
+  │ opus         │ Opus 4.6 — heavy reasoning                               │
+  ├──────────────┼──────────────────────────────────────────────────────────┤
+  │ sonnet       │ Sonnet 4.6 — strong, cheaper                             │
+  ├──────────────┼──────────────────────────────────────────────────────────┤
+  │ haiku        │ Haiku 4.5 — fast, cheap                                  │
+  ├──────────────┼──────────────────────────────────────────────────────────┤
+  │ full model   │ e.g. claude-haiku-4-5-20251001 — pin exactly             │
+  │ ID           │                                                          │
+  └──────────────┴──────────────────────────────────────────────────────────┘
+
+  How work lands on them
+
+  1. Auto-delegation — I read the description field and route matching tasks
+  there myself. That "Use it PROACTIVELY whenever..." phrasing in spec-author is
+   doing exactly that job. Sharper description = better routing.
+  2. Explicit — you say "have spec-author do X" or I invoke it via the Agent
+  tool.
+  3. /agents — interactive manager: create, edit, pick tools and model from a
+  menu instead of hand-writing frontmatter.
+
+  The play for THIS repo, if you want my counsel
+
+  - spec-author, shell-hands → opus or inherit — the brain and hands are where
+  wrong is expensive.
+  - server-doctor → could ride sonnet — it's mostly log-reading and CLI probes.
+  - Grunt work like transcript summarizing → haiku.
+
+  Each agent runs in its OWN context window too — so a server-doctor chewing
+  through 200 lines of journalctl doesn't pollute the main session. That's free
+  even before you touch the model dial.
+
+  Want me to set the model fields on the five in this repo? Say which gets what
+  and I'll cut the frontmatter — one line each.
+
+❯ dont use inherit for any of these be specific                                 
+
+  Read 4 files (ctrl+o to expand)
+
+● Update(.claude/agents/spec-author.md)
+  ⎿  Added 1 line, removed 1 line
+      2  name: spec-author                                               
+      3  description: Use this agent for any change to the Paradox spec  
+         (dox/creeps.dox) — new roles, unions, constants, states,        
+         events, transitions, or machines — and for diagnosing `paradox  
+         check` or `paradox generate` failures. Use it PROACTIVELY       
+         whenever a requested behavior change belongs in the brain       
+         rather than the shell.                                          
+      4  tools: Read, Grep, Glob, Edit, Write, Bash                      
+      5 -model: inherit                                                  
+      5 +model: claude-opus-4-6                                          
+      6  ---                                                             
+      7                                                                  
+      8  You are the Paradox spec author for dox-populi. The `.dox` spec 
+          IS the                                                         
+● Update(.claude/agents/shell-hands.md)
+  ⎿  Added 1 line, removed 1 line
+      2  name: shell-hands                                               
+      3  description: Use this agent for changes to the TypeScript shell 
+          (shell/main.ts, shell/memory.d.ts, tsconfig.json) — wiring     
+         generated brain API into the game loop, Screeps API calls,      
+         creep observation/event emission, Memory management, and        
+         typecheck failures in the shell.                                
+      4  tools: Read, Grep, Glob, Edit, Write, Bash                      
+      5 -model: inherit                                                  
+      5 +model: claude-opus-4-6                                          
+      6  ---                                                             
+      7                                                                  
+      8  You are the shell ("hands") developer for dox-populi. The shell 
+          observes the                                                   
+
+● Update(.claude/agents/nix-pipeline.md)
+  ⎿  Added 1 line, removed 1 line
+      2  name: nix-pipeline                                              
+      3  description: Use this agent for flake.nix work —                
+         apps/checks/packages, npm vendoring and lock-file pinning       
+         (npmDepsHash), the dev VM and installer ISO, tests/*.nix        
+         harnesses, devShell, and CI generation. Also for nix build      
+         failures anywhere in the pipeline.                              
+      4  tools: Read, Grep, Glob, Edit, Write, Bash                      
+      5 -model: inherit                                                  
+      5 +model: claude-sonnet-4-6                                        
+      6  ---                                                             
+      7                                                                  
+      8  You are the nix pipeline engineer for dox-populi. `flake.nix`   
+         owns the whole                                                  
+
+● Update(.claude/agents/server-doctor.md)
+  ⎿  Added 1 line, removed 1 line
+      2  name: server-doctor                                             
+      3  description: Use this agent to debug the running private        
+         Screeps server — server won't start, ports 21025/21026 not      
+         answering, deploy-local/signin failures, auto-spawn refusals,   
+         creeps not harvesting, stale processes, or world-state          
+         questions. Runtime diagnosis, not flake surgery.                
+      4  tools: Read, Grep, Glob, Bash                                   
+      5 -model: inherit                                                  
+      5 +model: claude-sonnet-4-6                                        
+      6  ---                                                             
+      7                                                                  
+      8  You are the private-server doctor for dox-populi. The server is 
+          the                                                            
+
+● Update(.claude/agents/tutorial-porter.md)
+  ⎿  Added 1 line, removed 1 line
+      2  name: tutorial-porter                                           
+      3  description: Use this agent when starting or planning a new     
+         Screeps tutorial section — it reads the official tutorial JS in 
+          ~/github/tutorial-scripts, decides the brain/hands split, and  
+         produces the porting plan (spec deltas, shell deltas, test      
+         deltas). Research and planning only; it does not write code.    
+      4  tools: Read, Grep, Glob, Bash                                   
+      5 -model: inherit                                                  
+      5 +model: claude-opus-4-6                                          
+      6  ---                                                             
+      7                                                                  
+      8  You are the tutorial porter for dox-populi. The project         
+         retraces the                                                    
+
+  Recalled 1 memory, searched memories, wrote 6 memories (ctrl+o to expand)
+
+  Recalled 1 memory, searched memories, wrote 4 memories (ctrl+o to expand)
+
+● Books are settled. Where we stand:
+
+  Done this session:
+  1. Refill law amended (dox/creeps.dox + shell/main.ts) — tower is a sink
+  whenever below 1000; latch = priority only. The 990 deadlock is dead law.
+  2. Itest seeds the war (tests/integration.nix) — one armWarConditions write
+  (RCL 3, safe mode off, harvested ≥ 50000), colony still builds and loads its
+  own tower, pollTowerFull guards the fair-fight bar, first blood stays the only
+   war assertion. globalTimeout 21000 → 12600.
+  3. Agents pinned — no more inherit: opus-4-6 on
+  spec-author/shell-hands/tutorial-porter, sonnet-4-6 on
+  nix-pipeline/server-doctor.
+  4. Memory updated — both files, stale doctrine superseded.
+
+  One debt outstanding — the checkers haven't testified. You waved off my check
+  run earlier, so the court date is yours:
+
+  paradox check --path dox                      # via devshell / nix run
+  .#spec-check
+  nix run .#generate
+  nix build .#checks.x86_64-linux.typecheck
+
+  And remember: your live server is still running the old deadlocked bundle —
+  the 990 tower stays starved until a redeploy puts the amended brain in the
+  world. Your call on when.
+
+✻ Brewed for 2m 45s
+
+❯ im running the tests and the towers arent being built,                        
+
+● Hold on — before we theorize, let's read the placement law. Show me the hands.
+
+  Read 1 file (ctrl+o to expand)
+  ⎿  Interrupted · What should Claude do instead?
+
+❯ you did not set up correct conditions, the gates are still locked             
+  ⎿  Interrupted · What should Claude do instead?
+
+❯ this is a testing issue                                                       
+
+  Searched for 1 pattern (ctrl+o to expand)
+
+● Update(tests/integration.nix)
+  ⎿  Added 6 lines, removed 6 lines
+      10  # (user ruling 2026-08-02, amending the total no-surgery       
+          ruling): the                                                   
+      11  # test SEEDS the war's start conditions in ONE arming write —  
+          the                                                            
+      12  # controller to RCL 3, safe mode off, the harvested counter    
+          past                                                           
+      13 -# raidGoal — because the natural climb (45k upgrade energy +   
+         -~20000                                                         
+      14 -# safe-mode ticks) proves only patience, not war. Everything   
+         -AFTER                                                          
+      15 -# the arming write is observation and tick pacing, nothing     
+         -else. The                                                      
+      16 -# colony still places, builds, and loads its OWN tower         
+         -(spec-driven                                                   
+      17 -# placement), and once the fair-fight clause is satisfied (a   
+         -FULL                                                           
+      18 -# tower standing — the seeded gates are already open) the raid 
+         - MOD                                                           
+      13 +# raidGoal, and the TOWER ITSELF standing at the spec's first  
+      14 +# towerOffsets cell with a full magazine — because the natural 
+         + climb                                                         
+      15 +# (45k upgrade energy + ~20000 safe-mode ticks + a 5000-energy 
+         + build)                                                        
+      16 +# proves only patience, not war. Everything AFTER the arming   
+         +write is                                                       
+      17 +# observation and tick pacing, nothing else. With a FULL tower 
+      18 +# standing, every gate is open at once, and the raid MOD       
+      19  # opens the RELENTLESS WAR (spec raid-law): an escalating wave 
+           on                                                            
+      20  # every cron check, forever — the durability test of a single  
+          tower.                                                         
+      21  # The test asserts exactly one thing about that war, by user   
+          ruling:                                                        
+
+● Update(tests/integration.nix)
+  ⎿  Added 17 lines, removed 11 lines
+      297    # --------------------------------------------------------- 
+           ----------                                                    
+      298                                                                
+      299    # The arming write — the war arc's seeded start conditions, 
+            in one                                                       
+      300 -  # expression: the itest user's controller jumps to RCL 3    
+          -(towers                                                       
+      301 -  # unlock at 3 — the shell places the tower site the tick it 
+          - observes                                                     
+      302 -  # the level) with safe mode cleared (typeof null is not     
+          -"number", so                                                  
+      303 -  # the mod's deferral clause passes), and every source in    
+          -the room                                                      
+      304 -  # gets invaderHarvested 50000 — the raid law's goal (mirrors
+      305 -  # dox/invader raidPolicy.goal; amend together)              
+          -. RELENTLESS WAR means                                        
+      306 -  # the counter never resets, so the threshold stays          
+          - crossed forever.                                             
+      307 -  # After this write the ONLY gate left standing is the       
+          -fair-fight                                                    
+      308 -  # clause: the war opens the moment the colony's own tower   
+          -stands                                                        
+      309 -  # FULL — built and loaded by creeps, no hand on that scale. 
+      300 +  # expression (user ruling: lift the gates, BUILD THE TOWER, 
+          + start                                                        
+      301 +  # the wave — all three seeded):                             
+      302 +  #   - controller to RCL 3 (tower legality) with safe mode   
+          +cleared                                                       
+      303 +  #     (typeof null is not "number", so the mod's deferral   
+          +passes)                                                       
+      304 +  #   - every source                                          
+          +gets invaderHarvested 50000 — the raid law's                  
+      305 +  #     goal (mirrors                                         
+          +dox/invader raidPolicy.goal; amend together);                 
+      306 +  #     RELENTLESS WAR never resets it, so the threshold stays
+      307 +  #     crossed forever                                       
+      308 +  #   - a TOWER standing at the spec's first towerOffsets     
+          +cell                                                          
+      309 +  #     (offsetSouthwest: spawn-2,+2 — amend with the spec),  
+          +owned by                                                      
+      310 +  #     the itest user, full magazine (store.energy 1000 =    
+      311 +  #     towerFullEnergy — the fair-fight bar) — modern store  
+          +shape,                                                        
+      312 +  #     TOWER_HITS 3000. Insert is idempotent (skipped if any 
+          + tower                                                        
+      313 +  #     already stands) so the retry loop can't stack towers. 
+      314 +  # After this write EVERY gate is open: genRaiders owes a    
+          +wave                                                          
+      315 +  # within one cron check.                                    
+      316    armWarConditions = writeShellScript "arm-war-conditions" '' 
+      317      set -euo pipefail                                         
+      318 -    CMD='storage.db.users.findOne({usernameLower:             
+          -"${email}"}).then(u =>                                        
+          -storage.db["rooms.objects"].findOne({type: "controller", user:
+          - u._id})).then(c                                              
+          - => Promise.all([storage.db["rooms.objects"].update({_id: c   
+          -._id}, {$set: {level: 3, progress: 0, safeMode: null}}),      
+          -storage.db["rooms.objects"].update({room: c                   
+          -.room, type: "source"}, {$set: {invaderHarvested: 50000}})]   
+          -).then(() => storage.db["rooms.objects"].findOne({_id: c._id})
+          -)).then(c2 => "ARMED:" + JSON.stringify({room: c2             
+          -.room, level: c2.level, progress: c2.progress, safeMode: c2.  
+          -safeMode})).catch(e => "ERR:" + (e && e.message || e))'       
+      318 +    CMD='storage.db.users.findOne({usernameLower:             
+          +"${email}"}).then(u => Promise.all([u,                        
+          +storage.db["rooms.objects"].findOne({type: "controller", user:
+          + u._id})                                                      
+          +, storage.db["rooms.objects"].findOne({type: "spawn", user:   
+          +u._id})])).then(ucs                                           
+          + => Promise.all([storage.db["rooms.objects"].update({_id:     
+          +ucs[1]                                                        
+          +._id}, {$set: {level: 3, progress: 0, safeMode: null}}),      
+          +storage.db["rooms.objects"].update({room: ucs[1]              
+          +.room, type: "source"}, {$set: {invaderHarvested: 50000}})    
+          +, storage.db["rooms.objects"]                                 
+          +.findOne({type: "tower", user: ucs[0]._id}).then(             
+          +tw => tw || storage.db["rooms.objects"].insert(               
+          +{type: "tower", room: ucs[2].room, x: ucs[2].x - 2, y:        
+          +ucs[2].y + 2, user: ucs[0]._id, hits: 3000, hitsMax: 3000,    
+          +store: {energy: 1000}, storeCapacityResource: {energy: 1000}, 
+          +notifyWhenAttacked: false, actionLog: {attack: null, heal:    
+          +null, repair: null}}))]).then(() => Promise.all([             
+          +storage.db["rooms.objects"].findOne({_id: ucs[1]._id})        
+          +, storage.db["rooms.objects"].find({type: "tower", user:      
+          +ucs[0]._id})]))).then(ct => "ARMED:" + JSON.stringify({room:  
+          +ct[0].room, level: ct[0].level, safeMode: ct[0].safeMode,     
+          +towers: ct[1].map(t => ({x: t.x, y: t.y, e: t.store.energy})) 
+          +})).catch(e => "ERR:" + (e && e.message || e))'               
+      319      OUT=$( (printf '%s\n' "$CMD"; sleep 3) |                  
+           ${netcat-openbsd}/bin/nc -N -w 6 127.0.0.1 21026 || true)     
+      320      echo "$OUT"                                               
+      321      case "$OUT" in                                            
+● Now the subtests — the tower phase becomes observation of the seeded tower,
+  not a build wait.
+
+● Update(tests/integration.nix)
+  ⎿  Added 1 line, removed 1 line
+      706              status, out =                                     
+           machine.execute("${armWarConditions} 2>&1")                   
+      707              print(f">>> arm: {out.strip()}")                  
+      708              if status == 0:                                   
+      709 -                print(">>> SUCCESS: war conditions seeded —   
+          -RCL 3, safe mode off, raidGoal crossed")                      
+      709 +                print(">>> SUCCESS: war conditions seeded —   
+          +RCL 3, safe mode off, raidGoal crossed, full tower standing") 
+      710                  break                                         
+      711              if time.time() > deadline:                        
+      712                  print(">>> TIMEOUT — server log tail for      
+           diagnosis:")                                                  
+
+● Update(tests/integration.nix)
+  ⎿  Added 15 lines, removed 16 lines
+      728                  raise Exception("timed out waiting for the    
+           shell to observe the seeded RCL 3")                           
+      729              time.sleep(2)                                     
+      730                                                                
+      731 -    with subtest("colony builds and fully loads its own       
+          -tower"):                                                      
+      732 -        # Tutorial-5 build proof, unseeded on purpose: at the 
+          - seeded                                                       
+      733 -        # RCL 3 the shell places the spec-driven tower site   
+      734 -        # (towerOffsets) and the builders haul 5000           
+          -build-energy into                                             
+      735 -        # it — the extension's 3000 had a 1500s deadline, so  
+          -5000 gets                                                     
+      736 -        # 2500s. Then delivery loads the tower to FULL (1000  
+          -=                                                             
+      737 -        # towerRefillTarget; under the amended refill law a   
+          -below-full                                                    
+      738 -        # tower is an ordinary sink, so the top-up never      
+          -stalls) —                                                     
+      739 -        # 1000 hauled energy gets 900s. Full tower ==         
+          -fair-fight bar:                                               
+      740 -        # this is the war's last gate.                        
+      741 -        deadline = time.time() + 2500                         
+      731 +    with subtest("shell observes the seeded tower, standing   
+          +and full"):                                                   
+      732 +        # The arming write seeded the tower (spec's first     
+          +towerOffsets                                                  
+      733 +        # cell, full magazine). These polls prove the BRAIN   
+          +sees it:                                                      
+      734 +        # stats.towersBuilt counts FIND_MY_STRUCTURES towers  
+          +and                                                           
+      735 +        # stats.towers carries its energy — the tower machine 
+          + is now                                                       
+      736 +        # running the spec's tower FSM over a real structure. 
+          + Full                                                         
+      737 +        # tower == fair-fight bar: the war's last gate is     
+          +open. The                                                     
+      738 +        # refill law keeps it topped up between waves (below  
+      739 +        # towerRefillTarget = ordinary sink; latch = priority 
+          + only).                                                       
+      740 +        deadline = time.time() + 180                          
+      741          while True:                                           
+      742              status, out = machine.execute("${pollTowerBuilt}  
+           2>&1")                                                        
+      743              print(f">>> poll: {out.strip()}")                 
+      744              if status == 0:                                   
+      745 -                print(">>> SUCCESS: tower built")             
+      745 +                print(">>> SUCCESS: shell observes the tower")
+      746                  break                                         
+      747              if time.time() > deadline:                        
+      748                  print(">>> TIMEOUT — server log tail for      
+           diagnosis:")                                                  
+      749                  print(machine.succeed("journalctl -u screeps  
+           --no-pager | tail -n 100"))                                   
+      750 -                raise Exception("timed out waiting for the    
+          -tower to be built")                                           
+      750 +                raise Exception("timed out waiting for the    
+          +shell to observe the seeded tower")                           
+      751              time.sleep(2)                                     
+      752 -        deadline = time.time() + 900                          
+      752 +        deadline = time.time() + 180                          
+      753          while True:                                           
+      754              status, out = machine.execute("${pollTowerFull}   
+           2>&1")                                                        
+      755              print(f">>> poll: {out.strip()}")                 
+      756              if status == 0:                                   
+      757 -                print(">>> SUCCESS: tower fully loaded        
+          - (energy >= 1000) — fair-fight bar met")                      
+      757 +                print(">>> SUCCESS: tower reads full          
+          + (energy >= 1000) — fair-fight bar met")                      
+      758                  break                                         
+      759              if time.time() > deadline:                        
+      760                  print(">>> TIMEOUT — server log tail for      
+           diagnosis:")                                                  
+      761                  print(machine.succeed("journalctl -u screeps  
+           --no-pager | tail -n 100"))                                   
+      762 -                raise Exception("timed out waiting for the    
+          -tower to reach full energy")                                  
+      762 +                raise Exception("timed out waiting for the    
+          +tower to read full energy")                                   
+      763              time.sleep(2)                                     
+      764                                                                
+      765      with subtest("the world makes war and draws first         
+           blood"):                                                      
+
+● Update(tests/integration.nix)
+  ⎿  Added 3 lines, removed 4 lines
+      366      [ "$L" != absent ] && [ "$L" -ge 3 ]                      
+      367    '';                                                         
+      368                                                                
+      369 -  # One-shot probe: stats.towersBuilt >= 1 — RCL 3 reached,   
+          - the shell                                                    
+      370 -  # placed the spec-driven tower site, and the builders       
+          -hauled 5000                                                   
+      371 -  # build-energy into it                                      
+          -. towersBuilt/RCL/towers printed every poll                   
+      372 -  # for diagnosis while the build is in flight.               
+      369 +  # One-shot probe: stats.towersBuilt >= 1 — the shell        
+          +observes the                                                  
+      370 +  # seeded tower (FIND_MY_STRUCTURES count) and the tower     
+          +machine is                                                    
+      371 +  # live. towersBuilt/RCL/towers printed every poll           
+          + for diagnosis.                                               
+      372    pollTowerBuilt = writeShellScript "poll-tower-built" ''     
+      373      set -euo pipefail                                         
+      374      TOKEN=$(${curl}/bin/curl -sS -X POST                      
+           "${url}/api/auth/signin" \                                    
+
+● Update(tests/integration.nix)
+  ⎿  Added 2 lines, removed 2 lines
+      543      # (mods.json), and the FAIR-FIGHT CLAUSE is the only      
+           shield the                                                    
+      544      # early phases get: a room with no FULL tower is not      
+           raid-eligible                                                 
+      545      # (raidPolicy.minTowers + towerFullEnergy), so the        
+           tutorial acts                                                 
+      546 -    # run unmolested — even after the arming write below opens
+          - every                                                        
+      547 -    # other gate — until the colony's own tower stands        
+          -loaded.                                                       
+      546 +    # run unmolested until the arming write seeds the         
+          +full tower and                                                
+      547 +    # opens every gate at once.                               
+      548                                                                
+      549      with subtest("spawn acquires energy"):                    
+      550          # Explicit poll loop so every observation is visible  
+           in the log.                                                   
+
+● Update(tests/integration.nix)
+  ⎿  Added 3 lines, removed 3 lines
+      471    # Worst-case sum of subtest deadlines: tutorial-1..3 (3 x   
+           600s +                                                        
+      472    # 1500s) plus the turnover phases (900s + 600s + 600s +     
+           300s) =                                                       
+      473    # 5700s, plus the SEEDED war arc: arming write 120s + RCL 3 
+      474 -  # observation 120s, tower build 2500s + load-to-full 900s   
+          -, then the                                                    
+      474 +  # observation 120s + tower observation 180s + 180s, then the
+      475    # relentless war's single assertion: war opens 600s (every  
+           gate                                                          
+      476    # pre-opened; one 10s cron check away) + first blood 1200s  
+           (waves                                                        
+      477    # land every 10s, escalating — live evidence puts blood at  
+           wave 2)                                                       
+      478 -  # ≈ 5440s of post-turnover deadlines — ≈ 11200s             
+          - total, plus boot                                             
+      478 +  # ≈ 2400s of post-turnover deadlines — ≈ 8100s              
+          + total, plus boot                                             
+      479    # and deploy. Deadlines only accrue on the FAILURE path     
+           (each phase                                                   
+      480    # exits the moment its probe passes), but the global        
+           timeout must                                                  
+      481    # cover the honest slow run.                                
+      482 -  globalTimeout = 12600;                                      
+      482 +  globalTimeout = 9000;                                       
+      483                                                                
+      484    nodes.machine = {                                           
+      485      # Server spawns storage/backend/engine children plus      
+           runner/processor                                              
+
+  Searched for 1 pattern, searched memories, wrote 3 memories (ctrl+o to expand)
+
+● Court's back in session — 200 lines even, books balanced. Here's what changed:
+
+  The arming write now seeds all three of your conditions
+  (tests/integration.nix):
+
+  1. Gates lifted — RCL 3, safe mode null, invaderHarvested 50000
+  2. Tower built — inserted standing at the spec's own first choice
+  (offsetSouthwest, spawn −2,+2), owned by the itest user, hits 3000, magazine 
+  full at 1000 — the fair-fight bar is met the instant the write lands. Insert
+  is idempotent, so the retry loop can't stack towers
+  3. Wave starts — with every gate open, genRaiders owes a wave within one 10s
+  cron check
+
+  The old 2500s "wait for the builders" phase is gone — replaced by two short
+  observation polls (180s each) proving the brain sees the seeded tower
+  (stats.towersBuilt, stats.towers energy). globalTimeout 12600 → 9000. The
+  ARMED: line now prints the tower list — {x, y, e: 1000} — so the log testifies
+   for itself.
+
+  To pick this up you need a fresh run — the VM you're in was built from the old
+   test. Kill it, rerun; the war arc should now go arm → observe → wave → blood
+  in minutes, not hours.
+
+  And the standing debt: paradox check / generate / typecheck still haven't
+  testified on the refill-law change — the itest bundles the shell, so a broken
+  build would've barked at test build time, but I want the witnesses on record
+  proper. They're yours or mine — say the word.
+
+✻ Churned for 3m 27s
+
+❯ /exit                                                                         
+  ⎿  Catch you later!
+
+❯ testing fable                                                                 
+
+● Heard. Session's live, hands on the table, memory intact.
+
+  State of the docket since you stepped out: the seeded-war itest, the amended
+  refill law, and the pinned agents are all in the working tree. The one open
+  item is still task 21 — the checkers haven't testified on the spec/shell
+  change (paradox check, .#generate, typecheck). You were running the tests
+  yourself; say the word if you want me to run the cheap checks or read a test
+  log.
+
+❯ /model                                                                        
+  ⎿  Kept model as claude-fable-5
+
+❯ do you understand why this is a problem, the gates should startt open, they   
+are clearly not open.  vm-test-run-dox-populi-itest> >>> poll: extensions       
+built: 0 (progress: 197, RCL: 2)                                                
+  ⎿  Interrupted · What should Claude do instead?

@@ -81,6 +81,50 @@
           cp main.js $out/
         '';
       };
+
+      # The ENEMY bundle: dox/invader (spec) → generated/invader.ts →
+      # shell/invader.ts (hands) → this JS, injected as the seeded NPC
+      # "raiders" user's users.code by the seed step in apps.server (NOT
+      # uid 2 — the engine owns that user's creeps). Stage 1 of the invader
+      # trajectory (docs/evolution-plan.md): the raider's decision logic
+      # goes through the same check → generate → typecheck pipeline as the
+      # colony brain — the enemy is world content, but its brain is spec.
+      invaderMain = pkgs.stdenv.mkDerivation {
+        name = "dox-populi-invader-main";
+        src = tsSrc;
+        nativeBuildInputs = [ pkgs.esbuild ];
+        buildPhase = ''
+          esbuild shell/invader.ts --bundle --format=cjs --platform=node \
+            --outfile=invader.js
+        '';
+        installPhase = ''
+          mkdir -p $out
+          cp invader.js $out/
+        '';
+      };
+      # The raid LAW bundle: shell/raidmod.ts (hands) over the raid policy
+      # data in generated/invader.ts — a server mod (mods.json) for the
+      # backend process that deletes the native genInvaders cron (uid-2
+      # engine-AI raids) and installs genRaiders: when a room's harvested
+      # energy crosses the spec's raidGoal (native counter, native reset
+      # semantics, room.invaderGoal override honored — 1 = raid now,
+      # huge = never), it inserts "raiders"-owned creeps at the room's
+      # exit squares, driven by the same seeded users.code brain. This is
+      # what makes raids WORLD BEHAVIOR: server + deploy-local + client
+      # shows a raider battle with no CLI surgery.
+      raidMod = pkgs.stdenv.mkDerivation {
+        name = "dox-populi-raid-mod";
+        src = tsSrc;
+        nativeBuildInputs = [ pkgs.esbuild ];
+        buildPhase = ''
+          esbuild shell/raidmod.ts --bundle --format=cjs --platform=node \
+            --outfile=raidmod.js
+        '';
+        installPhase = ''
+          mkdir -p $out
+          cp raidmod.js $out/
+        '';
+      };
       # secrix CLI as a devShell command (llm-core pattern: tool packages
       # included in devShell packages, not reached via `nix run`).
       secrixApp = secrix.secrix self;
@@ -231,6 +275,14 @@
 
       packages.${system} = {
         inherit generated main;
+        # The enemy bundle (shell/invader.ts + generated/invader.*), seeded
+        # as the NPC "raiders" user's users.code. Exported so CI gets a cheap build
+        # witness — otherwise it only builds inside the itest job.
+        invader-main = invaderMain;
+        # The raid-law server mod (shell/raidmod.ts + generated raid
+        # policy), injected into mods.json each launch. Exported for the
+        # same reason: a cheap CI build witness.
+        raid-mod = raidMod;
         screeps-server = screepsServer;
         screeps-client = screepsClient;
         secrix = secrixCli;
@@ -492,18 +544,43 @@
             [ -e "$DATA/node_modules" ] || ln -s "$LAUNCHER/init_dist/node_modules" "$DATA/node_modules"
             # mods.json is regenerated every launch (like .screepsrc): the
             # versioned template plus nix-vendored mod entry paths.
+            # raidmod: the raid law (spec-driven raider raids replace the
+            # native uid-2 genInvaders cron) — see raidMod above.
             ${pkgs.jq}/bin/jq --arg auth "${serverMods}/node_modules/screepsmod-auth/index.js" \
-              '.mods += [$auth]' ${./server/mods.json} > "$DATA/mods.json.tmp"
+              --arg raid "${raidMod}/raidmod.js" \
+              '.mods += [$auth, $raid]' ${./server/mods.json} > "$DATA/mods.json.tmp"
             mv -f "$DATA/mods.json.tmp" "$DATA/mods.json"
             # Seed the world database on first run (screeps init's job).
             # -s: also replace a 0-byte stub left by a failed GUI launch.
             if [ ! -s "$DATA/db.json" ]; then
               cp "$LAUNCHER/init_dist/db.json" "$DATA/db.json"
               chmod u+w "$DATA/db.json"
-              # Give the NPC Invader user (id 2) an empty script in the seed:
-              # without one, engine_runner spams "Unknown module 'main'"
-              # every tick. Patched offline so no runtime step is needed.
-              ${pkgs.jq}/bin/jq '(.collections[] | select(.name == "users.code")) |= (.data += [{_id: "InvaderCode", user: "2", branch: "default", activeWorld: true, modules: {main: "module.exports.loop = function(){};"}, meta: {revision: 0, created: 0, version: 0}, "$loki": (.maxId + 1)}] | .maxId += 1)' \
+              # Seed a DEDICATED NPC user ("raiders") armed with the
+              # spec-driven raider brain (dox/invader → shell/invader.ts →
+              # invaderMain). NOT the stock Invader (uid 2): the ENGINE
+              # special-cases user-2 creeps (itest forensics: inserted
+              # uid-2 raiders marched AWAY from the target spawn under
+              # engine invader AI while users.code never ran — memory:2
+              # stayed empty), and uid 2's stock invaderCore stronghold
+              # (W5N4) matures into ramparts/towers/defenderN spawns
+              # that muddy every combat probe. A fresh user has none of
+              # that baggage: the doc mirrors a simplebot user (roster
+              # fields cpu/cpuAvailable + meta, which LokiJS updates
+              # require) minus the bot field, so the runner executes
+              # users.code — our bundle. The `active` roster flag is
+              # server-managed (boot normalizes the seeded value; the
+              # raider surgery re-arms it at insertion time), so the
+              # seed's active: true is a best-effort default, not the
+              # mechanism. The uid-2 empty stub stays: stock ships NO
+              # users.code for the Invader user, and when the server
+              # promotes it onto the roster (active flips to 1 on world
+              # population) the runner spams "Unknown module 'main'"
+              # every tick without one. Patched offline so no runtime
+              # step is needed; an EXISTING world keeps its old db until
+              # reset-local.
+              ${pkgs.jq}/bin/jq --rawfile invader ${invaderMain}/invader.js \
+                '(.collections[] | select(.name == "users")) |= (.data += [{_id: "raiders", username: "Raiders", usernameLower: "raiders", cpu: 100, cpuAvailable: 10000, active: true, gcl: 1, registeredDate: "2016-11-14T14:04:21.156Z", badge: {type: 1, color1: "#f00", color2: "#000", color3: "#f00", flip: false, param: 0}, meta: {revision: 0, created: 0, version: 0}, "$loki": (.maxId + 1)}] | .maxId += 1)
+                 | (.collections[] | select(.name == "users.code")) |= (.data += [{_id: "RaiderCode", user: "raiders", branch: "default", activeWorld: true, modules: {main: $invader}, meta: {revision: 0, created: 0, version: 0}, "$loki": (.maxId + 1)}, {_id: "InvaderStub", user: "2", branch: "default", activeWorld: true, modules: {main: "module.exports.loop = function () {};"}, meta: {revision: 0, created: 0, version: 0}, "$loki": (.maxId + 2)}] | .maxId += 2)' \
                 "$DATA/db.json" > "$DATA/db.json.tmp"
               mv -f "$DATA/db.json.tmp" "$DATA/db.json"
             fi
@@ -879,6 +956,23 @@
                     '{room: $r, x: $x, y: $y, name: "Spawn1"}')")
                 if [ "$(printf '%s' "$RESULT" | $JQ -r '.ok // empty')" = "1" ]; then
                   echo "auto-placed Spawn1 in $ROOM at ($X,$Y)"
+                  # The engine's place-spawn endpoint welds newbie
+                  # protection onto the room: safeMode (gameTime + 20000,
+                  # honest world law, kept) AND invaderGoal: 1000000
+                  # (upstream backend-local lib/game/api/game.js). The
+                  # raid mod honors per-room invaderGoal overrides
+                  # (native parity), so that 1e6 would smother the
+                  # spec's raidGoal until a MILLION energy was harvested.
+                  # Clear it in the same breath, so every world born
+                  # through this pipeline lives under spec law from tick
+                  # one. raidWave: 0 resets the escalation counter — a
+                  # fresh colony faces raid sizes from sizeStart, not
+                  # the previous tenant's war. Best-effort like
+                  # setPassword above: worst case is late raids, never
+                  # a failed deploy.
+                  $JQ -rn --arg r "$ROOM" \
+                    '"storage.db.rooms.update({_id: \($r|@json)}, {$set: {invaderGoal: null, raidWave: 0}})"' \
+                    | ${pkgs.netcat-openbsd}/bin/nc -q 2 "$CLI_HOST" "$CLI_PORT" >/dev/null 2>&1 || true
                   PLACED=1
                   break
                 fi

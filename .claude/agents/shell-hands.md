@@ -2,7 +2,7 @@
 name: shell-hands
 description: Use this agent for changes to the TypeScript shell (shell/main.ts, shell/memory.d.ts, tsconfig.json) — wiring generated brain API into the game loop, Screeps API calls, creep observation/event emission, Memory management, and typecheck failures in the shell.
 tools: Read, Grep, Glob, Edit, Write, Bash
-model: inherit
+model: claude-opus-4-6
 ---
 
 You are the shell ("hands") developer for dox-populi. The shell observes the

@@ -19,13 +19,16 @@ import {
   harvesterContext,
   upgraderContext,
   builderContext,
+  defenderContext,
   harvesterTransition,
   upgraderTransition,
   builderTransition,
+  defenderTransition,
   towerTransition,
   validHarvesterState,
   validUpgraderState,
   validBuilderState,
+  validDefenderState,
   validTowerState,
   validCreepState,
 } from "../generated/index";
@@ -37,8 +40,10 @@ import type {
   HarvesterState,
   UpgraderState,
   BuilderState,
+  DefenderState,
   TowerState,
   TowerEvent,
+  ThreatLevel,
   TargetKind,
 } from "../generated/index";
 
@@ -48,60 +53,88 @@ import type {
 // valid*State validators double as ownership guards: a machine claims a
 // state by validating it, and declines (null) otherwise. step() folds over
 // the registry — first machine to claim the state wins. No role dispatch
-// exists anywhere else in the shell. The tower machine is NOT in this
+// exists anywhere else in the shell. Each machine carries its OWN event
+// emitter: the worker machines observe the store/sink/site product
+// (CreepEvent); the defender machine observes the room threat level — a
+// defender has no carry parts, so store facts are degenerate for it (the
+// contract documented in dox/creeps.dox). The tower machine is NOT in this
 // registry: it runs over TowerState/TowerEvent in its own structure loop
 // below, with validTowerState as the same kind of ownership guard.
 // ---------------------------------------------------------------------------
 
-type Step = (state: CreepState, event: CreepEvent) => CreepState | null;
+interface StepResult {
+  event: string;
+  next: CreepState;
+}
+
+type Step = (state: CreepState, creep: Creep, obs: RoomObs) => StepResult | null;
 
 const machines: Step[] = [
-  (state, event) => {
+  (state, creep, obs) => {
     let s: HarvesterState;
     try {
       s = validHarvesterState(state);
     } catch {
       return null;
     }
-    return harvesterTransition(s, event, harvesterContext).target;
+    const event = emitEvent(creep, obs);
+    return { event, next: harvesterTransition(s, event, harvesterContext).target };
   },
-  (state, event) => {
+  (state, creep, obs) => {
     let s: UpgraderState;
     try {
       s = validUpgraderState(state);
     } catch {
       return null;
     }
-    return upgraderTransition(s, event, upgraderContext).target;
+    const event = emitEvent(creep, obs);
+    return { event, next: upgraderTransition(s, event, upgraderContext).target };
   },
-  (state, event) => {
+  (state, creep, obs) => {
     let s: BuilderState;
     try {
       s = validBuilderState(state);
     } catch {
       return null;
     }
-    return builderTransition(s, event, builderContext).target;
+    const event = emitEvent(creep, obs);
+    return { event, next: builderTransition(s, event, builderContext).target };
+  },
+  (state, _creep, obs) => {
+    let s: DefenderState;
+    try {
+      s = validDefenderState(state);
+    } catch {
+      return null;
+    }
+    const event = threatLevel(obs);
+    return { event, next: defenderTransition(s, event, defenderContext).target };
   },
 ];
 
-function step(state: CreepState, event: CreepEvent): CreepState {
+function step(state: CreepState, creep: Creep, obs: RoomObs): StepResult {
   for (const machine of machines) {
-    const next = machine(state, event);
-    if (next !== null) return next;
+    const result = machine(state, creep, obs);
+    if (result !== null) return result;
   }
-  return state;
+  return { event: "unclaimed", next: state };
 }
 
 // ---------------------------------------------------------------------------
 // Observation. "Energy sink" is vocabulary, not policy: a spawn, an
-// extension, or a BELOW-THRESHOLD tower that can still accept delivered
-// energy. The tower threshold is brain data (towerContext.energyTarget): a
-// tower is a sink only while its energy is below the target. hasFreeEnergy
-// is the ONE filter serving both delivery targeting (TargetKind.energySink)
-// and the sinksAllFull observation — the observed fact can never contradict
-// the available action. Room-level facts (sinks, sites, hostiles, damage)
-// are computed once per room per tick.
+// extension, or a BELOW-FULL tower — a tower has free energy whenever it
+// reads below towerContext.refillTarget (the spec's refill law, amended
+// 2026-08-02: membership is "has room?", same as every other sink). The
+// hysteresis LATCH ranks, never gates: it OPENS when a tower's energy
+// drops below energyTarget and CLOSES only when delivery brings it back
+// to refillTarget; while open, that tower outranks every other sink in
+// the energySink selector. The shell holds the latch bit per tower id in
+// Memory.towerRefill — mechanical evaluation of the spec's rule, no
+// policy here. hasFreeEnergy is the ONE filter serving both delivery
+// targeting (TargetKind.energySink) and the sinksAllFull observation — the
+// observed fact can never contradict the available action. Room-level
+// facts (sinks, sites, hostiles, damage) are computed once per room per
+// tick.
 // ---------------------------------------------------------------------------
 
 type EnergySink = StructureSpawn | StructureExtension | StructureTower;
@@ -111,9 +144,22 @@ const isEnergySink = (s: AnyOwnedStructure): s is EnergySink =>
   s.structureType === STRUCTURE_EXTENSION ||
   s.structureType === STRUCTURE_TOWER;
 
+// Stable within a tick: once the latch flips, re-evaluating with the new
+// bit yields the same answer (open: energy < refillTarget; closed:
+// energy < energyTarget — the flip itself proves the active inequality).
+const towerRefillLatch = (t: StructureTower): boolean => {
+  const latches = (Memory.towerRefill ??= {});
+  const energy = t.store[RESOURCE_ENERGY];
+  const open = latches[t.id]
+    ? energy < towerContext.refillTarget
+    : energy < towerContext.energyTarget;
+  latches[t.id] = open;
+  return open;
+};
+
 const hasFreeEnergy = (s: EnergySink): boolean =>
   s.structureType === STRUCTURE_TOWER
-    ? s.store[RESOURCE_ENERGY] < towerContext.energyTarget
+    ? s.store[RESOURCE_ENERGY] < towerContext.refillTarget
     : s.store.getFreeCapacity(RESOURCE_ENERGY) > 0;
 
 const isTower = (s: AnyOwnedStructure): s is StructureTower =>
@@ -164,12 +210,29 @@ function emitEvent(creep: Creep, obs: RoomObs): CreepEvent {
   return `${store}${sinks}${sites}`;
 }
 
+// The ONE threat projection (same-filter doctrine at the type level):
+// hostiles-present bit, typed as the generated ThreatLevel union. Three
+// consumers share the exact value — the defender machine's event, the
+// tower event's first product fact, and the DesiredCounts index in the
+// spawn walk (ThreatLevel variant names ARE the DesiredCounts field
+// names; tsc proves the bridge).
+function threatLevel(obs: RoomObs): ThreatLevel {
+  return obs.hostiles.length > 0 ? "hostile" : "calm";
+}
+
 // The tower analogue: exactly one TowerEvent per tower per tick, the
-// product of the threat and integrity facts, same template-literal proof.
-function emitTowerEvent(obs: RoomObs): TowerEvent {
-  const threat = obs.hostiles.length > 0 ? "hostile" : "calm";
+// product of the threat, integrity, and reserve facts, same
+// template-literal proof. Reserve is a PER-TOWER fact (this tower's
+// energy against the spec's attackReserve floor), so the event is
+// emitted per tower, not per room.
+function emitTowerEvent(tower: StructureTower, obs: RoomObs): TowerEvent {
+  const threat = threatLevel(obs);
   const integrity = obs.damaged.length > 0 ? "Damage" : "Intact";
-  return `${threat}${integrity}`;
+  const reserve =
+    tower.store[RESOURCE_ENERGY] >= towerContext.attackReserve
+      ? "ReserveOk"
+      : "ReserveLow";
+  return `${threat}${integrity}${reserve}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -197,8 +260,17 @@ function resolveTarget(
   switch (kind) {
     case "source":
       return pos.findClosestByPath(FIND_SOURCES);
-    case "energySink":
-      return pos.findClosestByPath(obs.sinks.filter(hasFreeEnergy));
+    case "energySink": {
+      // Refill-hysteresis PRIORITY (spec: towerContext refill law): the
+      // latch ranks the open set, never gates it — a latched tower
+      // (drained below energyTarget, not yet back at refillTarget)
+      // outranks every other sink; otherwise closest open sink wins.
+      const open = obs.sinks.filter(hasFreeEnergy);
+      const latchedTowers = open.filter(
+        (s): s is StructureTower => isTower(s) && towerRefillLatch(s)
+      );
+      return pos.findClosestByPath(latchedTowers.length > 0 ? latchedTowers : open);
+    }
     case "controller":
       return room.controller ?? null;
     case "constructionSite":
@@ -371,16 +443,22 @@ export const loop = (): void => {
   }
 
   // Reclaim memory of towers whose id no longer resolves — the tower
-  // analogue of dead-creep reclamation.
+  // analogue of dead-creep reclamation. The refill latch rides along.
   if (Memory.towers) {
     for (const id in Memory.towers) {
       if (!liveTowerIds.has(id)) delete Memory.towers[id];
+    }
+  }
+  if (Memory.towerRefill) {
+    for (const id in Memory.towerRefill) {
+      if (!liveTowerIds.has(id)) delete Memory.towerRefill[id];
     }
   }
 
   pruneDeadTraces(liveTowerIds);
 
   const spawn: StructureSpawn | undefined = Game.spawns["Spawn1"];
+  const obsCache = new Map<string, RoomObs>();
 
   // Spec-driven population: walk the spawnQueue in order, spawn for the
   // first role that is under strength. Counts, tier order, and the afford
@@ -389,15 +467,18 @@ export const loop = (): void => {
   // the first affordable tier wins. If no tier is affordable this tick,
   // nobody spawns: the first under-strength role holds the spawn slot, and
   // skipping ahead to a cheaper role would be shell-invented policy.
+  // desired is a DesiredCounts record indexed by the observed threat level
+  // — a literal bridge, no if/else: the brain's numbers, the world's index.
   let birthsThisTick = 0;
   if (spawn && !spawn.spawning) {
     const creeps = Object.values(Game.creeps);
     const affordable = spawn.room[spawnAffordBasis];
+    const threat = threatLevel(observeRoom(spawn.room, obsCache));
     const tierCost = (body: BodyPart[]): number =>
       body.reduce((sum, part) => sum + BODYPART_COST[part], 0);
     for (const spec of spawnQueue) {
       const count = creeps.filter((c) => c.memory.role === spec.role).length;
-      if (count < spec.desired) {
+      if (count < spec.desired[threat]) {
         const body = spec.bodies.find((b) => tierCost(b) <= affordable);
         if (body) {
           const result = spawn.spawnCreep(body, `${spec.role}-${Game.time}`, {
@@ -460,7 +541,6 @@ export const loop = (): void => {
   }
 
   // Generic creep loop: observe → transition (brain) → execute (hands).
-  const obsCache = new Map<string, RoomObs>();
   const creepStats: Record<
     string,
     { role: string; event: string; fsm: string; action: string; parts: number }
@@ -483,8 +563,7 @@ export const loop = (): void => {
       state = init;
     }
 
-    const event = emitEvent(creep, obs);
-    const next = step(state, event);
+    const { event, next } = step(state, creep, obs);
     creep.memory.fsm = next;
     const rc = execute(behaviors[next], creep, obs);
     recordTrace(name, event, next, behaviors[next].action, rc);
@@ -510,8 +589,8 @@ export const loop = (): void => {
     const room = Game.rooms[roomName];
     if (!room) continue;
     const obs = observeRoom(room, obsCache);
-    const event = emitTowerEvent(obs);
     for (const tower of towers) {
+      const event = emitTowerEvent(tower, obs);
       let state: TowerState;
       try {
         state = validTowerState(Memory.towers?.[tower.id]?.fsm);
@@ -540,6 +619,49 @@ export const loop = (): void => {
   // hostiles/damaged are the spawn-room observation counts (0 when no
   // spawn exists).
   const spawnObs = spawn ? observeRoom(spawn.room, obsCache) : null;
+
+  // Combat observation: cumulative counters diffed against the previous
+  // tick's snapshot, which rides stats.combat itself (Memory persists
+  // between ticks — the births/deaths pattern, so no second Memory root).
+  // Pure bookkeeping, no policy, nothing reads it back:
+  //  - hostileMoves: observed hostile position changes (a raider that
+  //    marches, latched forever);
+  //  - damageTaken: summed observed hit-point drops on own creeps and
+  //    own-room structures (a raider that lands blows, latched);
+  //  - hostilesDowned: hostiles that vanished from the spawn room — NPC
+  //    creeps never cross room edges, so gone means dead.
+  // Snapshot rebuild is from live objects only; dead entries fall out
+  // naturally. A structure first seen damaged counts its drop from
+  // hitsMax (structures enter observation at full health).
+  const prevCombat = Memory.stats?.combat;
+  const hostileSnap: Record<string, { x: number; y: number; hits: number }> =
+    {};
+  const hitsSnap: Record<string, number> = {};
+  let hostileMoves = prevCombat?.hostileMoves ?? 0;
+  let damageTaken = prevCombat?.damageTaken ?? 0;
+  let hostilesDowned = prevCombat?.hostilesDowned ?? 0;
+  if (spawnObs) {
+    for (const h of spawnObs.hostiles) {
+      hostileSnap[h.id] = { x: h.pos.x, y: h.pos.y, hits: h.hits };
+      const p = prevCombat?.hostiles[h.id];
+      if (p && (p.x !== h.pos.x || p.y !== h.pos.y)) hostileMoves += 1;
+    }
+    for (const id in prevCombat?.hostiles ?? {}) {
+      if (!(id in hostileSnap)) hostilesDowned += 1;
+    }
+    for (const name in Game.creeps) {
+      const c = Game.creeps[name];
+      hitsSnap[name] = c.hits;
+      const before = prevCombat?.hits[name] ?? c.hitsMax;
+      if (c.hits < before) damageTaken += before - c.hits;
+    }
+    for (const s of spawnObs.damaged) {
+      hitsSnap[s.id] = s.hits;
+      const before = prevCombat?.hits[s.id] ?? s.hitsMax;
+      if (s.hits < before) damageTaken += before - s.hits;
+    }
+  }
+
   Memory.stats = {
     spawnEnergy: spawn ? spawn.store[RESOURCE_ENERGY] : 0,
     controllerProgress: spawn?.room.controller?.progress ?? 0,
@@ -557,5 +679,12 @@ export const loop = (): void => {
     towers: towerStats,
     hostiles: spawnObs ? spawnObs.hostiles.length : 0,
     damaged: spawnObs ? spawnObs.damaged.length : 0,
+    combat: {
+      hostileMoves,
+      damageTaken,
+      hostilesDowned,
+      hostiles: hostileSnap,
+      hits: hitsSnap,
+    },
   };
 };

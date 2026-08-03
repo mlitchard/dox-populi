@@ -28,7 +28,11 @@
       "WebFetch(domain:raw.githubusercontent.com)",
       "Bash(curl -s --max-time 5 http://127.0.0.1:21025/api/version)",
       "Bash(printf 'storage.db[\"\"\"\"users\"\"\"\"].find\\({}\\)\\\\n')",
-      "Bash(nc -q 3 127.0.0.1 21026)"
+      "Bash(nc -q 3 127.0.0.1 21026)",
+      "Bash(nix log:*)",
+      "Bash(curl -s https://raw.githubusercontent.com/screeps/backend-local/master/lib/index.js)",
+      "Bash(curl -s https://raw.githubusercontent.com/screeps/backend-local/master/lib/cronjobs.js)",
+      "Bash(curl -s https://raw.githubusercontent.com/screeps/backend-local/master/lib/game/api/game.js)"
     ]
   }
 }
