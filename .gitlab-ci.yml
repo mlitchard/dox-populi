@@ -132,6 +132,10 @@ gitlab-ci:check:
     - echo "wrote .gitlab-ci.yml.new"
     - 'diff -u .gitlab-ci.yml .gitlab-ci.yml.new || (echo ''ERROR: .gitlab-ci.yml is out of date. Run: nix run .#gitlab-ci > .gitlab-ci.yml'' && exit 1)'
   stage: validate
+include:
+  - component: gitlab.com/DeterminateSystems/flakehub-push/component@main
+    inputs:
+      visibility: unlisted
 nixosConfigurations:dox-populi:
   needs: []
   script:
@@ -180,5 +184,6 @@ stages:
   - build
   - test
   - validate
+  - release
 variables:
   NIX_CONFIG: experimental-features = nix-command flakes

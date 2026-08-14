@@ -19,7 +19,7 @@
     };
 
     gitlab-ci = {
-      url = "git+ssh://git@gitlab.platonic.systems/platonic/gitlab-ci.nix.git";
+      url = "github:Platonic-Systems/gitlab-ci";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };
@@ -451,7 +451,17 @@
               needs = builtins.filter (n: !(builtins.elem n dropped)) job.needs;
             }
             else job;
-        in builtins.mapAttrs scrubNeeds (builtins.removeAttrs prev dropped);
+          filtered = builtins.mapAttrs scrubNeeds (builtins.removeAttrs prev dropped);
+        # Publish to FlakeHub via the DetSys GitLab CI component (JWT
+        # auth from id_tokens, no stored secrets; rolling release from
+        # the default branch by default).
+        in filtered // {
+          stages = (filtered.stages or [ "build" "test" ]) ++ [ "release" ];
+          include = (filtered.include or [ ]) ++ [{
+            component = "gitlab.com/DeterminateSystems/flakehub-push/component@main";
+            inputs.visibility = "unlisted"; # flip to "public" after the test push
+          }];
+        };
 
       apps.${system} = {
         # Regenerate ./generated and ./vendor in the working tree for editor use.
