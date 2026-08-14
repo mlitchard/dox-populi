@@ -124,6 +124,9 @@ devShells:default:
   script:
     - nix build .#devShells.x86_64-linux.default --no-link --print-build-logs
   stage: build
+flakehub-push:
+  variables:
+    NIX_INSTALLER_NETRC: $CI_BUILDS_DIR/tmp/nix-netrc
 gitlab-ci:check:
   needs: []
   script:
