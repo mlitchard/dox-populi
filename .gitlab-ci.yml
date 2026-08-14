@@ -135,6 +135,7 @@ gitlab-ci:check:
 include:
   - component: gitlab.com/DeterminateSystems/flakehub-push/component@main
     inputs:
+      tmpdir: $CI_BUILDS_DIR/tmp
       visibility: unlisted
 nixosConfigurations:dox-populi:
   needs: []
