@@ -126,6 +126,7 @@ devShells:default:
   stage: build
 flakehub-push:
   variables:
+    NIX_INSTALLER_EXTRA_CONF: $CI_BUILDS_DIR/tmp/flakehub-extra-conf
     NIX_INSTALLER_NETRC: $CI_BUILDS_DIR/tmp/nix-netrc
 gitlab-ci:check:
   needs: []

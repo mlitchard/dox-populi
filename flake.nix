@@ -464,10 +464,14 @@
               tmpdir = "$CI_BUILDS_DIR/tmp";
             };
           }];
-          # Component bug workaround: its netrc path ignores the tmpdir
-          # input; a local job-level variable wins the include merge.
+          # Component bug workaround: its netrc and extra-conf paths
+          # ignore the tmpdir input; local job-level variables win the
+          # include merge.
           "flakehub-push" = {
-            variables.NIX_INSTALLER_NETRC = "$CI_BUILDS_DIR/tmp/nix-netrc";
+            variables = {
+              NIX_INSTALLER_NETRC = "$CI_BUILDS_DIR/tmp/nix-netrc";
+              NIX_INSTALLER_EXTRA_CONF = "$CI_BUILDS_DIR/tmp/flakehub-extra-conf";
+            };
           };
         };
 
