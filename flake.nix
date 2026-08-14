@@ -459,7 +459,10 @@
           stages = (filtered.stages or [ "build" "test" ]) ++ [ "release" ];
           include = (filtered.include or [ ]) ++ [{
             component = "gitlab.com/DeterminateSystems/flakehub-push/component@main";
-            inputs.visibility = "unlisted"; # flip to "public" after the test push
+            inputs = {
+              visibility = "unlisted"; # flip to "public" after the test push
+              tmpdir = "$CI_BUILDS_DIR/tmp";
+            };
           }];
         };
 
