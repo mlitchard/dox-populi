@@ -19,7 +19,7 @@
     };
 
     gitlab-ci = {
-      url = "git+ssh://git@gitlab.platonic.systems/platonic/gitlab-ci.nix.git";
+      url = "github:Platonic-Systems/gitlab-ci";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };
