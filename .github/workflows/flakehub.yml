@@ -1,0 +1,39 @@
+# FlakeHub publish — the ONLY GitHub CI in this repo.
+#
+# Real CI (paradox check, tsc, vm-boot, itest) runs on self-hosted GitLab.
+# GitHub is the identity notary: FlakeHub trusts github.com's OIDC issuer,
+# not our GitLab instance's (401 at /token/status, 2026-08-14). This job
+# fires ONLY on a SemVer tag (v0.1.0), laid by hand after the GitLab
+# pipeline is green — the tag is the bridge of trust between the systems.
+# workflow_dispatch re-publishes an existing tag if a run fails.
+name: "Publish tags to FlakeHub"
+
+on:
+  push:
+    tags:
+      - "v?[0-9]+.[0-9]+.[0-9]+*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "The existing tag to publish to FlakeHub"
+        type: "string"
+        required: true
+
+jobs:
+  flakehub-publish:
+    runs-on: "ubuntu-latest"
+    permissions:
+      id-token: "write" # OIDC: GitHub mints the JWT FlakeHub trusts
+      contents: "read"
+    steps:
+      - uses: "actions/checkout@v6"
+        with:
+          persist-credentials: false
+          ref: "${{ (inputs.tag != null) && format('refs/tags/{0}', inputs.tag) || '' }}"
+      - uses: "DeterminateSystems/determinate-nix-action@v3"
+      - uses: "DeterminateSystems/flakehub-push@main"
+        with:
+          visibility: "unlisted" # flip to "public" after the first good push
+          name: "mlitchard/dox-populi"
+          tag: "${{ inputs.tag }}"
+          include-output-paths: false

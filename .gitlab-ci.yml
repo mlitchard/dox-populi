@@ -124,10 +124,6 @@ devShells:default:
   script:
     - nix build .#devShells.x86_64-linux.default --no-link --print-build-logs
   stage: build
-flakehub-push:
-  variables:
-    NIX_INSTALLER_EXTRA_CONF: $CI_BUILDS_DIR/tmp/flakehub-extra-conf
-    NIX_INSTALLER_NETRC: $CI_BUILDS_DIR/tmp/nix-netrc
 gitlab-ci:check:
   needs: []
   script:
@@ -136,11 +132,6 @@ gitlab-ci:check:
     - echo "wrote .gitlab-ci.yml.new"
     - 'diff -u .gitlab-ci.yml .gitlab-ci.yml.new || (echo ''ERROR: .gitlab-ci.yml is out of date. Run: nix run .#gitlab-ci > .gitlab-ci.yml'' && exit 1)'
   stage: validate
-include:
-  - component: gitlab.com/DeterminateSystems/flakehub-push/component@main
-    inputs:
-      tmpdir: $CI_BUILDS_DIR/tmp
-      visibility: unlisted
 nixosConfigurations:dox-populi:
   needs: []
   script:
@@ -189,6 +180,5 @@ stages:
   - build
   - test
   - validate
-  - release
 variables:
   NIX_CONFIG: experimental-features = nix-command flakes

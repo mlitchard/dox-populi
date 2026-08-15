@@ -452,28 +452,11 @@
             }
             else job;
           filtered = builtins.mapAttrs scrubNeeds (builtins.removeAttrs prev dropped);
-        # Publish to FlakeHub via the DetSys GitLab CI component (JWT
-        # auth from id_tokens, no stored secrets; rolling release from
-        # the default branch by default).
-        in filtered // {
-          stages = (filtered.stages or [ "build" "test" ]) ++ [ "release" ];
-          include = (filtered.include or [ ]) ++ [{
-            component = "gitlab.com/DeterminateSystems/flakehub-push/component@main";
-            inputs = {
-              visibility = "unlisted"; # flip to "public" after the test push
-              tmpdir = "$CI_BUILDS_DIR/tmp";
-            };
-          }];
-          # Component bug workaround: its netrc and extra-conf paths
-          # ignore the tmpdir input; local job-level variables win the
-          # include merge.
-          "flakehub-push" = {
-            variables = {
-              NIX_INSTALLER_NETRC = "$CI_BUILDS_DIR/tmp/nix-netrc";
-              NIX_INSTALLER_EXTRA_CONF = "$CI_BUILDS_DIR/tmp/flakehub-extra-conf";
-            };
-          };
-        };
+        # FlakeHub publishing moved to GitHub Actions
+        # (.github/workflows/flakehub.yml): our self-hosted GitLab's OIDC
+        # issuer is untrusted by api.flakehub.com (401 at /token/status),
+        # so the DetSys GitLab component can never authenticate from here.
+        in filtered;
 
       apps.${system} = {
         # Regenerate ./generated and ./vendor in the working tree for editor use.
