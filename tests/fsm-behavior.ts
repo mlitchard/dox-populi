@@ -283,6 +283,12 @@ for (const state of Object.keys(invaderBehaviorOracle) as (keyof InvaderStateBeh
   );
 }
 
+// ── Initial-state field order ────────────────────────────────────────
+// The shells derive recovery state from Object.keys(<behaviors>)[0];
+// key order is invisible to tsc, so pin it at runtime.
+assert("tower initial state", Object.keys(towerBehaviors)[0], "guarding");
+assert("invader initial state", Object.keys(invaderBehaviors)[0], "marching");
+
 // ── Summary ────────────────────────────────────────────────────────
 console.log("");
 if (failures > 0) {
