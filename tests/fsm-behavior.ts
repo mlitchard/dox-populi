@@ -1,34 +1,11 @@
-// FSM behavioral tests: verify the generated transition functions AND
-// the generated state behaviors against an independent restatement of
-// the spec's policy tables. Run via
-// `nix build .#checks.x86_64-linux.fsm-behavior`.
+// FSM behavioral tests: generated transition functions and state
+// behaviors vs an independent restatement of the spec's policy tables.
+// Run via `nix build .#checks.x86_64-linux.fsm-behavior`.
 //
-// Event vocabulary (tutorial 5 + attack-defense): CreepEvent is a
-// PRODUCT of three orthogonal facts — store level (empty|mid|full) x
-// sink saturation (SinksOpen|SinksFull) x site presence (Site|NoSite)
-// — 12 variants, spelled as the exact concatenation of the dimension
-// values. TowerEvent is the product threat (hostile|calm) x integrity
-// (Damage|Intact) x reserve (ReserveOk|ReserveLow). The defender
-// machine's event type is ThreatLevel itself (hostile|calm). The
-// ENEMY's InvaderEvent (dox/invader submodule) is the product foe
-// reach (foe|noFoe) x struct reach (Struct|NoStruct) x spawn sight
-// (Spawn|NoSpawn). One event per actor per tick, no priority, no
-// masking: every fact rides every event.
-//
-// Test strategy, two sweeps:
-//  1. Transitions: every state x every event against a policy oracle
-//     restated here from the spec's documentation — proves the state
-//     GRAPH routes correctly.
-//  2. Behaviors: every state's {action, target} against a full restated
-//     behavior table — the shell executes behaviors[state], so a
-//     transition sweep alone would stay green even if codegen wired
-//     e.g. supporting to 'harvest' and every "supporting" creep went
-//     mining at the controller.
-// The oracles are an independent second statement of the tables in
-// dox/creeps.dox; if spec and oracle ever disagree, one of them is
-// lying and this check fails. tsc proves the reconstructed event
-// product and the oracle tables against the generated types: rename a
-// spec variant and this file stops compiling.
+// Two sweeps — transitions (every state x every event) and behaviors
+// (every state's {action, target}); a transition sweep alone stays
+// green under miswired behaviors. tsc proves the oracles against the
+// generated types, so a spec vocabulary change fails compile here.
 import {
   harvesterTransition,
   upgraderTransition,
@@ -55,9 +32,6 @@ import type {
   StateBehaviors,
   TowerStateBehaviors,
 } from "../generated/index";
-// The ENEMY brain gets the same church: dox/invader/ is its own
-// submodule (generated/invader.ts), so its vocabulary imports come
-// from there, not from index.
 import { invaderTransition, invaderContext, invaderBehaviors } from "../generated/invader";
 import type {
   InvaderState,
@@ -84,7 +58,6 @@ const SITES = ["Site", "NoSite"] as const;
 const THREATS = ["hostile", "calm"] as const;
 const INTEGRITIES = ["Damage", "Intact"] as const;
 const RESERVES = ["ReserveOk", "ReserveLow"] as const;
-// InvaderEvent product: foe reach x struct reach x spawn sight.
 const FOES = ["foe", "noFoe"] as const;
 const STRUCTS = ["Struct", "NoStruct"] as const;
 const SPAWNSIGHTS = ["Spawn", "NoSpawn"] as const;
@@ -99,9 +72,6 @@ type Foe = (typeof FOES)[number];
 type Struct = (typeof STRUCTS)[number];
 type SpawnSight = (typeof SPAWNSIGHTS)[number];
 
-// The THREATS dimension IS the ThreatLevel union (the defender's whole
-// event vocabulary and the tower event's first fact share one spelling)
-// — tsc proves the identification here.
 const threatEvent = (th: Threat): ThreatLevel => th;
 
 const creepEvent = (st: Store, sk: Sinks, si: Sites): CreepEvent =>
@@ -111,7 +81,6 @@ const towerEvent = (th: Threat, integ: Integrity, rs: Reserve): TowerEvent =>
 const invaderEvent = (f: Foe, s: Struct, sp: SpawnSight): InvaderEvent =>
   `${f}${s}${sp}`;
 
-// Helper: run a transition and return the target state.
 function hTx(state: HarvesterState, event: CreepEvent): HarvesterState {
   return harvesterTransition(state, event, harvesterContext).target;
 }
@@ -133,16 +102,6 @@ function iTx(state: InvaderState, event: InvaderEvent): InvaderState {
 
 // ── Policy oracles: the spec's tables, restated independently ────────
 
-// Harvester: harvest until full, deliver until empty; nowhere to put it
-// -> support the controller. empty -> harvesting; mid while harvesting
-// stays (fill up first); otherwise energy on board is disposed of by
-// the sink dimension: SinksOpen -> delivering, SinksFull -> supporting.
-// Sites are noise to this role.
-// Historical: a mid-store harvester in delivering whose sinks just
-// saturated has an EMPTY transfer-target set — staying put is the same
-// null-target freeze the builder once had; the *SinksFull* rows pin the
-// supporting escape. Sinks reopening pulls supporting back to
-// delivering because delivery powers spawning.
 function harvesterOracle(
   state: HarvesterState,
   st: Store,
@@ -153,28 +112,12 @@ function harvesterOracle(
   return sk === "SinksOpen" ? "delivering" : "supporting";
 }
 
-// Upgrader: collect until full, upgrade until empty; mid self-loops.
-// Sinks and sites are noise to this role — the old sinksFull->upgrading
-// shortcut was only ever a proxy for "store full" and dissolves here.
 function upgraderOracle(state: UpgraderState, st: Store): UpgraderState {
   if (st === "full") return "upgrading";
   if (st === "empty") return "collecting";
   return state;
 }
 
-// Builder: gather until full; energy on board is spent by the site
-// dimension: Site -> building, NoSite -> assisting. mid while gathering
-// stays (fill up first). Sinks are noise to this role.
-// Historical (both fixed by the product vocabulary, both pinned by the
-// full* rows of the sweep):
-//  - FROZEN builder: the old priority chain let storeFull mask the
-//    residual noSites — a full builder with zero sites self-looped in
-//    building (action=build, no target, no API call) until TTL death.
-//    full*NoSite -> assisting is the escape, observed not deduced.
-//  - BLIND builder: the compound sinksFull outranked sawSite, so a full
-//    builder under sink saturation shoveled overflow at the controller
-//    next to an unbuilt extension. full*Site -> building keeps sight of
-//    the site regardless of the sink dimension.
 function builderOracle(
   state: BuilderState,
   st: Store,
@@ -185,34 +128,16 @@ function builderOracle(
   return si === "Site" ? "building" : "assisting";
 }
 
-// Defender: state-independent pure policy over the one threat fact —
-// hostile -> engaging, calm -> patrolling. The first combat creep and
-// the first creep machine with its own event type.
 function defenderOracle(th: Threat): DefenderState {
   return th === "hostile" ? "engaging" : "patrolling";
 }
 
-// Tower: attack OUTRANKS repair, and repair respects the reserve;
-// state-independent pure policy. The reference (section 5 main.js)
-// issues repair then attack in one tick and lets the later intent win —
-// engine accident as priority. The spec makes it explicit: hostile
-// present -> attacking no matter integrity OR reserve (shoot with
-// whatever is in the tank); calm + Damage repairs only at ReserveOk —
-// at ReserveLow the tower guards instead of repairing itself dry (the
-// calmDamageReserveLow rows pin the energy discipline).
 function towerOracle(th: Threat, integ: Integrity, rs: Reserve): TowerState {
   if (th === "hostile") return "attacking";
   if (integ === "Damage" && rs === "ReserveOk") return "repairing";
   return "guarding";
 }
 
-// Invader (the ENEMY brain, dox/invader/invader.dox): creeps outrank
-// structures outrank the march; nothing in reach and no spawn to march
-// on -> loiter. STATE-INDEPENDENT pure policy — all four states carry
-// the identical eight transitions (tower precedent), so the oracle
-// reads only the event facts. Answer the sword before the masonry:
-// a defender blocking the path must not let the raider die chewing a
-// wall.
 function invaderOracle(f: Foe, s: Struct, sp: SpawnSight): InvaderState {
   if (f === "foe") return "slaughtering";
   if (s === "Struct") return "razing";
@@ -221,9 +146,8 @@ function invaderOracle(f: Foe, s: Struct, sp: SpawnSight): InvaderState {
 }
 
 // ── Behavior oracles: what each state DOES ───────────────────────────
-// Typed as the generated StateBehaviors/TowerStateBehaviors so tsc
-// enforces exhaustiveness and variant spelling; the runtime compare
-// below catches wrong wiring (right shape, wrong action or target).
+// Typed as the generated records so tsc enforces exhaustiveness and
+// spelling; the runtime compare catches wrong wiring.
 const creepBehaviorOracle: StateBehaviors = {
   harvesting: { action: "harvest", target: "source" },
   delivering: { action: "transfer", target: "energySink" },
@@ -243,9 +167,6 @@ const towerBehaviorOracle: TowerStateBehaviors = {
   repairing: { action: "repair", target: "damagedStructure" },
 };
 
-// Field order mirrors the spec's InvaderStateBehaviors record — the
-// FIRST field is the machine's initial state (the hands' recovery
-// state comes from Object.keys(invaderBehaviors)[0]).
 const invaderBehaviorOracle: InvaderStateBehaviors = {
   marching: { action: "march", target: "hostileSpawn" },
   slaughtering: { action: "attack", target: "foeInReach" },
