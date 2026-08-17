@@ -14,7 +14,7 @@
     secrix.url = "github:Platonic-Systems/secrix";
 
     disko = {
-      url = "github:nix-community/disko";
+      url = "https://flakehub.com/f/nix-community/disko/1.13.0.tar.gz";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
@@ -24,9 +24,11 @@
     };
 
     determinate.url = "https://flakehub.com/f/DeterminateSystems/determinate/3";
+
+    fh.url = "https://flakehub.com/f/DeterminateSystems/fh/*";
   };
 
-  outputs = { self, nixpkgs, paradox, typed-screeps, secrix, disko, gitlab-ci, determinate }:
+  outputs = { self, nixpkgs, paradox, typed-screeps, secrix, disko, gitlab-ci, determinate, fh }:
     let
       system = "x86_64-linux";
       pkgs = import nixpkgs { inherit system; };
@@ -273,6 +275,7 @@
         name = "dox-populi-dev";
         packages = [
           paradoxBin
+          fh.packages.${system}.default
           pkgs.z3
           pkgs.nodejs
           pkgs.typescript
