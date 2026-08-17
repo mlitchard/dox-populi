@@ -12,3 +12,4 @@ node_modules/
 /dox-populi.qcow2
 /dox-populi-installer.iso
 .claude/settings.local.json
+/blog

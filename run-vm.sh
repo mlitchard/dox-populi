@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# dox-populi dev VM runner (dubai vm-session pattern): qemu runs
+# dox-populi dev VM runner: qemu runs
 # detached in a tmux session with its serial console on stdio, and you
 # connect to that console with `./run-vm.sh console` — a normal
 # terminal you can cut/paste in, and detach from (Ctrl-b d) without

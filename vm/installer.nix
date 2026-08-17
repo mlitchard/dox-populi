@@ -1,5 +1,5 @@
-# Auto-installing ISO for the dev VM (the dubai installer-auto-dd
-# pattern, dd edition): the ISO carries a PREBUILT zstd-compressed
+# Auto-installing ISO for the dev VM: the ISO carries a PREBUILT
+# zstd-compressed
 # disk image of nixosConfigurations.vm (packages.vm-image-zst) and a
 # boot service that decompresses it straight onto /dev/vda, grows the
 # root partition to fill the disk, and powers off. No nix, no git, no
@@ -30,8 +30,8 @@
   image.baseName = lib.mkForce "dox-populi-installer";
 
   # Ship the compressed system image as a plain file in the ISO
-  # filesystem — NOT a store path in the installer's closure (same
-  # deliberate decoupling as dubai's --post-format-files). At runtime
+  # filesystem — NOT a store path in the installer's closure, so the
+  # installer system and the payload image stay decoupled. At runtime
   # the live system mounts the ISO at /iso (iso-image.nix declares
   # fileSystems."/iso"), so the service reads it from
   # /iso/install/image.raw.zst.
@@ -102,7 +102,7 @@
 
       # The image is smaller than the disk, so after dd the GPT backup
       # header sits at the image's end, not the disk's — move it before
-      # growing anything (dubai's sgdisk -e step).
+      # growing anything.
       echo "=== relocating GPT backup header to end of disk ==="
       sgdisk -e "$TARGET"
       partprobe "$TARGET" || true
