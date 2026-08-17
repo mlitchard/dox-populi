@@ -14,7 +14,7 @@
     secrix.url = "github:Platonic-Systems/secrix";
 
     disko = {
-      url = "github:nix-community/disko";
+      url = "https://flakehub.com/f/nix-community/disko/1.13.0.tar.gz";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
@@ -22,24 +22,32 @@
       url = "github:Platonic-Systems/gitlab-ci";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+
+    determinate.url = "https://flakehub.com/f/DeterminateSystems/determinate/3";
+
+    fh.url = "https://flakehub.com/f/DeterminateSystems/fh/*";
+
+    flake-checker.url = "https://flakehub.com/f/DeterminateSystems/flake-checker/*";
   };
 
-  outputs = { self, nixpkgs, paradox, typed-screeps, secrix, disko, gitlab-ci }:
+  outputs = { self, nixpkgs, paradox, typed-screeps, secrix, disko, gitlab-ci, determinate, fh, flake-checker }:
     let
       system = "x86_64-linux";
       pkgs = import nixpkgs { inherit system; };
-      # Every locked flake input source, recursively (nested inputs
-      # included). Baked into the VM image so the guest's first
-      # `nix develop` finds all eval sources (content-addressed by
-      # narHash) already in the store and fetches nothing.
+      # Every locked flake input source, recursively; baked into the VM
+      # image so the guest's first `nix develop` fetches nothing.
       collectFlakeInputs = input:
         [ input ] ++ builtins.concatMap collectFlakeInputs
           (builtins.attrValues (input.inputs or { }));
       flakeInputSources =
         builtins.concatMap collectFlakeInputs (builtins.attrValues self.inputs);
+      # Shared by nixosConfigurations.vm and checks.vm-boot.
+      vmCoreModules = [
+        determinate.nixosModules.default
+        ./vm/module.nix
+      ];
       paradoxBin = paradox.packages.${system}.paradox;
-      # Atlas lives in the paradox *source* (the flake input), not the
-      # installed package output.
+      # Atlas ships in the paradox flake source.
       atlas = "${paradox}/lib/dox";
 
       # Paradox generate writes into <spec-dir>/.dox/, so work on a copy.
@@ -59,7 +67,6 @@
         '';
       };
 
-      # Assemble the full TS project (shell + generated + vendored types).
       tsSrc = pkgs.runCommand "dox-populi-ts-src" { } ''
         mkdir -p $out/vendor
         cp -r ${./shell} $out/shell
@@ -82,13 +89,8 @@
         '';
       };
 
-      # The ENEMY bundle: dox/invader (spec) → generated/invader.ts →
-      # shell/invader.ts (hands) → this JS, injected as the seeded NPC
-      # "raiders" user's users.code by the seed step in apps.server (NOT
-      # uid 2 — the engine owns that user's creeps). Stage 1 of the invader
-      # trajectory (docs/evolution-plan.md): the raider's decision logic
-      # goes through the same check → generate → typecheck pipeline as the
-      # colony brain — the enemy is world content, but its brain is spec.
+      # Raider brain (dox/invader spec + shell/invader.ts); apps.server
+      # seeds it as the "raiders" NPC user's users.code.
       invaderMain = pkgs.stdenv.mkDerivation {
         name = "dox-populi-invader-main";
         src = tsSrc;
@@ -102,16 +104,10 @@
           cp invader.js $out/
         '';
       };
-      # The raid LAW bundle: shell/raidmod.ts (hands) over the raid policy
-      # data in generated/invader.ts — a server mod (mods.json) for the
-      # backend process that deletes the native genInvaders cron (uid-2
-      # engine-AI raids) and installs genRaiders: when a room's harvested
-      # energy crosses the spec's raidGoal (native counter, native reset
-      # semantics, room.invaderGoal override honored — 1 = raid now,
-      # huge = never), it inserts "raiders"-owned creeps at the room's
-      # exit squares, driven by the same seeded users.code brain. This is
-      # what makes raids WORLD BEHAVIOR: server + deploy-local + client
-      # shows a raider battle with no CLI surgery.
+      # Server mod (mods.json): replaces the native genInvaders cron with
+      # the spec's genRaiders, which inserts "raiders"-owned creeps at
+      # the room's exits when harvested energy crosses raidGoal
+      # (room.invaderGoal override honored).
       raidMod = pkgs.stdenv.mkDerivation {
         name = "dox-populi-raid-mod";
         src = tsSrc;
@@ -125,8 +121,6 @@
           cp raidmod.js $out/
         '';
       };
-      # secrix CLI as a devShell command (llm-core pattern: tool packages
-      # included in devShell packages, not reached via `nix run`).
       secrixApp = secrix.secrix self;
       secrixCli = pkgs.writeShellApplication {
         name = "secrix";
@@ -135,19 +129,14 @@
         '';
       };
 
-      # Tick-speed knob: ms per tick for the private server (engine
-      # default: 1000). Single source of truth — apps.server re-asserts
-      # it over the CLI on every launch (setTickDuration PERSISTS in the
-      # world's env storage, so the knob must overrule stale world
-      # state), and the itest is wired to the same value. Optional
-      # per-shell override: SCREEPS_TICK_MS.
+      # ms per tick (engine default 1000). setTickDuration persists in
+      # world storage, so apps.server re-asserts this every launch;
+      # SCREEPS_TICK_MS overrides per shell.
       tickMs = 50;
 
-      # The Screeps server itself, nix-vendored from the open-source npm
-      # package (`screeps` = the launcher; it pulls in @screeps/backend,
-      # engine, storage, driver...). Replaces the Steam-bundled tree: no
-      # steam-run, no bundled node, pure eval. isolated-vm and friends are
-      # native modules — node-gyp needs python + the matching node headers.
+      # The open-source Screeps server, nix-vendored from npm. isolated-vm
+      # and friends are native modules: node-gyp needs python + the
+      # matching node headers.
       serverNode = pkgs.nodejs_22; # screeps@4.3.0 wants node >=22.9
       screepsServer = pkgs.buildNpmPackage {
         pname = "dox-populi-screeps-server";
@@ -195,7 +184,7 @@
         '';
       };
 
-      # Private-server mods, nix-vendored (quux pattern): deps declared in
+      # Private-server mods, nix-vendored: deps declared in
       # server/mods/package.json, resolved by the committed package-lock.json,
       # fetched reproducibly via npmDepsHash. apps.server injects the mod
       # entry paths into the generated mods.json each launch.
@@ -214,9 +203,8 @@
       };
     in
     {
-      # Self-contained secrix key configuration. The secrix CLI derives its
-      # users and systems from config.secrix across this flake's
-      # nixosConfigurations — keys are declared here, not in ~/nixos.
+      # Secrix key stub: the secrix CLI reads config.secrix from this
+      # flake's nixosConfigurations.
       nixosConfigurations.dox-populi = nixpkgs.lib.nixosSystem {
         inherit system;
         modules = [
@@ -225,8 +213,7 @@
             secrix.defaultEncryptKeys.mlitchard = [
               (builtins.readFile ./secrets/public_keys/mlitchard.pub)
             ];
-            # Stub-only config for secrix key discovery; deploys is the real
-            # deploy target. Dummy fs/bootloader satisfy flake-check asserts.
+            # Dummy fs/bootloader satisfy flake-check asserts.
             fileSystems."/" = { device = "none"; fsType = "tmpfs"; };
             boot.loader.grub.enable = false;
             system.stateVersion = "26.05";
@@ -234,30 +221,19 @@
         ];
       };
 
-      # Dev VM for hosts without nix (dubai installer-auto-dd dd
-      # pattern). Never built on the host, never built at install time:
-      # the disko image builder bakes nixosConfigurations.vm into a raw
-      # disk image (packages.vm-image → vm-image-zst), the installer
-      # ISO (vm/installer.nix) carries that compressed image and its
-      # boot service just dd's it onto /dev/vda and grows the root
-      # partition — no nix, no git, no network in the installer.
-      # vm/module.nix is the installed system; vm/disko.nix holds the
-      # disk layout (a separate module so tests/vm.nix, which imports
-      # module.nix alone, stays disko-free).
+      # Dev VM. Built into a raw disk image (packages.vm-image →
+      # vm-image-zst) that the installer ISO dd's onto /dev/vda.
+      # vm/disko.nix is a separate module so checks.vm-boot can boot
+      # vmCoreModules without it.
       nixosConfigurations.vm = nixpkgs.lib.nixosSystem {
         inherit system;
-        modules = [
+        modules = vmCoreModules ++ [
           disko.nixosModules.disko
           ./vm/disko.nix
-          ./vm/module.nix
-          # Bake the dev goodies into the image so the first
-          # `nix develop` in the VM builds nothing AND fetches nothing:
-          # build outputs (devshell/server/client) plus every locked
-          # flake input source (eval needs them; content-addressed, so
-          # the guest's nix reuses the baked copies). Lives here — not
-          # in vm/module.nix — because it needs `self`, and module.nix
-          # must stay self-free for tests/vm.nix. (Replaces the old
-          # installer-time `nix build --store /mnt` step.)
+          # Bake dev-shell outputs and all locked flake input sources
+          # into the image so `nix develop` in the VM is offline. Lives
+          # here because it needs `self`; vm/module.nix stays self-free
+          # for tests/vm.nix.
           {
             system.extraDependencies = flakeInputSources ++ [
               self.devShells.${system}.default
@@ -275,26 +251,18 @@
 
       packages.${system} = {
         inherit generated main;
-        # The enemy bundle (shell/invader.ts + generated/invader.*), seeded
-        # as the NPC "raiders" user's users.code. Exported so CI gets a cheap build
-        # witness — otherwise it only builds inside the itest job.
+        # Exported so CI builds them outside the itest job.
         invader-main = invaderMain;
-        # The raid-law server mod (shell/raidmod.ts + generated raid
-        # policy), injected into mods.json each launch. Exported for the
-        # same reason: a cheap CI build witness.
         raid-mod = raidMod;
         screeps-server = screepsServer;
         screeps-client = screepsClient;
         secrix = secrixCli;
         default = main;
-        # Raw disk image of the dev VM system, built by disko's image
-        # builder (qemu in the sandbox): 16G GPT disk (BIOS-boot part +
-        # ext4 root), BIOS grub, full closure preinstalled. Output:
+        # Raw disk image of the dev VM (disko image builder). Output:
         # <name>.raw per disk (vm/disko.nix names one disk, "main").
         vm-image =
           self.nixosConfigurations.vm.config.system.build.diskoImages;
-        # zstd -3: dubai measured ~100x faster than -19 for <3% size
-        # difference; decompression speed is level-independent.
+        # zstd -3: ~100x faster than -19 for <3% size difference.
         vm-image-zst = pkgs.runCommand "dox-populi-vm-image-zst"
           { nativeBuildInputs = [ pkgs.zstd ]; } ''
           mkdir -p $out
@@ -309,6 +277,8 @@
         name = "dox-populi-dev";
         packages = [
           paradoxBin
+          fh.packages.${system}.default
+          flake-checker.packages.${system}.default
           pkgs.z3
           pkgs.nodejs
           pkgs.typescript
@@ -342,19 +312,17 @@
       };
 
       checks.${system} = {
-        # End-to-end VM test — pure now that the server is the nix-vendored
-        # npm package (no Steam tree, no --impure).
+        # End-to-end VM test: server + deploy + harvest.
         itest = pkgs.callPackage ./tests/integration.nix {
           serverProgram = self.apps.${system}.server.program;
           deployProgram = self.apps.${system}.deploy-local.program;
           inherit tickMs;
         };
 
-        # Boots the dev VM system (vm/module.nix) in the NixOS test
-        # harness (dubai nix-workstation-image pattern) and asserts the
-        # first-boot contract: live-mounted repo, sshd, flakes, dev env vars.
+        # First-boot contract of the dev VM (vmCoreModules): repo
+        # mount, sshd, Determinate Nix, flakes, dev env vars.
         vm-boot = pkgs.callPackage ./tests/vm.nix {
-          nixosModule = ./vm/module.nix;
+          nixosModule = { imports = vmCoreModules; };
           inherit self;
         };
 
@@ -377,8 +345,8 @@
           touch $out
         '';
 
-        # FSM behavioral tests: exercise the generated transition functions
-        # against critical scenarios (e.g. the spawnFull event-priority bug).
+        # Exhaustive sweep of the generated transition functions
+        # against the restated policy.
         fsm-behavior = pkgs.runCommand "fsm-behavior"
           { nativeBuildInputs = [ pkgs.typescript pkgs.nodejs_22 ]; } ''
           cp -r ${tsSrc}/. .
@@ -409,27 +377,20 @@
         build = main;
       };
 
-      # CI job filter, read by the gitlab-ci.nix generator (its shell
-      # script does `flake.gitlab or null` and applies this overlay to
-      # the generated config). The generator maps EVERY flake output to
-      # a job, which duplicates work along dependency chains — one job
-      # building the deepest artifact proves the whole chain. Dropped:
-      # - VM chain: apps:installer-iso builds the ISO, which embeds
-      #   vm-image-zst <- vm-image <- the vm system; five upstream jobs
-      #   rebuild strict prefixes of it (nixosConfigurations:vm and
-      #   :installer, packages:vm-image, :vm-image-zst, :installer-iso).
+      # CI job filter, read by the gitlab-ci.nix generator (`flake.gitlab
+      # or null`, applied to the generated config). The generator maps
+      # every flake output to a job; one job building the deepest
+      # artifact proves the whole chain. Dropped:
+      # - VM chain: apps:installer-iso embeds vm-image-zst <- vm-image
+      #   <- the vm system, so those upstream jobs are redundant.
       # - checks:build and packages:main are the same derivation as
-      #   packages:default (`build = main`, `default = main`).
-      # - flake:check rebuilds every check the test stage already ran
-      #   (including the multi-hour itest VM).
-      # - flake:show: gitlab-ci:check runs `nix flake show --json`
-      #   itself as its first step.
-      # - apps:server / apps:deploy-local programs are baked into the
-      #   checks:itest derivation (serverProgram/deployProgram), so
-      #   that job already builds both.
-      # removeAttrs (not the README's `= null` trick: nulls survive
-      # into the YAML) + a needs scrub so no kept job references a
-      # dropped one (GitLab rejects undefined needs).
+      #   packages:default.
+      # - flake:check rebuilds every check the test stage already ran.
+      # - flake:show: gitlab-ci:check runs `nix flake show --json` itself.
+      # - apps:server / apps:deploy-local are baked into checks:itest
+      #   (serverProgram/deployProgram).
+      # removeAttrs, not `= null` (nulls survive into the YAML), plus a
+      # needs scrub (GitLab rejects undefined needs).
       gitlab = prev:
         let
           dropped = [
@@ -452,10 +413,9 @@
             }
             else job;
           filtered = builtins.mapAttrs scrubNeeds (builtins.removeAttrs prev dropped);
-        # FlakeHub publishing moved to GitHub Actions
-        # (.github/workflows/flakehub.yml): our self-hosted GitLab's OIDC
-        # issuer is untrusted by api.flakehub.com (401 at /token/status),
-        # so the DetSys GitLab component can never authenticate from here.
+        # FlakeHub publishing lives in GitHub Actions
+        # (.github/workflows/flakehub.yml): FlakeHub trusts github.com's
+        # OIDC issuer, not this GitLab instance's.
         in filtered;
 
       apps.${system} = {
@@ -507,9 +467,8 @@
           type = "app";
           program = toString (pkgs.writeShellScript "screeps-server" ''
             set -euo pipefail
-            # Tick duration: flake default first (works out of the box),
-            # SCREEPS_TICK_MS as optional per-shell override. The value
-            # is spliced into a CLI expression — digits only, no excuses.
+            # Flake default; SCREEPS_TICK_MS is an optional override.
+            # The value is spliced into a CLI expression — digits only.
             TICK_MS="''${SCREEPS_TICK_MS:-${toString tickMs}}"
             case "$TICK_MS" in
               ("" | *[!0-9]*)
@@ -547,10 +506,9 @@
             mkdir -p "$DATA/logs"
             [ -e "$DATA/assets" ]       || ln -s "$LAUNCHER/init_dist/assets" "$DATA/assets"
             [ -e "$DATA/node_modules" ] || ln -s "$LAUNCHER/init_dist/node_modules" "$DATA/node_modules"
-            # mods.json is regenerated every launch (like .screepsrc): the
-            # versioned template plus nix-vendored mod entry paths.
-            # raidmod: the raid law (spec-driven raider raids replace the
-            # native uid-2 genInvaders cron) — see raidMod above.
+            # mods.json is regenerated every launch: the versioned
+            # template plus nix-vendored mod paths. raidmod replaces the
+            # native genInvaders cron with the spec-driven raid policy.
             ${pkgs.jq}/bin/jq --arg auth "${serverMods}/node_modules/screepsmod-auth/index.js" \
               --arg raid "${raidMod}/raidmod.js" \
               '.mods += [$auth, $raid]' ${./server/mods.json} > "$DATA/mods.json.tmp"
@@ -560,28 +518,18 @@
             if [ ! -s "$DATA/db.json" ]; then
               cp "$LAUNCHER/init_dist/db.json" "$DATA/db.json"
               chmod u+w "$DATA/db.json"
-              # Seed a DEDICATED NPC user ("raiders") armed with the
-              # spec-driven raider brain (dox/invader → shell/invader.ts →
-              # invaderMain). NOT the stock Invader (uid 2): the ENGINE
-              # special-cases user-2 creeps (itest forensics: inserted
-              # uid-2 raiders marched AWAY from the target spawn under
-              # engine invader AI while users.code never ran — memory:2
-              # stayed empty), and uid 2's stock invaderCore stronghold
-              # (W5N4) matures into ramparts/towers/defenderN spawns
-              # that muddy every combat probe. A fresh user has none of
-              # that baggage: the doc mirrors a simplebot user (roster
-              # fields cpu/cpuAvailable + meta, which LokiJS updates
-              # require) minus the bot field, so the runner executes
-              # users.code — our bundle. The `active` roster flag is
-              # server-managed (boot normalizes the seeded value; the
-              # raider surgery re-arms it at insertion time), so the
-              # seed's active: true is a best-effort default, not the
-              # mechanism. The uid-2 empty stub stays: stock ships NO
-              # users.code for the Invader user, and when the server
-              # promotes it onto the roster (active flips to 1 on world
-              # population) the runner spams "Unknown module 'main'"
-              # every tick without one. Patched offline so no runtime
-              # step is needed; an EXISTING world keeps its old db until
+              # Seed a dedicated NPC user ("raiders") with the raider
+              # brain (dox/invader → shell/invader.ts → invaderMain).
+              # Not uid 2: the engine drives user-2 creeps itself and
+              # never runs its users.code, and uid 2 owns a stock
+              # stronghold that muddies combat probes. The doc mirrors a
+              # simplebot user; the meta field is required — the LokiJS
+              # storage layer throws on any update to a doc without one.
+              # `active`
+              # is server-managed, so the seeded value is only a
+              # default. The uid-2 empty users.code stub prevents
+              # "Unknown module 'main'" spam when the server activates
+              # that user. An existing world keeps its db until
               # reset-local.
               ${pkgs.jq}/bin/jq --rawfile invader ${invaderMain}/invader.js \
                 '(.collections[] | select(.name == "users")) |= (.data += [{_id: "raiders", username: "Raiders", usernameLower: "raiders", cpu: 100, cpuAvailable: 10000, active: true, gcl: 1, registeredDate: "2016-11-14T14:04:21.156Z", badge: {type: 1, color1: "#f00", color2: "#000", color3: "#f00", flip: false, param: 0}, meta: {revision: 0, created: 0, version: 0}, "$loki": (.maxId + 1)}] | .maxId += 1)
@@ -622,14 +570,12 @@
             trap cleanup EXIT
             ${serverNode}/bin/node "$LAUNCHER/bin/screeps.js" start "$@" &
             LAUNCHER_PID=$!
-            # Assert the tick duration once the CLI answers. The launcher
-            # is backgrounded, so 21026 may not be bound yet — poll by
-            # pushing the command itself (nc fails fast while the port is
-            # closed). setTickDuration PERSISTS in the world's env
-            # storage (LokiJS db.json, autosave), so this re-asserts
-            # every launch: the knob is authoritative, not whatever an
-            # old session left behind. Best-effort — a miss means wrong
-            # tick speed, never a dead server.
+            # Assert the tick duration once the CLI answers (21026 may
+            # not be bound yet — poll by pushing the command itself; nc
+            # fails fast on a closed port). setTickDuration persists in
+            # the world's env storage, so this re-asserts it every
+            # launch. Best-effort: a miss means wrong tick speed, never
+            # a dead server.
             (
               for _ in $(seq 1 60); do
                 if printf 'system.setTickDuration(%s)\n' "$TICK_MS" \
@@ -736,9 +682,9 @@
           '');
         };
 
-        # Stop the private server (launcher + all its storage/backend/engine
-        # children — every one has the vendored server's store path in its
-        # argv) and the browser client. World data is left intact.
+        # Stop the private server (the launcher and its children all
+        # carry the vendored server's store path in argv) and the
+        # browser client. World data is left intact.
         stop = {
           type = "app";
           program = toString (pkgs.writeShellScript "screeps-stop" ''
@@ -766,9 +712,7 @@
           program = toString (pkgs.writeShellScript "reset-local" ''
             set -euo pipefail
             DATA="''${SCREEPS_DATA_DIR:-$(${pkgs.git}/bin/git rev-parse --show-toplevel)/.server-data}"
-            # Same kill handle as apps.stop: catches the launcher AND its
-            # children (the old 'screeps.js start' pattern orphaned them,
-            # leaving 21025/21026 bound).
+            # Same kill handle as apps.stop.
             ${pkgs.procps}/bin/pkill -f '${screepsServer}/node_modules' 2>/dev/null || true
             sleep 2
             ${pkgs.procps}/bin/pkill -9 -f '${screepsServer}/node_modules' 2>/dev/null || true
@@ -778,15 +722,11 @@
         };
 
         # Provision the dev VM disk (one-time): create dox-populi.qcow2
-        # and boot the flake's own installer ISO in qemu, foreground,
-        # serial on stdio. The ISO's boot service dd's the prebuilt
-        # system image onto the disk, grows the root partition, and
-        # powers off (vm/installer.nix) — qemu exiting cleanly means
-        # the install is done. Run the installed VM with ./run-vm.sh
-        # (which only RUNS; all provisioning lives here). No -netdev:
-        # the dd installer needs no network, so it gets none.
-        # `nix run .#installer-iso` resolves to this app; `nix build
-        # .#installer-iso` still builds the bare ISO package.
+        # and boot the installer ISO in qemu; its boot service dd's the
+        # prebuilt image onto the disk and powers off (vm/installer.nix).
+        # No -netdev: the installer needs no network. ./run-vm.sh runs
+        # the installed VM. `nix run .#installer-iso` resolves to this
+        # app; `nix build .#installer-iso` builds the bare ISO package.
         installer-iso = {
           type = "app";
           program = toString (pkgs.writeShellScript "install-vm" ''
@@ -908,12 +848,11 @@
             echo "deployed main.js to $URL (branch 'default')"
 
             # Auto-spawn: if the account owns nothing yet, place Spawn1.
-            # Get the room id first: place-spawn demands a room that exists in
-            # db.rooms AND contains an unowned controller (the server's own
-            # world-start-room falls back to hardcoded W5N5, a controller-less
-            # center room — useless). No HTTP endpoint distinguishes "unowned
-            # controller" from "no controller", so read candidates from the
-            # world db and try them in order.
+            # place-spawn demands a room that exists in db.rooms AND has
+            # an unowned controller (the server's world-start-room falls
+            # back to W5N5, a controller-less center room). No HTTP
+            # endpoint exposes controller ownership, so read candidates
+            # from the world db and try them in order.
             STATUS=$($CURL -sS -H "X-Token: $TOKEN" "$URL/api/user/world-status" \
               | $JQ -r '.status // empty')
             echo "world-status: $STATUS"
@@ -961,20 +900,12 @@
                     '{room: $r, x: $x, y: $y, name: "Spawn1"}')")
                 if [ "$(printf '%s' "$RESULT" | $JQ -r '.ok // empty')" = "1" ]; then
                   echo "auto-placed Spawn1 in $ROOM at ($X,$Y)"
-                  # The engine's place-spawn endpoint welds newbie
-                  # protection onto the room: safeMode (gameTime + 20000,
-                  # honest world law, kept) AND invaderGoal: 1000000
-                  # (upstream backend-local lib/game/api/game.js). The
-                  # raid mod honors per-room invaderGoal overrides
-                  # (native parity), so that 1e6 would smother the
-                  # spec's raidGoal until a MILLION energy was harvested.
-                  # Clear it in the same breath, so every world born
-                  # through this pipeline lives under spec law from tick
-                  # one. raidWave: 0 resets the escalation counter — a
-                  # fresh colony faces raid sizes from sizeStart, not
-                  # the previous tenant's war. Best-effort like
-                  # setPassword above: worst case is late raids, never
-                  # a failed deploy.
+                  # place-spawn welds newbie protection onto the room:
+                  # safeMode (kept) and invaderGoal: 1000000. The raid
+                  # mod honors per-room invaderGoal overrides, so clear
+                  # it; raidWave: 0 resets the escalation counter.
+                  # Best-effort: worst case is late raids, never a
+                  # failed deploy.
                   $JQ -rn --arg r "$ROOM" \
                     '"storage.db.rooms.update({_id: \($r|@json)}, {$set: {invaderGoal: null, raidWave: 0}})"' \
                     | ${pkgs.netcat-openbsd}/bin/nc -q 2 "$CLI_HOST" "$CLI_PORT" >/dev/null 2>&1 || true
@@ -991,10 +922,7 @@
           '');
         };
 
-        # Integration test: VM boots the private server, deploy-local
-        # provisions account + code + spawn, then the harness polls
-        # Memory.stats.energy until the colony acquires energy. Pure —
-        # also runs as part of `nix flake check`.
+        # Build checks.itest with streamed logs.
         itest = {
           type = "app";
           program = toString (pkgs.writeShellScript "itest" ''
