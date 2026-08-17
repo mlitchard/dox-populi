@@ -26,9 +26,11 @@
     determinate.url = "https://flakehub.com/f/DeterminateSystems/determinate/3";
 
     fh.url = "https://flakehub.com/f/DeterminateSystems/fh/*";
+
+    flake-checker.url = "https://flakehub.com/f/DeterminateSystems/flake-checker/*";
   };
 
-  outputs = { self, nixpkgs, paradox, typed-screeps, secrix, disko, gitlab-ci, determinate, fh }:
+  outputs = { self, nixpkgs, paradox, typed-screeps, secrix, disko, gitlab-ci, determinate, fh, flake-checker }:
     let
       system = "x86_64-linux";
       pkgs = import nixpkgs { inherit system; };
@@ -276,6 +278,7 @@
         packages = [
           paradoxBin
           fh.packages.${system}.default
+          flake-checker.packages.${system}.default
           pkgs.z3
           pkgs.nodejs
           pkgs.typescript
