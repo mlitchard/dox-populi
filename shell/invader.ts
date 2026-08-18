@@ -47,8 +47,8 @@ function observe(creep: Creep): RaiderObs {
 }
 
 // Builds the event name from three yes/no answers: foe in reach,
-// structure in reach, spawn in the room. tsc checks the result
-// against the generated InvaderEvent union.
+// structure in reach, spawn in the room. The return type makes any
+// name outside the generated InvaderEvent union a compile error.
 function emitInvaderEvent(obs: RaiderObs): InvaderEvent {
   const foe = obs.foes.length > 0 ? "foe" : "noFoe";
   const struct = obs.structs.length > 0 ? "Struct" : "NoStruct";
@@ -126,7 +126,8 @@ function recordTrace(
   if (log.length > TRACE_LIMIT) log.shift();
 }
 
-// First field of invaderBehaviors = initial state by spec field-order contract.
+// The generated invaderBehaviors object lists states in spec order, so
+// its first key is the invader machine's starting state.
 const invaderInitialState: InvaderState = validInvaderState(
   Object.keys(invaderBehaviors)[0]
 );
