@@ -1,40 +1,18 @@
-# Auto-installing ISO for the dev VM: the ISO carries a PREBUILT
-# zstd-compressed
-# disk image of nixosConfigurations.vm (packages.vm-image-zst) and a
-# boot service that decompresses it straight onto /dev/vda, grows the
-# root partition to fill the disk, and powers off. No nix, no git, no
-# network at install time — the image was built by whoever built the
-# ISO. Progress streams to the serial console.
-#
-# Provisioning entry point: `nix run .#installer-iso` (the flake app)
-# creates the qcow2 and boots this ISO once; `nix build .#installer-iso`
-# builds the bare ISO. run-vm.sh only runs the installed system.
-#
-# vmImageZst arrives via specialArgs from flake.nix (the package
-# compressing the disko-built raw image).
 { pkgs, lib, modulesPath, vmImageZst, ... }:
 {
   imports = [ (modulesPath + "/installer/cd-dvd/installation-cd-minimal.nix") ];
 
-  # run-vm.sh is serial-only (-nographic/tmux): put boot and install
-  # output on the serial console.
   boot.kernelParams = [ "console=ttyS0,115200" ];
 
   # installation-cd enables ZFS support, which pulls in this option's
-  # deprecated default (true). Nothing here roots on ZFS; false is the
-  # 26.11 default and avoids force-importing a possibly-live pool.
+  # deprecated default (true). false avoids force-importing a possibly-live pool.
   boot.zfs.forceImportRoot = false;
 
-  # The ISO file is named "<image.baseName>.iso" (isoImage.isoName is a
-  # dead alias since 25.05); mkForce beats installation-cd-base's value.
+  # isoImage.isoName is a dead alias since 25.05; image.baseName is the live option.
   image.baseName = lib.mkForce "dox-populi-installer";
 
-  # Ship the compressed system image as a plain file in the ISO
-  # filesystem — NOT a store path in the installer's closure, so the
-  # installer system and the payload image stay decoupled. At runtime
-  # the live system mounts the ISO at /iso (iso-image.nix declares
-  # fileSystems."/iso"), so the service reads it from
-  # /iso/install/image.raw.zst.
+  # Plain file in the ISO filesystem keeps the payload image out of the
+  # installer's closure. iso-image.nix mounts the ISO at /iso at runtime.
   isoImage.contents = [
     {
       source = "${vmImageZst}/image.raw.zst";
@@ -48,9 +26,9 @@
     path = [
       pkgs.zstd
       pkgs.coreutils
-      pkgs.util-linux # dd's friends: blockdev, findmnt, lsblk, partprobe, sfdisk (growpart backend)
+      pkgs.util-linux # blockdev, findmnt, lsblk, partprobe, sfdisk (growpart backend)
       pkgs.cloud-utils # growpart
-      pkgs.gptfdisk # sgdisk: relocate the GPT backup header after dd
+      pkgs.gptfdisk # sgdisk
       pkgs.e2fsprogs # e2fsck, resize2fs
       pkgs.gawk
       pkgs.gnugrep
@@ -59,7 +37,6 @@
     ];
     serviceConfig = {
       Type = "oneshot";
-      # Show progress on the (serial) console, not just the journal.
       StandardOutput = "journal+console";
       StandardError = "journal+console";
     };
@@ -68,8 +45,7 @@
       IMAGE=/iso/install/image.raw.zst
       TARGET=/dev/vda
 
-      # Idempotence: a partitioned disk means an installed system —
-      # never clobber it (same contract as the old installer).
+      # Idempotence: a partitioned disk means an already-installed system.
       if [ -e "''${TARGET}1" ]; then
         echo "dox-populi: $TARGET already partitioned — skipping auto-install"
         exit 0
