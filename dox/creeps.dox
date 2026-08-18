@@ -1,12 +1,11 @@
 import std
 
-| Tutorial section 5 brain: harvester + upgrader + builder + tower, plus
-| the generic-interpreter emit contract. The shell is a dumb fold: it
-| reads this file's exports (spawnQueue, behaviors, the four machines,
-| extension + tower placement policy) and executes — it decides NOTHING.
-| The tower is the first NON-CREEP machine: same Machine/StateConfig/
-| Transition shape, its own event vocabulary, driven by the shell in a
-| separate structure loop.
+| Tutorial section 5 brain: harvester, upgrader, builder, defender,
+| and tower. The shell reads this file's exports (spawnQueue,
+| behaviors, the machines, extension and tower placement policy) and
+| executes them; every decision lives here. The tower shares the
+| Machine/StateConfig/Transition shape with its own event vocabulary,
+| and the shell drives it in a separate loop.
 
 union CreepRole
   harvester
@@ -14,10 +13,9 @@ union CreepRole
   builder
   defender
 
-| BodyPart variant names are EXACT Screeps BODYPART_COST keys — the
+| BodyPart variant names are exact Screeps BODYPART_COST keys, so the
 | generated string literals index the engine cost table and feed
-| spawnCreep directly, no shell mapping. tough/attack arrive with the
-| defender role (the first combat creep).
+| spawnCreep directly.
 
 union BodyPart
   work
@@ -26,7 +24,7 @@ union BodyPart
   tough
   attack
 
-| State namespace design. Each machine is verified over its OWN state
+| State namespace design. Each machine is verified over its own state
 | union (generate rejects a machine whose state type has states the
 | machine never reaches), so machine states are per-machine unions:
 |
@@ -36,24 +34,24 @@ union BodyPart
 |   DefenderState:  patrolling, engaging
 |   TowerState:     guarding, attacking, repairing
 |
-| CreepState is the shared NAMESPACE union over the ten CREEP names.
-| It is used only by the flat creep semantics — StateBehaviors totality
-| and RoleSpec.initial — never as a machine state type. TowerState is
-| deliberately NOT part of CreepState: the tower is not a creep, has its
-| own behaviors record (TowerStateBehaviors), and the shell drives
-| towers in a separate loop. In generated TS all of these are
-| string-literal types, so each role union is assignable to CreepState.
+| CreepState is the shared namespace union over the ten creep state
+| names. It serves the flat creep semantics: StateBehaviors totality
+| and RoleSpec.initial. TowerState stays out of CreepState because the
+| tower has its own behaviors record (TowerStateBehaviors) and the
+| shell drives towers in a separate loop. In generated TS all of these
+| are string-literal types, so each role union is assignable to
+| CreepState.
 |
-| Disjointness across ALL machines — creep roles AND the tower — is
-| load-bearing: the shell's machine registry uses the generated
-| validHarvesterState / validUpgraderState / validBuilderState /
-| validTowerState functions as OWNERSHIP GUARDS — an actor whose state
-| fails a machine's valid*State check is foreign to that machine and the
-| machine is skipped. If two machines ever shared a state name,
-| ownership would be ambiguous — don't merge variants. That is why the
-| harvester's full-and-nowhere-to-deliver state is `supporting`, not
-| `assisting`: the builder already owns `assisting` — and the defender
-| fights in `engaging`, not `attacking`: the tower owns `attacking`.
+| State names are disjoint across all machines, creep roles and tower
+| alike, and the disjointness is load-bearing: the shell's machine
+| registry uses the generated validHarvesterState / validUpgraderState
+| / validBuilderState / validTowerState functions as ownership guards.
+| An actor whose state fails a machine's valid*State check is foreign
+| to that machine and the machine is skipped. Two machines sharing a
+| state name would make ownership ambiguous, so variants stay
+| unmerged: the builder owns `assisting`, so the harvester's
+| full-and-nowhere-to-deliver state is named `supporting`; the tower
+| owns `attacking`, so the defender fights in `engaging`.
 
 union HarvesterState
   harvesting
@@ -90,61 +88,37 @@ union CreepState
   patrolling
   engaging
 
-| The shell observes the world and emits exactly ONE CreepEvent per
-| creep per tick. There is NO priority and NO masking: the event is the
-| PRODUCT of three orthogonal facts, all of which ride every event.
+| The shell observes the world and emits exactly one CreepEvent per
+| creep per tick. Each event carries all three observations at once:
+| the creep's store level, whether any sink has room, and whether
+| construction sites exist.
 |
 |   store level  — empty     creep has zero energy
 |                  mid       neither empty nor full
 |                  full      creep has zero free capacity
 |   sink status  — SinksOpen some energy sink passes the free-energy
 |                            filter
-|                  SinksFull NO energy sink in the room passes the
+|                  SinksFull no energy sink in the room passes the
 |                            free-energy filter
 |   site status  — Site      construction sites exist
 |                  NoSite    no construction sites exist
 |
-| "Energy sink" = spawn + extensions + BELOW-FULL towers (see
-| towerContext: a tower is a sink whenever its energy is below
-| refillTarget — full capacity, the same bar the raid law's
-| fair-fight clause reads. The refill LATCH does not gate sink
-| membership; it only ranks it — see the energySink selector. The
-| same one below-full filter drives delivery targeting AND this
-| observation, so the fact can never contradict the action).
+| An energy sink is the spawn, an extension, or a tower below
+| refillTarget; the refill latch only changes which sink a delivery
+| picks first. The same below-full filter drives delivery targeting
+| and this observation, so a creep told to deliver always has a
+| target.
 |
-| NAMING CONTRACT (exact casing is load-bearing): each variant is the
-| literal concatenation storeLevel + sinkStatus + siteStatus. The shell
+| Naming contract (exact casing matters): each variant is the literal
+| concatenation storeLevel + sinkStatus + siteStatus. The shell
 | computes the event as the TypeScript template literal
 |
 |   `${store}${sinks}${sites}`
 |
 | with store in {"empty","mid","full"}, sinks in
-| {"SinksOpen","SinksFull"}, sites in {"Site","NoSite"} — and tsc proves
-| the inferred template-literal union is EXACTLY the generated
-| CreepEvent union. Rename a variant here and the shell fails to
-| typecheck; add a fourth store level and every machine below fails
-| generate's coverage check. Two checkers, one vocabulary.
-|
-| WHY a product instead of the old priority chain
-| (storeEmpty > sinksFull > storeFull > sawSite|noSites): priority
-| masking caused two live bugs.
-|
-|   1. The FROZEN builder: storeFull outranked the residual noSites, so
-|      a full builder in `building` with zero sites kept receiving
-|      storeFull, self-looped, resolved no build target, and idled
-|      until TTL death.
-|   2. The BLIND builder: sinksFull outranked sawSite, so a full
-|      builder under sink saturation could never observe that sites
-|      existed — the one fact its role runs on.
-|
-| With a product, masking is UNREPRESENTABLE: every event carries the
-| store level AND the sink status AND the site status. There is nothing
-| left to outrank. The old compound sinksFull ("store full AND sinks
-| full") dissolves into the fullSinksFull* corner of the product, and
-| the old residual pair sawSite/noSites becomes the always-present
-| Site/NoSite dimension. The observe-before-act property that retired
-| the tutorial-2 ERR_FULL recovery is unchanged: the shell still reads
-| sink fullness before any transfer is attempted.
+| {"SinksOpen","SinksFull"}, sites in {"Site","NoSite"}. Rename a
+| variant here and the shell fails to typecheck; add a fourth store
+| level and every machine below fails generate's coverage check.
 |
 | Variant order is systematic: store level outermost (empty, mid,
 | full), then sinks (Open, Full), then sites (Site, NoSite).
@@ -163,14 +137,11 @@ union CreepEvent
   fullSinksFullSite
   fullSinksFullNoSite
 
-| The FIXED action vocabulary the shell knows how to execute. States
-| are tagged with actions (see StateBehaviors / TowerStateBehaviors); a
-| novel state added by a future spec mutation still maps into this
-| vocabulary, so the shell never needs new wiring. idle pairs with
-| TargetKind.none (tower guarding, defender patrolling). The vocabulary
-| is shared across actor kinds: one Action union, one shell switch —
-| attack serves both the tower (attacking) and the defender (engaging);
-| repair remains tower-only today.
+| The fixed action vocabulary the shell knows how to execute. States
+| are tagged with actions (see StateBehaviors / TowerStateBehaviors);
+| a new state added by a future spec mutation still maps into this
+| vocabulary, so the shell needs no new wiring. idle pairs with
+| TargetKind.none. attack serves both the tower and the defender.
 
 union Action
   harvest
@@ -181,14 +152,13 @@ union Action
   repair
   idle
 
-| The FIXED target-selector vocabulary. The shell resolves each kind:
+| The fixed target-selector vocabulary. The shell resolves each kind:
 |   source           — closest active energy source
-|   energySink       — closest sink with room for energy (spawn |
-|                      extension | below-refillTarget tower), EXCEPT
-|                      while any tower holds the refill latch (energy
-|                      dropped below towerContext.energyTarget, not
-|                      yet back at refillTarget): then the closest
-|                      LATCHED tower outranks every other sink
+|   energySink       — closest sink with room for energy. While any
+|                      tower holds the refill latch (energy dropped
+|                      below towerContext.energyTarget and still
+|                      short of refillTarget), the closest latched
+|                      tower outranks every other sink
 |   controller       — the room controller
 |   constructionSite — first construction site
 |   hostile          — closest hostile creep from the actor's pos
@@ -210,9 +180,9 @@ type Behavior
   action: Action
   target: TargetKind
 
-| StateBehaviors is a RECORD with one field per CreepState variant —
-| deliberately NOT a map. When the shell indexes behaviors[state], tsc
-| proves totality: add a state without a behavior and the build fails.
+| StateBehaviors is a record with one field per CreepState variant.
+| The shell indexes behaviors[state], so a state added without a
+| behavior fails the shell's typecheck.
 
 type StateBehaviors
   harvesting: Behavior
@@ -236,11 +206,11 @@ deliveringBehavior: Behavior
     action: Action.transfer
     target: TargetKind.energySink
 
-| supporting = the harvester's full-and-nowhere-to-deliver escape:
-| spend the load on the controller instead of stalling on an empty
-| transfer-target set. Same action pair as the builder's assisting, but
-| its own name — cross-machine state disjointness is load-bearing (see
-| the namespace comment above).
+| supporting is the harvester's full-and-nowhere-to-deliver escape: a
+| saturated sink set leaves nothing to transfer into, so the harvester
+| spends the load on the controller. Same action pair as the builder's
+| assisting, under its own name per the disjointness rule (see the
+| namespace comment above).
 
 supportingBehavior: Behavior
   Behavior:
@@ -272,11 +242,10 @@ assistingBehavior: Behavior
     action: Action.upgrade
     target: TargetKind.controller
 
-| Defender behaviors. patrolling = stand guard where spawned (idle, no
-| target); engaging = creep.attack at the closest hostile — the day the
-| Action comment foresaw: attack stops being a tower-only verb. The
-| shell's ERR_NOT_IN_RANGE handling supplies the closing move, so melee
-| needs no separate "approach" state.
+| Defender behaviors. patrolling stands guard where spawned (idle, no
+| target); engaging attacks the closest hostile. The shell's
+| ERR_NOT_IN_RANGE handling supplies the closing move, so melee needs
+| no separate "approach" state.
 
 patrollingBehavior: Behavior
   Behavior:
@@ -302,47 +271,38 @@ behaviors: StateBehaviors
     engaging: engagingBehavior
 
 | ============================ THREAT LEVEL ==========================
-| ThreatLevel is the ONE room-threat fact, observed once per room per
-| tick (hostile creeps present or not), with THREE consumers sharing
-| the exact spelling — same-filter doctrine at the type level, so the
-| projections can never disagree:
+| ThreatLevel is the room-threat observation, made once per room per
+| tick: hostile creeps present or absent. Three consumers are typed
+| against this one generated union, so a rename here fails the shell's
+| typecheck at each of them:
 |
-|   1. the tower event's first product fact (`${threat}...` below),
-|   2. the defender machine's event type (the whole vocabulary — a
-|      defender has no carry parts, so the store-shaped CreepEvent is
-|      degenerate for it; threat is the only fact its decisions read),
-|   3. the DesiredCounts field index: the shell resolves each role's
-|      desired count as desired[threatLevel] — a literal bridge, no
-|      if/else. tsc proves the shell's projected string inhabits this
-|      union, and the union's variant names ARE the DesiredCounts
-|      field names.
+|   1. the tower event's first component (`${threat}...` below),
+|   2. the defender machine's entire event type — a defender has no
+|      carry parts, so threat is the only observation its decisions
+|      read,
+|   3. the DesiredCounts field names: the shell resolves each role's
+|      desired count as desired[threatLevel].
 |
-| Deliberate exclusions, same doctrine as the tower's old energy
-| exclusion: hostile COUNT and PROXIMITY are not facts — no decision
-| branches on them. Count adds nothing while targeting is closest-first
-| (which already encodes proximity at the resolution layer); a fact
-| earns an event dimension only when some transition branches on it.
+| Hostile count and proximity are left out: no transition branches on
+| either. Closest-first targeting already handles proximity, and an
+| observation earns a place in an event only when some transition
+| branches on it.
 
 union ThreatLevel
   hostile
   calm
 
-| Population policy. spawnQueue's ORDER is the spawn priority: the
+| Population policy. spawnQueue's order is the spawn priority: the
 | shell walks it front to back and spawns the first role below its
-| desired count. No if/else chain in the shell — this list IS the
-| policy.
+| desired count.
 |
-| THREAT-CONDITIONAL POPULATION (the first population policy that
-| reads an observation): desired is no longer a scalar but a
-| DesiredCounts RECORD indexed by the observed ThreatLevel. The
-| defender exists only under threat (hostile: 1, calm: 0) and sits
-| FIRST in the spawnQueue: when calm its desired count is 0, so it
-| costs the economy nothing and the walk passes straight through; when
-| hostiles are present, raising the defender outranks economy
-| replacement — answer the sword before the plow. Every other role is
-| threat-indifferent (same count in both fields). A defender that
-| outlives the raid (TTL) is simply not replaced once calm — the
-| policy breathes in both directions.
+| desired is a DesiredCounts record indexed by the observed
+| ThreatLevel. The defender sits first in the queue with counts
+| hostile: 1, calm: 0: when calm its desired count is 0 and the walk
+| passes straight through; when hostiles are present, spawning the
+| defender outranks every economy role. Every other role has the same
+| count in both fields. A defender that outlives the raid is not
+| replaced once the room is calm again.
 |
 | Capacity-tiered bodies. Part costs: work=100, carry=50, move=50,
 | attack=80, tough=10.
@@ -353,11 +313,9 @@ union ThreatLevel
 |   lightDefenderBody = [attack, move]                      cost 130
 |
 | 350 is exactly the current room energyCapacityAvailable (spawn 300 +
-| 1 extension 50). A tier list is ORDERED, richest first — the order IS
-| the policy: the shell walks bodies front to back and spawns the FIRST
-| tier whose cost fits the afford basis (see spawnAffordBasis below).
-| Mechanical maximization over spec data, same pattern as
-| extensionOffsets: the spec ranks, the world disposes.
+| 1 extension 50). Each bodies list is ordered richest first: the
+| shell walks it front to back and spawns the first tier whose cost
+| fits the afford basis (see spawnAffordBasis below).
 
 workerBody: [BodyPart]
   [BodyPart.work, BodyPart.carry, BodyPart.move]
@@ -369,9 +327,9 @@ workerBodyTiers: [[BodyPart]]
   [heavyWorkerBody, workerBody]
 
 | Defender tiers: the heavy tier fits current capacity (270 <= 350);
-| the light tier (130) is the crisis fallback — spawnable from spawn
-| trickle alone while the economy is dead and a hostile stands in the
-| yard.
+| the light tier (130) is affordable from the spawn's own energy
+| regeneration, so a defender can still spawn while the economy is
+| dead.
 
 lightDefenderBody: [BodyPart]
   [BodyPart.attack, BodyPart.move]
@@ -383,16 +341,14 @@ defenderBodyTiers: [[BodyPart]]
   [heavyDefenderBody, lightDefenderBody]
 
 | Afford basis: which Room energy figure a spawn attempt is priced
-| against. The variant names are EXACT Screeps Room property names —
-| the generated string literal indexes directly into the Room type
-| (room[spawnAffordBasis]), no shell switch.
+| against. The variant names are exact Screeps Room property names, so
+| the generated string literal indexes the Room type directly
+| (room[spawnAffordBasis]).
 |
-| Decision: afford against CURRENT energy (energyAvailable), not
-| capacity. Waiting for capacity deadlocks recovery: with all
-| harvesters dead, the extension never refills, so 350 never arrives
-| and nothing ever spawns. At steady state the sinks are full, so the
-| rich tier still spawns — capacity gets spent without risking
-| starvation.
+| The basis is energyAvailable. Waiting for capacity deadlocks
+| recovery: with all harvesters dead, the extension never refills, so
+| 350 never arrives and nothing ever spawns. At steady state the sinks
+| are full and the rich tier still spawns.
 
 union SpawnAffordBasis
   energyAvailable
@@ -401,8 +357,8 @@ union SpawnAffordBasis
 spawnAffordBasis: SpawnAffordBasis
   SpawnAffordBasis.energyAvailable
 
-| DesiredCounts: field names ARE the ThreatLevel variant names — the
-| literal bridge the shell indexes with the observed threat level.
+| DesiredCounts field names match the ThreatLevel variant names; the
+| shell indexes desired[threatLevel] with the observed value.
 
 type DesiredCounts
   hostile: Integer
@@ -506,14 +462,14 @@ offsetNorthwest: SiteOffset
 extensionOffsets: [SiteOffset]
   [offsetEast, offsetWest, offsetSouth, offsetNorth, offsetSoutheast, offsetNorthwest]
 
-| Tower placement policy — brain data, mirrors the extension mechanism
-| exactly: the shell places STRUCTURE_TOWER construction sites at these
-| offsets from Spawn1 until desiredTowers exist (built or in progress),
-| once RCL allows it (towers unlock at RCL 3); server legality decides
-| whether a candidate sticks, so the list is ordered fallbacks. The
-| offsets are chosen to be DISJOINT from every extensionOffsets cell —
-| extensions own (2,0),(-2,0),(0,2),(0,-2),(2,2),(-2,-2); towers take
-| the remaining diagonals and the distance-3 cardinals.
+| Tower placement policy, same mechanism as extensions: the shell
+| places STRUCTURE_TOWER construction sites at these offsets from
+| Spawn1 until desiredTowers exist (built or in progress), once RCL
+| allows it (towers unlock at RCL 3); server legality decides whether
+| a candidate sticks, so the list is ordered fallbacks. The offsets
+| avoid every extensionOffsets cell: extensions use
+| (2,0),(-2,0),(0,2),(0,-2),(2,2),(-2,-2); towers take the remaining
+| diagonals and the distance-3 cardinals.
 
 desiredTowers: Integer
   1
@@ -552,17 +508,16 @@ towerOffsets: [SiteOffset]
   [offsetSouthwest, offsetNortheast, offsetFarSouth, offsetFarEast, offsetFarNorth, offsetFarWest]
 
 | Per-creep FSMs. Three creep machines share CreepEvent/CreepContext
-| but each has its OWN state union, so generate verifies each machine
+| but each has its own state union, so generate verifies each machine
 | total and reachable over exactly its own states. Every state handles
-| every one of the 12 events, self-loops written out — total and
-| explicit, no implicit fallthrough. Transitions are named top-level
-| values and REUSED across states of the same machine wherever
-| event+target coincide: state names are disjoint across all machines,
-| so a name like toBuildingFullSinksOpenSite is globally unambiguous —
-| the target names the machine.
+| every one of the 12 events, self-loops written out. Transitions are
+| named top-level values, reused across states of the same machine
+| wherever event and target coincide. Since state names are disjoint
+| across machines, a name like toBuildingFullSinksOpenSite is globally
+| unambiguous: the target names the machine.
 
-| Context carries the same tier list as RoleSpec.bodies — a machine's
-| context must never contradict the spawn policy, so there is no
+| Context carries the same tier list as RoleSpec.bodies, so a
+| machine's context cannot contradict the spawn policy; there is no
 | single-body field anywhere.
 
 type CreepContext
@@ -591,20 +546,17 @@ defenderContext: CreepContext
 | The supporting state is the full-and-nowhere-to-deliver escape. Two
 | routes in:
 |
-|   - full + SinksFull anywhere: a full harvester with a saturated sink
-|     set has an EMPTY transfer-target set; delivering would be a
-|     null-target stall.
-|   - mid + SinksFull while delivering or supporting (CRITICAL): a
-|     mid-store harvester in delivering whose sinks just saturated is
-|     the exact freeze signature of the old builder bug — the behavior
-|     says transfer, the target set is empty, no API call happens, the
-|     store never drains, the event never changes. Staying put is a
-|     null-target stall; spend the remainder on the controller instead.
+|   - full + SinksFull anywhere: a full harvester with a saturated
+|     sink set has no transfer target, so delivering would stall.
+|   - mid + SinksFull while delivering or supporting: the behavior
+|     says transfer but the target set is empty, so no API call
+|     happens, the store never drains, and the event never changes.
+|     Spending the remainder on the controller breaks the stall.
 |
-| mid + SinksOpen while supporting goes BACK to delivering: sinks
-| reopened, and delivery outranks controller-feeding for this role —
-| it powers spawning. Site presence is noise to this role: every
-| transition below is Site/NoSite-symmetric.
+| mid + SinksOpen while supporting returns to delivering: sinks
+| reopened, and delivery powers spawning, so it outranks
+| controller-feeding for this role. Site presence never affects this
+| role: every transition below is Site/NoSite-symmetric.
 
 | — empty in any harvester state: back to the source (8 values; the
 |   mid* four are the harvesting self-loops).
@@ -739,18 +691,10 @@ harvesterMachine: Machine HarvesterState CreepEvent CreepContext
     finals: {}
     states: {HarvesterState.harvesting: harvestingConfig, HarvesterState.delivering: deliveringConfig, HarvesterState.supporting: supportingConfig}
 
-| Upgrader machine: collect until full, upgrade until empty. The sink
-| and site dimensions are IRRELEVANT to this role — it delivers to the
-| controller, not the sinks, and it never builds — so every transition
-| depends only on the store level: full anywhere -> upgrading, empty
-| anywhere -> collecting, mid self-loops.
-|
-| The old collectingSinksFull -> upgrading shortcut dissolves here: the
-| old compound sinksFull only fired when the creep's store was ALSO
-| full, so it was never anything but a proxy for "store full" wearing a
-| sink costume. Under the product vocabulary the proxy is exposed —
-| full* covers every case the shortcut ever handled, and the sink
-| dimension goes back to being noise for this role.
+| Upgrader machine: collect until full, upgrade until empty. This
+| role only spends energy on the controller and never builds, so
+| every transition depends on the store level alone: full anywhere ->
+| upgrading, empty anywhere -> collecting, mid self-loops.
 
 | — full in any upgrader state: go upgrade (also the upgrading full
 |   self-loops).
@@ -875,46 +819,21 @@ upgraderMachine: Machine UpgraderState CreepEvent CreepContext
     states: {UpgraderState.collecting: collectingConfig, UpgraderState.upgrading: upgradingConfig}
 
 | Builder machine: gather until full; full -> build if sites exist,
-| else assist; never freeze, never go blind. The sink dimension is
-| irrelevant to this role — a builder consumes energy on sites and the
-| controller, it never transfers — so every transition below is
+| else assist. A builder spends energy on sites and the controller
+| and never transfers, so every transition below is
 | SinksOpen/SinksFull-symmetric.
 |
-| BOTH historical bugs of the priority-chain vocabulary are now
-| UNREPRESENTABLE, and this machine is where they lived:
-|
-|   1. The FROZEN builder (historical): under the old chain, storeFull
-|      outranked the residual noSites, so a full builder in building
-|      with zero sites kept receiving storeFull. The old building
-|      self-loop on storeFull was an unreachable-escape freeze: full
-|      builder, zero sites, action=build resolving no target, idle
-|      until TTL death (births 105 / deaths 100 on the live server).
-|      The eventual fix routed building --storeFull--> assisting — an
-|      EXACT move only because of the timing argument: events are
-|      computed at tick start, before actions, and an honest builder
-|      entering building spends energy the same tick, so full while IN
-|      building implies the previous build spent nothing. Under the
-|      product that inference is unnecessary: full*NoSite says
-|      directly "full and no site exists" — the escape is observed,
-|      not deduced.
-|   2. The BLIND builder (historical): the old compound sinksFull
-|      outranked sawSite, so a full builder under sink saturation
-|      could never see a site. Now fullSinksFullSite -> building: the
-|      site fact rides the event no matter what the sinks are doing.
-|
-| full*Site while ALREADY IN building stays in building: by the same
-| timing argument, an honest builder should not observe full here — if
-| it does, the previous build spent nothing (site unreachable this
-| tick, ramp-up ordering, etc.). But the site is VISIBLE, and staying
-| on it is honest retry against an observed target — not masking. The
-| freeze case was full+NoSite being masked, and that now has its own
-| pair of events routing to assisting.
+| full*Site while already in building stays in building. Events are
+| computed at tick start, before actions, so observing full here
+| means the previous build spent nothing (site unreachable that tick,
+| ramp-up ordering). The site is still observed, so staying on it is
+| a retry against a live target; full*NoSite has its own pair of
+| events routing to assisting.
 |
 | mid*NoSite while building -> assisting: the last site finished
-| mid-drain; spend the remainder on the controller instead of
-| null-target stalling. Spec decision unchanged from section 3: no
-| wasted creep-ticks. mid*Site while assisting pulls the builder back
-| to building.
+| mid-drain, and with no build target left the remainder goes to the
+| controller. mid*Site while assisting pulls the builder back to
+| building.
 
 | — empty in any builder state: back to the source (the mid* four are
 |   the gathering self-loops).
@@ -968,8 +887,7 @@ toGatheringMidSinksFullNoSite: Transition BuilderState CreepEvent CreepContext
     guard: ()
 
 | — a site exists and there is energy on board: build (mid* used by
-|   building/assisting, full* used by all three states — including the
-|   formerly-blind fullSinksFullSite).
+|   building/assisting, full* used by all three states).
 
 toBuildingMidSinksOpenSite: Transition BuilderState CreepEvent CreepContext
   Transition:
@@ -995,8 +913,7 @@ toBuildingFullSinksFullSite: Transition BuilderState CreepEvent CreepContext
     target: BuilderState.building
     guard: ()
 
-| — no site and energy on board: assist the controller (the formerly-
-|   frozen full+NoSite corner, now directly observed).
+| — no site and energy on board: assist the controller.
 
 toAssistingMidSinksOpenNoSite: Transition BuilderState CreepEvent CreepContext
   Transition:
@@ -1051,20 +968,17 @@ builderMachine: Machine BuilderState CreepEvent CreepContext
     states: {BuilderState.gathering: gatheringConfig, BuilderState.building: buildingConfig, BuilderState.assisting: assistingConfig}
 
 | ============================= DEFENDER =============================
-| The first combat creep, and the first creep machine with its OWN
-| event type: ThreatLevel (see the union's comment for why CreepEvent
-| is degenerate here — no carry parts, no store facts). The shell's
-| machine registry pairs each machine with its own emitter, so this
-| costs no special-casing: the defender's emitter projects the same
-| room-threat fact the tower and the spawn walk consume.
+| The defender's event type is ThreatLevel: with no carry parts it
+| has no store to observe, so the room threat is the only input its
+| decisions read. The shell's machine registry pairs each machine
+| with its own emitter, and the defender's emitter reports the same
+| room-threat observation the tower and the spawn walk consume.
 |
-| The mapping is STATE-INDEPENDENT (tower precedent): both states
-| carry the identical two transitions — a pure policy function
-| ThreatLevel -> DefenderState in FSM clothing. hostile -> engaging
-| (attack the closest hostile; the shell's ERR_NOT_IN_RANGE move
-| closes distance), calm -> patrolling (idle at post). Reachability
-| from patrolling: hostile -> engaging; every state covers both
-| events, no finals, no deadlock — generate verifies exactly this.
+| Both states carry the identical two transitions, so the target
+| depends only on the event: hostile -> engaging (attack the closest
+| hostile; the shell's ERR_NOT_IN_RANGE handling closes distance),
+| calm -> patrolling (idle at post). Every state covers both events
+| and there are no finals; generate verifies this.
 
 toEngagingHostile: Transition DefenderState ThreatLevel CreepContext
   Transition:
@@ -1097,14 +1011,14 @@ defenderMachine: Machine DefenderState ThreatLevel CreepContext
     states: {DefenderState.patrolling: patrollingConfig, DefenderState.engaging: engagingConfig}
 
 | ============================== TOWER ===============================
-| The first non-creep machine. Same Machine/StateConfig/Transition
-| shape as the creep machines, its own event and context types; the
-| shell drives towers in a SEPARATE loop (one TowerEvent per tower per
-| tick), with validTowerState as the ownership guard, exactly like the
-| creep registry.
+| Same Machine/StateConfig/Transition shape as the creep machines,
+| with its own event and context types. The shell drives towers in a
+| separate loop (one TowerEvent per tower per tick), with
+| validTowerState as the ownership guard, exactly like the creep
+| registry.
 
-| TowerEvent is a product of THREE orthogonal facts, same construction
-| and same template-literal contract as CreepEvent:
+| Each TowerEvent carries three observations at once, same
+| construction and same template-literal contract as CreepEvent:
 |
 |   threat    — hostile     hostile creeps present in the room
 |               calm        none
@@ -1113,26 +1027,21 @@ defenderMachine: Machine DefenderState ThreatLevel CreepContext
 |   reserve   — ReserveOk   tower energy >= attackReserve
 |               ReserveLow  tower energy below the attack reserve
 |
-| The shell computes the event as `${threat}${integrity}${reserve}`;
-| the threat component is the typed ThreatLevel projection (the same
-| value that drives the defender machine and the DesiredCounts index),
-| and tsc proves the inferred template-literal union is exactly the
-| generated TowerEvent union.
+| The shell computes the event as `${threat}${integrity}${reserve}`,
+| where the threat component is the same ThreatLevel value that
+| drives the defender machine and the DesiredCounts index. Rename a
+| variant here and the shell fails to typecheck.
 |
-| AMENDED EXCLUSION (was: tower energy is not an event dimension). The
-| total exclusion held while no tower decision read energy. The repair
-| doctrine broke it: with real battle damage, calmDamage -> repairing
-| to hitsMax could REPAIR THE TOWER DRY — repair spends energy with no
-| floor, and the next raider meets an empty magazine. Repair-or-wait
-| genuinely branches on a reserve fact, so energy enters as exactly
-| ONE BIT (above/below attackReserve). The full gradation stays
-| excluded: attack ignores reserve (shooting is always right — the
-| last 10 energy belongs to the gun; a drained tower's attack is still
-| a harmless no-op), and refill remains delivery-driven, no tower
-| decision required. attackReserve < energyTarget is load-bearing: a
-| ReserveLow tower is below the LATCH trigger, so it holds the
-| delivery PRIORITY (see the refill decision below) — the wait ends
-| by the emergency refill campaign, guaranteed.
+| Tower energy enters the event as a single bit, above or below
+| attackReserve, because one decision branches on it: repair. Repair
+| spends energy with no floor, so repairing while low would leave the
+| next raider facing an empty tower; a ReserveLow tower waits for
+| refill before repairing. Attack ignores reserve — a drained tower's
+| attack is a harmless no-op, so shooting is always safe. Refill is
+| delivery-driven and needs no tower decision. attackReserve <
+| energyTarget matters: a ReserveLow tower is already below the latch
+| trigger, so it holds the delivery priority (see the refill decision
+| below) and the wait ends with the refill campaign.
 
 union TowerEvent
   hostileDamageReserveOk
@@ -1144,43 +1053,35 @@ union TowerEvent
   calmIntactReserveOk
   calmIntactReserveLow
 
-| The refill decision (user rulings 2026-08-01 + 2026-08-02, which
-| together supersede both the plain threshold sink AND the first
-| latch-gated reading). TWO separate questions, two separate answers:
+| The refill decision answers two separate questions:
 |
-|   IS the tower a delivery target?  YES whenever energy <
+|   Is the tower a delivery target?  Yes whenever energy <
 |   refillTarget (full capacity, 1000) — the same "has room?" rule
-|   every spawn and extension answers, and the same bar the raid
-|   law's fair-fight clause reads. A tower at 990 is an ordinary
+|   every spawn and extension answers. A tower at 990 is an ordinary
 |   sink and gets topped back to full by the ordinary delivery
-|   rotation.
+|   rotation. If the latch gated membership instead, a full tower
+|   that fires one shot would sit at 990 forever: below full, above
+|   the reopen line, and never fed again.
 |
-|   HOW URGENTLY?  The hysteresis LATCH: it opens the moment energy
-|   drops below energyTarget (the low-water trigger, 500) and closes
-|   only when delivery brings the tower back to refillTarget. While
-|   open, refilling that tower is THE delivery priority — the
-|   energySink selector answers with the closest latched tower
-|   before any spawn or extension. Why a latch and not a plain
-|   threshold for the priority: threshold-priority would flap — one
-|   shot fired at 501 demotes, one delivery promotes. The latch
-|   opens only on a real 500-point drain and holds the front of the
-|   line until full — one emergency campaign per drain.
+|   How urgently?  A hysteresis latch: it opens the moment energy
+|   drops below energyTarget (500) and closes only when delivery
+|   brings the tower back to refillTarget. While open, refilling
+|   that tower is the delivery priority — the energySink selector
+|   answers with the closest latched tower before any spawn or
+|   extension. A plain threshold here would flap: one shot fired at
+|   501 demotes, one delivery promotes. The latch opens only on a
+|   real 500-point drain and holds the front of the line until full,
+|   one refill campaign per drain.
 |
-| The first reading made the latch gate sink MEMBERSHIP itself; live
-| evidence convicted it: a full tower that fires ONE shot sits at
-| 990 — below the fair-fight bar, above the reopen line — and no
-| creep ever feeds it again. Deadlock: the raid gate demands full,
-| the latch forbids refill. Membership-until-full dissolves it. The
-| shell holds the latch bit per tower id (Memory.towerRefill); the
-| below-full filter is the ONE filter for BOTH delivery targeting
-| and the SinksFull observation, so the observed fact can never
-| contradict the available action.
+| The shell holds the latch bit per tower id (Memory.towerRefill).
+| The below-full filter drives both delivery targeting and the
+| SinksFull observation, so the observed fact always matches the
+| available action.
 |
-| TowerContext carries desired alongside energyTarget: Paradox rejects
-| single-field product types (error 23; the alternative, wrap, would
-| emit a branded scalar and change the shell-facing shape). desired
-| REFERENCES desiredTowers — the context must never contradict the
-| placement policy, same pattern as CreepContext.bodies referencing
+| TowerContext carries desired alongside energyTarget because Paradox
+| rejects single-field product types (error 23). desired references
+| desiredTowers, so the context cannot contradict the placement
+| policy — same pattern as CreepContext.bodies referencing
 | workerBodyTiers.
 
 type TowerContext
@@ -1192,22 +1093,21 @@ type TowerContext
 towerEnergyTarget: Integer
   500
 
-| refillTarget: where a refill campaign ENDS — full capacity (the
+| refillTarget: where a refill campaign ends — full capacity (the
 | engine's TOWER_CAPACITY, 1000). Once the latch opens at
 | energyTarget, creeps keep the tower first in line until it reads
-| this. Also the raid law's fair-fight bar: dox/invader RaidPolicy
-| .towerFullEnergy repeats this number — a room is only raid-eligible
-| behind a FULL magazine (amend both together).
+| this. Must match dox/invader RaidPolicy.towerFullEnergy, the raid
+| mod's fair-fight bar: a room is only raid-eligible while a full
+| tower stands.
 
 towerRefillTarget: Integer
   1000
 
-| attackReserve: the repair floor — calm-time repair runs only while
+| attackReserve: the repair floor. Calm-time repair runs only while
 | energy >= this; below it the tower guards and waits for delivery.
-| 200 = 20 shots held back for the next raid. MUST stay below
-| towerEnergyTarget (see the amended-exclusion comment: below the sink
-| threshold, refill is delivery-guaranteed). A genome knob for the
-| evolution tournament.
+| 200 = 20 shots held back for the next raid. Must stay below
+| towerEnergyTarget: a tower under the latch trigger holds the
+| delivery priority, so the wait for refill always ends.
 
 towerAttackReserve: Integer
   200
@@ -1218,27 +1118,22 @@ towerContext: TowerContext
   desired: desiredTowers
   attackReserve: towerAttackReserve
 
-| Tower policy: attack OUTRANKS repair, and repair OUTRANKS itself dry.
-| The reference implementation (tutorial section 5 main.js) issues
-| repair and then attack in the same tick, where the later attack
-| intent wins anyway — engine accident as priority. We make the
-| priority explicit and verified:
+| Tower policy: attack comes first, and repair only runs with a
+| reserve behind it.
 |
-|   hostile**                -> attacking  (reserve IGNORED: shoot with
-|                                           whatever is in the tank)
+|   hostile**                -> attacking  (reserve ignored: shoot
+|                                           with whatever is in the
+|                                           tank)
 |   calmDamageReserveOk      -> repairing  (heal to hitsMax)
-|   calmDamageReserveLow     -> guarding   (energy discipline: do NOT
-|                                           repair below the reserve;
-|                                           wait for delivery refill)
+|   calmDamageReserveLow     -> guarding   (hold the reserve; wait
+|                                           for delivery refill)
 |   calmIntact*              -> guarding
 |
-| The mapping is STATE-INDEPENDENT — all three states carry the
-| IDENTICAL eight transitions, so this is a pure policy function
-| (TowerEvent -> TowerState) in FSM clothing. That is deliberate: the
-| uniform machine shape keeps the shell a generic interpreter — one
-| registry, one transition call, no special-casing the tower. The
-| current state still matters downstream: towerBehaviors[state] picks
-| the action each tick.
+| All three states carry the identical eight transitions, so the
+| target depends only on the event. The uniform machine shape keeps
+| the shell a generic interpreter: one registry, one transition call,
+| no special-casing the tower. The current state still matters
+| downstream: towerBehaviors[state] picks the action each tick.
 
 toAttackingHostileDamageReserveOk: Transition TowerState TowerEvent TowerContext
   Transition:
@@ -1316,10 +1211,9 @@ towerMachine: Machine TowerState TowerEvent TowerContext
     finals: {}
     states: {TowerState.guarding: guardingConfig, TowerState.attacking: attackingConfig, TowerState.repairing: repairingConfig}
 
-| TowerStateBehaviors is a RECORD with one field per TowerState variant
-| — the same tsc-totality trick as StateBehaviors: the shell indexes
-| towerBehaviors[state], and adding a tower state without a behavior
-| fails the build.
+| TowerStateBehaviors is a record with one field per TowerState
+| variant. The shell indexes towerBehaviors[state], so a tower state
+| added without a behavior fails the shell's typecheck.
 
 type TowerStateBehaviors
   guarding: Behavior
