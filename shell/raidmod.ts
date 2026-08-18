@@ -1,51 +1,17 @@
-// dox-populi raid mod: the world's raid LAW. Loaded from mods.json into
-// the backend process, where it REPLACES the engine's native genInvaders
-// cron (which inserts uid-2 creeps driven by hardcoded engine AI — the
-// enemy this project outlawed) with raids of "raiders"-owned creeps, so
-// every raider that ever walks this world is driven by the Paradox brain
-// (dox/invader → generated/invader.ts → shell/invader.ts users.code).
-//
-// This file is HANDS. Every policy number — the harvested-energy goal,
-// the raid size, the cron cadence, the body — is spec data imported from
-// generated/invader.ts. The mod only observes the db and inserts
-// documents. Native-parity semantics preserved mechanically (upstream
-// backend-local/lib/cronjobs.js genInvaders):
-//   - the engine itself maintains source.invaderHarvested on every
-//     harvest (engine/src/processor/intents/creeps/harvest.js); the mod
-//     just sums it
-//   - per-room override: room.invaderGoal || raidPolicy.goal, and
-//     invaderGoal == 1 means "raid NOW" (director's dial; the itest's
-//     sterilizer is a huge value)
-// Deliberate differences from native: no raid while the controller's
-// safeMode runs (the engine refuses hostile creep actions there — the
-// ERR_NO_BODYPART masquerade; a raid into it is theater, not war);
-// exit-square choice is DETERMINISTIC (fixed edge scan, first squares) —
-// reproducible aggression is the raider contract, mod included; and
-// RELENTLESS WAR (spec raid-law, user ruling 2026-08-01): the harvested
-// counter is NEVER reset and live raiders do NOT hold off the next wave —
-// once a room crosses the goal, an escalating wave lands on every cron
-// check until the colony falls or the controller stops being owned. The
-// durability test of a single tower, by law.
-//
-// Load order (verified upstream, backend-local/lib/index.js): the var
-// block requires ./cronjobs (which assigns config.cronjobs wholesale)
-// BEFORE start() calls configManager.load() (which runs mods) — so this
-// mod sees the populated table and gets the last word. Only the backend
-// process has config.cronjobs; everywhere else the guard exits.
-
+// A server mod, wired into the private server by flake.nix. It runs
+// inside the server process against the database, on a timer. It
+// replaces the engine's built-in invader generation (genInvaders)
+// with genRaiders, which inserts raider creeps for the "raiders"
+// user under the rules of the spec's raidPolicy.
 import { raidBody, raidPolicy } from "../generated/invader";
 
-// Identity plumbing, not policy: the NPC user seeded by the flake's seed
-// step (users doc _id "raiders" + users.code carrying the invader
-// bundle). Must match the flake jq. `active` is server-managed and gets
-// normalized on boot, so it is re-armed at every insertion — same
-// discipline as the itest surgery.
+// The NPC user that owns all raider creeps. Must match the _id of the
+// user seeded by flake.nix.
 const RAIDER_USER = "raiders";
 
-// ---------------------------------------------------------------------------
-// Minimal structural views of the server internals the mod touches.
-// ---------------------------------------------------------------------------
-
+// The database collection methods used in this file. The server
+// provides the real collections untyped; this typing covers only what
+// is called here.
 interface DbCollection {
   find(query: object): Promise<Record<string, any>[]>;
   findOne(query: object): Promise<Record<string, any> | null>;
@@ -53,6 +19,8 @@ interface DbCollection {
   update(query: object, update: object): Promise<unknown>;
 }
 
+// The parts of the config object the server passes to raidMod at
+// startup: the cronjob table and the storage handles.
 interface ServerConfig {
   cronjobs?: Record<string, unknown[]>;
   common?: {
@@ -63,13 +31,9 @@ interface ServerConfig {
   };
 }
 
-// ---------------------------------------------------------------------------
-// Exit squares: every open (non-wall) tile on the four room edges, in a
-// FIXED scan order — top row, right column, bottom row, left column —
-// with corners visited exactly once. Terrain doc is the 2500-char string;
-// bit 0 is TERRAIN_MASK_WALL.
-// ---------------------------------------------------------------------------
-
+// Collects the walkable squares on the room's border, where raiders
+// enter. The terrain string holds one digit per tile of the 50x50
+// room, row-major; an odd digit is a wall.
 function exitSquares(terrain: string): Array<[number, number]> {
   const open = (x: number, y: number): boolean =>
     (parseInt(terrain.charAt(y * 50 + x), 10) & 1) === 0;
@@ -81,9 +45,9 @@ function exitSquares(terrain: string): Array<[number, number]> {
   return squares;
 }
 
-// Document shape mirrors the itest's surgery-proven raider insert (a
-// REAL NPC-owned creep), plus native genInvaders' ticksToLive: 1500 so
-// a raid that outlives its war dies of old age like any other creep.
+// Builds the database document for one raider creep, copying the
+// shape the engine gives its own creep documents. The body parts come
+// from the spec's raidBody.
 function raiderDoc(
   room: string,
   square: [number, number],
@@ -124,6 +88,11 @@ function raiderDoc(
   };
 }
 
+// Decides, for each owned room, whether a raid starts now, and inserts
+// the wave when it does. A raid waits until the room has
+// raidPolicy.minTowers fully loaded towers and enough energy has been
+// harvested to reach the goal; a goal of 1 skips both checks so a raid
+// can be forced. Each wave is sizeStep raiders larger than the last.
 async function genRaiders(
   db: Record<string, DbCollection>,
   env: { get(key: string): Promise<string | null> }
@@ -131,29 +100,21 @@ async function genRaiders(
   const gameTime = parseInt((await env.get("gameTime")) ?? "0", 10) || 0;
   const controllers = await db["rooms.objects"].find({ type: "controller" });
   for (const controller of controllers) {
-    // Only rooms somebody OWNS get raided, and never the raiders' own.
     if (!controller.user || controller.user === RAIDER_USER) continue;
-    // Safe-mode deferral: safeMode is the absolute game time it expires.
     if (typeof controller.safeMode === "number" && controller.safeMode > gameTime)
       continue;
     const room: string = controller.room;
     const roomDoc = await db["rooms"].findOne({ _id: room });
     const goal: number = (roomDoc && roomDoc.invaderGoal) || raidPolicy.goal;
     if (goal !== 1) {
-      // Fair-fight clause (spec: raidPolicy.minTowers + towerFullEnergy):
-      // only FULLY-LOADED towers count — a room with no standing defense,
-      // or a tower still loading its magazine, is not raid-eligible; a
-      // colony gets built, not buried. Tower docs carry the modern store
-      // shape ({store: {energy}}), same as the creeps this mod inserts.
-      // The dial (goal == 1) bypasses this too: RAID NOW is a director's
-      // instrument, unconditional by native parity.
+      // A tower counts as fully loaded when its energy reaches
+      // towerFullEnergy, which must stay equal to creeps.dox's
+      // towerRefillTarget: a full tower.
       const towers = await db["rooms.objects"].find({ room, type: "tower" });
       const loaded = towers.filter(
         (t) => ((t.store && t.store.energy) || 0) >= raidPolicy.towerFullEnergy
       );
       if (loaded.length < raidPolicy.minTowers) continue;
-      // Relentless war: the counter is never reset, so once harvested
-      // crosses the goal this gate stays open on every check, forever.
       const sources = await db["rooms.objects"].find({ room, type: "source" });
       const harvested = sources.reduce(
         (sum, s) => sum + (s.invaderHarvested || 0),
@@ -165,10 +126,8 @@ async function genRaiders(
     if (!terrainDoc) continue;
     const squares = exitSquares(terrainDoc.terrain);
     if (squares.length === 0) continue;
-    // Escalation (spec: sizeStart + sizeStep * wave): room.raidWave is
-    // the mod-maintained per-room raid counter — incremented after each
-    // raid, cleared to 0 by deploy-local provisioning when a colony is
-    // placed. The world spawns ever-increasing raids, by law.
+    // deploy-local (flake.nix) resets raidWave to 0, so escalation
+    // starts over on every fresh deploy.
     const wave: number = (roomDoc && roomDoc.raidWave) || 0;
     const size = raidPolicy.sizeStart + raidPolicy.sizeStep * wave;
     const chosen = squares.slice(0, size);
@@ -188,10 +147,11 @@ async function genRaiders(
   }
 }
 
+// The server runs several processes and loads this file into all of
+// them; only the process with a cronjob table performs the swap.
+// Storage connects after this function runs, so the timer's callback
+// looks up the db handles at each firing.
 const raidMod = (config: ServerConfig): void => {
-  // Backend process only: that is where lib/cronjobs.js populated the
-  // table. Storage is not connected yet at mod-load time — the db is
-  // touched only inside the cron callback, which starts after connect.
   if (!config.cronjobs || !config.common) return;
   delete config.cronjobs["genInvaders"];
   config.cronjobs["genRaiders"] = [

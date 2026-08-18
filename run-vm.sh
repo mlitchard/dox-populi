@@ -1,11 +1,9 @@
 #!/usr/bin/env bash
-# dox-populi dev VM runner: qemu runs
-# detached in a tmux session with its serial console on stdio, and you
-# connect to that console with `./run-vm.sh console` — a normal
-# terminal you can cut/paste in, and detach from (Ctrl-b d) without
-# stopping the VM.
+# dox-populi dev VM runner: starts qemu detached in a tmux session
+# with its serial console on stdio; `./run-vm.sh console` attaches
+# to it.
 #
-# This script only RUNS the VM. Provisioning is the flake's job:
+# One-time setup before the first run:
 #
 #   nix run .#installer-iso   one-time: creates dox-populi.qcow2 and
 #                             boots the auto-installing ISO, whose boot
@@ -13,8 +11,7 @@
 #                             onto the disk and powers off
 #   ./run-vm.sh               boots the installed system from disk
 #
-# Host dependencies: qemu, tmux. No nix needed to RUN the VM — nix
-# runs INSIDE it.
+# Host dependencies: qemu, tmux.
 #
 # Delete dox-populi.qcow2 for a factory reset (then reinstall).
 #
@@ -30,9 +27,8 @@
 #
 #   ssh -p 2222 dev@localhost   # password: dox-populi
 #
-# The Screeps server runs INSIDE the VM (nix run .#server — the
-# nix-vendored open-source server, pre-baked into the image); play by
-# pointing the Steam client on the HOST at localhost:21025.
+# The Steam client on the host connects to localhost:21025; the local
+# browser client (nix run .#client) is served at localhost:8080.
 #
 # Env knobs: MEM (default 32G), CPUS (default 8), DISK (default
 # ./dox-populi.qcow2), WORKDIR (host dir shared into the guest at
@@ -41,8 +37,6 @@ set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")" && pwd)"
 DISK="${DISK:-dox-populi.qcow2}"
-# Host dir shared into the guest at ~/work (keys, client assets).
-# Skipped if the directory doesn't exist.
 WORKDIR="${WORKDIR:-$HOME/vm-keys}"
 MEM="${MEM:-32G}"
 CPUS="${CPUS:-8}"
@@ -84,7 +78,7 @@ case "$CMD" in
       echo "error: tmux is required (it hosts the VM's serial console)" >&2
       exit 1
     fi
-    # Resolve qemu HERE and hand the absolute path into the tmux
+    # Resolve qemu here and hand the absolute path into the tmux
     # session: tmux spawns sessions with its own environment, which may
     # not have this shell's PATH (e.g. qemu from a dev shell).
     if ! QEMU="$(command -v qemu-system-x86_64)"; then
@@ -96,8 +90,6 @@ case "$CMD" in
       exit 0
     fi
 
-    # Running is this script's ONLY job — provisioning belongs to the
-    # flake. No disk means not installed; refuse, don't improvise.
     if [ ! -f "$DISK" ]; then
       cat >&2 <<EOF
 error: no VM disk at $DISK
@@ -135,22 +127,16 @@ EOF
         ;;
     esac
 
-    # The repo itself, shared read-write into the guest (9p, mounted at
-    # /home/dev/dox-populi by the guest's fstab): the guest works on the
-    # host's REAL working tree — history, branches, remote and all.
+    # Shares the repo read-write into the guest.
     SHARE=(-virtfs "local,path=$REPO,mount_tag=repodir,security_model=mapped-xattr")
 
-    # Optional host directory shared into the guest (9p, mounted at
-    # /home/dev/work by the guest's fstab).
     if [ -n "${WORKDIR:-}" ] && [ -d "$WORKDIR" ]; then
       SHARE+=(-virtfs "local,path=$WORKDIR,mount_tag=workdir,security_model=mapped-xattr")
 
-      # Browser-client assets: put the game's package.nw in the shared
-      # dir so `nix run .#client` inside the VM finds it (~/work/package.nw).
-      # A symlink would dangle — the guest resolves symlink targets in
-      # its OWN namespace — so hard-link it (same inode, served as a
-      # regular file), falling back to a copy across filesystems.
-      # Re-linked whenever Steam replaces the file (new inode).
+      # Hard-links the game's package.nw into the shared dir, where
+      # `nix run .#client` inside the VM reads it: the browser client
+      # serves the game from these assets. Re-linked whenever the
+      # source file changes (new inode).
       NW="${SCREEPS_CLIENT_NW:-$HOME/.local/share/Steam/steamapps/common/Screeps/package.nw}"
       if [ -f "$NW" ]; then
         NW=$(readlink -f "$NW")

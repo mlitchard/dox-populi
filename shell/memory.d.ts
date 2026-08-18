@@ -1,3 +1,6 @@
+// The shapes of everything the shell stores in Screeps Memory. Both
+// bundles, colony (main.ts) and invader (invader.ts), compile against
+// this one declaration.
 import type { CreepRole, CreepState, TowerState } from "../generated/index";
 import type { InvaderState } from "../generated/invader";
 
@@ -40,10 +43,6 @@ declare global {
       >;
       hostiles: number;
       damaged: number;
-      // Cumulative combat observation, diffed against the previous
-      // tick's snapshot (the births/deaths pattern). hostiles/hits ARE
-      // the snapshot: hostile positions+hits by id, own-object hit
-      // points by creep name / structure id.
       combat: {
         hostileMoves: number;
         damageTaken: number;
@@ -52,17 +51,17 @@ declare global {
         hits: Record<string, number>;
       };
     };
-    // Tower FSM state, keyed by tower id — towers have no built-in memory.
+    // Keyed by tower id: each tower's FSM state.
     towers?: Record<string, { fsm: TowerState }>;
-    // Refill-hysteresis latch bit per tower id (spec: towerContext
-    // energyTarget/refillTarget law) — true while a refill campaign runs.
+
+    // Keyed by tower id: true while that tower's refill is in progress.
     towerRefill?: Record<string, boolean>;
-    // Raider FSM state, keyed by creep name — lives in the seeded
-    // "raiders" NPC user's memory, written only by shell/invader.ts
-    // (the enemy bundle). The
-    // colony shell never touches it; the field coexists here because both
-    // bundles share one global Memory declaration.
+
+    // Keyed by raider creep name: each raider's FSM state. Written by
+    // invader.ts.
     raiders?: Record<string, { fsm: InvaderState }>;
+    // One log per actor of its recent changes, keyed by creep name or
+    // tower id, kept for debugging. Written by both main.ts and invader.ts.
     trace?: Record<
       string,
       Array<{
