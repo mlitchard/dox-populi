@@ -1,8 +1,6 @@
 # Build artifacts — never committed (Option B: generated/ is a pure artifact)
 /generated/
-docs/
 /vendor/
-/dox/.dox/
 /main.js
 /result
 /result-*
@@ -12,4 +10,3 @@ node_modules/
 /dox-populi.qcow2
 /dox-populi-installer.iso
 .claude/settings.local.json
-/blog

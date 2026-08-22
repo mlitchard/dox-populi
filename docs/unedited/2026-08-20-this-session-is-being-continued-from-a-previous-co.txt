@@ -1,0 +1,1432 @@
+ ▐▛███▜▌   Claude Code v2.1.81
+▝▜█████▛▘  Opus 4.6 (1M context) · Claude Max
+  ▘▘ ▝▝    ~/gitlab/dox-populi
+
+✻ Conversation compacted (ctrl+o for history)
+
+  ⎿  Read blog/one/outline.md (90 lines)
+  ⎿  Read blog/zero/outline.md (99 lines)
+  ⎿  Read blog/roadmap.md (143 lines)
+
+● Straight talk. Here's the shape, plain:
+
+  Posts zero and one: the Session is dialogue — curated transcript excerpts,
+  your questions in bold, the LLM answering, checker verdicts landing between
+  them. Conversation is the spine.
+
+  Post two: the transcript is thin. The design argument happened before the
+  capture started — no dialogue exists for the interesting part. So the
+  Session's spine becomes documents you wrote or sealed, with the sparse 
+  dialogue as punctuation:
+
+  1. Open with your assignment — docs/session-prompt-tutorial-3.md. You wrote
+  the success criterion before the work: adding the builder touches the shell 
+  only where new primitives enter the vocabulary. That's your voice, on the
+  record, same as a bolded question — just written as orders instead of asked as
+   a question.
+  2. The tool-bug story comes from the committed doc —
+  docs/paradox-check-generate-asymmetry.md. It's in the repo, 74 lines, sealed
+  by commit. We quote it instead of pretending there's a transcript scene that
+  doesn't exist.
+  3. The dialogue we DO have gets spent where it's sharpest — the ERR_FULL
+  removal ruling (~47–51: post one's hero fix, deleted because the new
+  architecture made the bug impossible), and "i already ran the test" (~378).
+
+  Curation law riding along: no quoting ghosts. Nothing gets presented as
+  conversation unless it's in the transcript. Artifacts get cited as artifacts.
+
+  That's it. Bless the artifact-spine Session, or rule dialogue-only and we work
+   with the thin material straight.
+
+✻ Churned for 1m 41s
+
+❯ the assignment must always be at the end, what is to be taught is always at   
+the begining, otherwise what you propose is blessed                             
+
+● Understood — the lesson leads, the assignment closes. The Session opens with
+  the sparse dialogue and the committed doc; your written assignment lands at
+  the end, where an assignment belongs. Here's the outline as it'll be written:
+
+  Blog post two — "You Know Nothing, Jon Shell" — branch 3-tutorial-3
+
+  1. The Promise — objectives stated up front:
+  1. Why a shell that knows nothing is worth having — zero role literals, zero
+  state literals, every decision in the spec. The title is a falsifiable claim.
+  2. Architecture that deletes code: post one's hero fix (ERR_FULL recovery)
+  removed because the interpreter made the deadlock structurally impossible.
+  3. Tools have gaps: paradox check and paradox generate disagree on Machine
+  verification scope — the method survives because it rests on the checkers, not
+   the tool's polish.
+
+  2. The Session — artifact-spine:
+  - The ERR_FULL removal ruling on record (~47–51), fsm-behavior ALL PASSED
+  after the deletion (~55–100).
+  - "i already ran the test" (~378) — the human running the checks himself.
+  - The check-vs-generate asymmetry, quoted from the committed
+  docs/paradox-check-generate-asymmetry.md — cited as a document, not staged as
+  dialogue.
+  - Curation law: no quoting ghosts. Nothing appears as conversation unless it's
+   in the transcript.
+
+  3. The Proof — GIF: the builder raising structures the shell has never heard
+  of. Plus the grep-zero terminal still: grep the shell for a role name, find
+  nothing. Caption law holds.
+
+  4. The Postscript — exercises mapped to objectives, closing with the
+  assignment itself: docs/session-prompt-tutorial-3.md, your success criterion
+  verbatim — adding a role touches the shell only where new primitives enter the
+   vocabulary. The reader leaves holding the same assignment you gave the LLM.
+
+  Say write and it goes to blog/two/outline.md.
+
+❯ write it                                                                      
+
+● Write(blog/two/outline.md)
+  ⎿  User rejected update to blog/two/outline.md
+      15  - What you'll learn:                                           
+      16    1. Why a shell that knows nothing is worth having — what a   
+          generic                                                        
+      17       FSM interpreter buys when the next role arrives.          
+      18 -  2. Architecture can delete code: post one's ERR_FULL         
+         -recovery fix —                                                 
+      19 -     removed because the interpreter made the deadlock         
+         -structurally                                                   
+      20 -     impossible.                                               
+      18 +  2. Architecture can delete code: post one's hero fix         
+         +(ERR_FULL                                                      
+      19 +     recovery) removed because the interpreter made the        
+         +deadlock                                                       
+      20 +     structurally impossible.                                  
+      21    3. Tools have gaps: `paradox check` and `paradox generate`   
+          disagree                                                       
+      22 -     on Machine verification scope — a spec can pass one and   
+         -fail the                                                       
+      23 -     other. The method survives because the full battery runs, 
+         - so one                                                        
+      24 -     subcommand's blind spot never becomes the project's blind 
+         - spot;                                                         
+      25 -     another gate catches it.                                  
+      22 +     on Machine verification scope — the method survives       
+         +because it                                                     
+      23 +     rests on the checkers, not on the tool's polish.          
+      24  - Jargon links out on first use: interpreter, string literal.  
+      25                                                                 
+      26  ## 2. The Session                                              
+     ...
+      50    skips; workaround = per-role state unions. Quoted as a       
+          document —                                                     
+      51    honest "here's where the tool bit us" material.              
+      52                                                                 
+      53 -Curation notes: the deletion is the headline — a post that     
+         -removes its                                                    
+      54 -predecessor's central fix demonstrates the architecture better 
+         - than                                                          
+      55 -any addition could. The asymmetry doc gets one tight excerpt,  
+         -not a                                                          
+      56 -reprint.                                                       
+      53 +Curation notes: the deletion is the headline — a post that     
+         +celebrates                                                     
+      54 +removing its predecessor's proudest fix demonstrates the       
+         +architecture                                                   
+      55 +better than any addition could. The asymmetry doc gets one     
+         +tight                                                          
+      56 +excerpt, not a reprint.                                        
+      57                                                                 
+      58  ## 3. The Proof                                                
+      59                                                                 
+     ...
+      75    3. (objective 3) Read                                        
+          `docs/paradox-check-generate-asymmetry.md`.                    
+      76       Run `paradox check --path dox`, then `nix run .#generate` 
+           — watch                                                       
+      77       where each one's verification actually happens.           
+      78 -  4. (objective 1) Read `docs/session-prompt-tutorial-3.md` —  
+         -the                                                            
+      79 -     author's written orders to the LLM, success criterion     
+         -included:                                                      
+      80 -     adding a role touches the shell only where new primitives 
+         - enter                                                         
+      81 -     the vocabulary. Check each success criterion against the  
+         -evidence                                                       
+      82 -     in this post — find where the post proves it, or fails    
+         -to.                                                            
+      78  - Stretch (objective 1): ask an LLM why a generic interpreter  
+          needs                                                          
+      79    zero role literals to stay generic, then verify its answer   
+          against                                                        
+      80    the Action and TargetKind switches in `shell/main.ts`. The   
+      81    interrogation habit, third rep.                              
+      82 +- The assignment, last: `docs/session-prompt-tutorial-3.md`,   
+         +the                                                            
+      83 +  author's own written orders to the LLM, success criterion    
+         +verbatim —                                                     
+      84 +  adding a role touches the shell only where new primitives    
+         +enter the                                                      
+      85 +  vocabulary. The reader leaves holding the same assignment    
+         +the LLM                                                        
+      86 +  got.                                                         
+
+❯ what do you mean by this, what do you mean by 'checker' '   3. Tools have     
+gaps: `paradox check` and `paradox generate` disagree                           
+      on Machine verification scope — the method survives because it            
+      rests on the checkers, not on the tool's polish.'                         
+
+● Fair cross-examination — the line is muddy, because the thing with the gap IS
+  one of the checkers. Here's what I actually meant:
+
+  The gap: paradox check and paradox generate run different amounts of
+  verification. Generate runs machine verification that check skips — so a spec
+  can pass paradox check and then fail at generate time. That's documented in
+  docs/paradox-check-generate-asymmetry.md. One tool, two subcommands,
+  disagreeing about what "verified" means.
+
+  "The checkers" in that sentence = the whole battery, plural: Z3 verification
+  (wherever it fires), tsc --strict over shell + generated, fsm-behavior, itest.
+   The claim: the method — spec in, multiple independent verdicts out — doesn't
+  collapse when one tool has a rough edge, because verification still happened;
+  it just happened at a different gate than the manual promised. The pipeline
+  runs generate anyway, so nothing unverified ships.
+
+  The muddiness: "rests on the checkers, not the tool's polish" reads like
+  Paradox isn't a checker. It is. The honest phrasing is closer to: the method 
+  rests on running the full battery, so one subcommand's blind spot doesn't 
+  become the project's blind spot — another gate catches it.
+
+  Want objective 3 reworded to that effect, or do you want to dictate the line?
+
+❯ reword objective 3                                                            
+
+● Write(blog/two/outline.md)
+  ⎿  User rejected update to blog/two/outline.md
+      15  - What you'll learn:                                           
+      16    1. Why a shell that knows nothing is worth having — what a   
+          generic                                                        
+      17       FSM interpreter buys when the next role arrives.          
+      18 -  2. Architecture can delete code: post one's ERR_FULL         
+         -recovery fix —                                                 
+      19 -     removed because the interpreter made the deadlock         
+         -structurally                                                   
+      20 -     impossible.                                               
+      18 +  2. Architecture can delete code: post one's hero fix         
+         +(ERR_FULL                                                      
+      19 +     recovery) removed because the interpreter made the        
+         +deadlock                                                       
+      20 +     structurally impossible.                                  
+      21    3. Tools have gaps: `paradox check` and `paradox generate`   
+          disagree                                                       
+      22       on Machine verification scope — a spec can pass one and   
+          fail the                                                       
+      23       other. The method survives because the full battery runs, 
+           so one                                                        
+     ...
+      50    skips; workaround = per-role state unions. Quoted as a       
+          document —                                                     
+      51    honest "here's where the tool bit us" material.              
+      52                                                                 
+      53 -Curation notes: the deletion is the headline — a post that     
+         -removes its                                                    
+      54 -predecessor's central fix demonstrates the architecture better 
+         - than                                                          
+      55 -any addition could. The asymmetry doc gets one tight excerpt,  
+         -not a                                                          
+      56 -reprint.                                                       
+      53 +Curation notes: the deletion is the headline — a post that     
+         +celebrates                                                     
+      54 +removing its predecessor's proudest fix demonstrates the       
+         +architecture                                                   
+      55 +better than any addition could. The asymmetry doc gets one     
+         +tight                                                          
+      56 +excerpt, not a reprint.                                        
+      57                                                                 
+      58  ## 3. The Proof                                                
+      59                                                                 
+     ...
+      75    3. (objective 3) Read                                        
+          `docs/paradox-check-generate-asymmetry.md`.                    
+      76       Run `paradox check --path dox`, then `nix run .#generate` 
+           — watch                                                       
+      77       where each one's verification actually happens.           
+      78 -  4. (objective 1) Read `docs/session-prompt-tutorial-3.md` —  
+         -the                                                            
+      79 -     author's written orders to the LLM, success criterion     
+         -included:                                                      
+      80 -     adding a role touches the shell only where new primitives 
+         - enter                                                         
+      81 -     the vocabulary. Check each success criterion against the  
+         -evidence                                                       
+      82 -     in this post — find where the post proves it, or fails    
+         -to.                                                            
+      78  - Stretch (objective 1): ask an LLM why a generic interpreter  
+          needs                                                          
+      79    zero role literals to stay generic, then verify its answer   
+          against                                                        
+      80    the Action and TargetKind switches in `shell/main.ts`. The   
+      81    interrogation habit, third rep.                              
+      82 +- The assignment, last: `docs/session-prompt-tutorial-3.md`,   
+         +the                                                            
+      83 +  author's own written orders to the LLM, success criterion    
+         +verbatim —                                                     
+      84 +  adding a role touches the shell only where new primitives    
+         +enter the                                                      
+      85 +  vocabulary. The reader leaves holding the same assignment    
+         +the LLM                                                        
+      86 +  got.                                                         
+
+❯ what do you mean by 'hero'                                                    
+
+● "Hero fix" is me talking in magazine language — the hero of post one's story.
+  The ERR_FULL recovery was that post's climax: itest caught the deadlock the
+  unit test couldn't, the fix made the hands report the rejected transfer to the
+   brain, a regression counter got posted as a guard. The fix that earned its
+  place through the full loop.
+
+  Post two deletes it. That reversal is the drama I was flagging: the previous
+  post's centerpiece, removed, and the checkers bless the removal.
+
+  But "hero" is decoration, not information. Plain version: post one's ERR_FULL 
+  recovery fix — removed because the interpreter made the deadlock structurally 
+  impossible. Want it worded that way?
+
+❯ yes, reword it                                                                
+
+● Write(blog/two/outline.md)
+  ⎿  User rejected update to blog/two/outline.md
+      75    3. (objective 3) Read                                        
+          `docs/paradox-check-generate-asymmetry.md`.                    
+      76       Run `paradox check --path dox`, then `nix run .#generate` 
+           — watch                                                       
+      77       where each one's verification actually happens.           
+      78 -  4. (objective 1) Read `docs/session-prompt-tutorial-3.md` —  
+         -the                                                            
+      79 -     author's written orders to the LLM, success criterion     
+         -included:                                                      
+      80 -     adding a role touches the shell only where new primitives 
+         - enter                                                         
+      81 -     the vocabulary. Check each success criterion against the  
+         -evidence                                                       
+      82 -     in this post — find where the post proves it, or fails    
+         -to.                                                            
+      78  - Stretch (objective 1): ask an LLM why a generic interpreter  
+          needs                                                          
+      79    zero role literals to stay generic, then verify its answer   
+          against                                                        
+      80    the Action and TargetKind switches in `shell/main.ts`. The   
+      81    interrogation habit, third rep.                              
+      82 +- The assignment, last: `docs/session-prompt-tutorial-3.md`,   
+         +the                                                            
+      83 +  author's own written orders to the LLM, success criterion    
+         +verbatim —                                                     
+      84 +  adding a role touches the shell only where new primitives    
+         +enter the                                                      
+      85 +  vocabulary. The reader leaves holding the same assignment    
+         +the LLM                                                        
+      86 +  got.                                                         
+
+❯ i'm skeptical of this assignment, can you defend it? ' - The assignment,      
+last: `docs/session-prompt-tutorial-3.md`, the                                  
+   author's own written orders to the LLM, success criterion verbatim —         
+   adding a role touches the shell only where new primitives enter the          
+   vocabulary. The reader leaves holding the same assignment the LLM            
+   got.                                                                         
+'                                                                               
+
+● Let me make the case, and I'll tell you where it's weak.
+
+  The defense: that document is the only artifact in the whole series that shows
+   what directing an LLM looks like when it's done right. Not a chat, not a vibe
+   — written orders with a falsifiable success criterion set down before the
+  work started: adding a role touches the shell only where new primitives enter
+  the vocabulary. Then the post spends three sections proving that criterion was
+   met — the grep-zero still IS the criterion, verified. For your audience — the
+   self-taught kid learning to work with these agents — the transcript shows the
+   LLM working, but the session prompt shows the human's half of the job. That's
+   the half nobody teaches. Closing the post with it says: this is what an
+  assignment looks like; the checks decide if it was met.
+
+  Where it's weak, and you're right to smell it: as written, it's an orphan. It
+  maps to no objective, it assigns no task. "The reader leaves holding the same
+  assignment the LLM got" — holding it to do what? That's a flourish wearing a
+  lesson plan's clothes, and it violates your own law: every exercise reflects a
+   stated objective. The item earns its slot only if it's either (a) an exercise
+   — read the assignment, then check each success criterion against the evidence
+   in this post; find where the post proves it or fails to — which maps clean to
+   objective 1, or (b) the "before the next post" bridge, like blog zero's
+  dox/creeps.dox pointer.
+
+  Verdict: the artifact defends itself; my framing doesn't. Say which shape —
+  exercise, bridge, or cut it entirely.
+
+❯ make it an exercise                                                           
+
+● Write(blog/two/outline.md)
+  ⎿  Wrote 86 lines to blog/two/outline.md
+     # Blog post two — outline
+
+     **Title:** You Know Nothing, Jon Shell
+     **Branch:** `3-tutorial-3`
+     **Source transcript:** `docs/unedited/one/2026-07-30-165717-*.txt`
+     **Source artifacts:** `docs/session-prompt-tutorial-3.md`,
+     `docs/paradox-check-generate-asymmetry.md`
+
+     ## 1. The Promise
+
+     … +76 lines (ctrl+o to expand)
+
+● Written to blog/two/outline.md. The assignment is now exercise 4 — mapped to
+  objective 1, with a real task: check each success criterion against the post's
+   own evidence, find where it's proven or where it falls short. Stretch rides
+  after it, same as post one's shape.
+
+  Three outlines down. Post three — "Bodies, Budgets, and the Literal Bridge,"
+  branch 4-tutorial-4 — when you're ready.
+
+❯ outline blog post three                                                       
+● Explore(Mine tutorial-4 transcript)
+  ⎿  Done (8 tool uses · 25.6k tokens · 1m 6s)
+  (ctrl+o to expand)
+
+● Receipts are in. Before the outline, one honest flag: the literal bridge has 
+  no transcript receipt. The agent combed all 477 lines — the variant-naming
+  trick is nowhere in the dialogue; the design happened inside a collapsed agent
+   run. It lives in the code: the union variants in dox/creeps.dox and the shell
+   indexing into the Screeps API with no switch. Under the no-quoting-ghosts
+  law, it gets told as an artifact — quote the spec and the shell side by side —
+   not staged as conversation. Same shape post two blessed.
+
+  What the transcript DOES have is good: your interrogations, the five-phase
+  generational itest contract, the afford-basis deadlock rationale, and a
+  confession on the record. Proposed outline:
+
+  Blog post three — "Bodies, Budgets, and the Literal Bridge" — branch
+  4-tutorial-4
+
+  1. The Promise — objectives up front:
+  1. How the spec ranks and the world disposes — tiered bodies, richest-first,
+  and why affording against energy on hand instead of capacity is the difference
+   between recovery and deadlock.
+  2. The literal bridge: union variant names chosen to match Screeps' own
+  strings, so the type system carries a proof while the shell does plain
+  indexing.
+  3. How you prove a colony outlives its creeps — a five-phase itest that waits
+  for a natural death and demands recovery.
+
+  2. The Session — receipts (line numbers, verify at draft):
+  - ~136 — "did you write integration tests verifying new tutorial 4 spec?" →
+  the five-phase generational itest contract (~143–166): deaths ≥ 1, baseline
+  progress, recovery + births ≥ deaths + 5, a 5-part creep proving the extension
+   gets spent, progress above baseline after the funeral.
+  - ~296–310 — the afford-basis rationale on record: wait-for-capacity is a
+  deadlock — all harvesters die, the extension never refills, 350 never arrives.
+  - ~168–177 — the agent flags a bug hiding inside the green (run-vm.sh silent
+  first-run failure) → "fix run-vm.sh."
+  - ~366 — "do i what i told you to do, do not deviate from my instructions" —
+  the human as final word, disciplining agent initiative.
+  - ~396 — "i included the bug fix in this commit, note my sin." — the author
+  holds himself to the standard, on the record.
+  - The literal bridge told from the artifacts: spec union next to shell
+  indexing, cited as code.
+
+  3. The Proof — GIF: a 5-part heavy worker spawning after a death; the colony
+  refilling to 2/1/2. Caption law holds.
+
+  4. The Postscript — exercises mapped 1/2/3, closing with the assignment:
+  docs/session-prompt-tutorial-4.md, exercise-form — check its three phases
+  against the post's evidence.
+
+  Bless it or cross-examine.
+
+✻ Baked for 1m 52s
+
+❯ write it                                                                      
+
+● Write(blog/three/outline.md)
+  ⎿  Wrote 97 lines to blog/three/outline.md
+     # Blog post three — outline
+
+     **Title:** Bodies, Budgets, and the Literal Bridge
+     **Branch:** `4-tutorial-4`
+     **Source transcript:** `docs/unedited/one/2026-07-30-201356-*.txt`
+     **Source artifacts:** `docs/session-prompt-tutorial-4.md`,
+     `dox/creeps.dox` + `shell/main.ts` (the literal bridge itself)
+
+     ## 1. The Promise
+
+     … +87 lines (ctrl+o to expand)
+
+● Written to blog/three/outline.md. Four down, two to go.
+
+  Post four — "When the Fancy Feature Fails You," branch 7-tutorial-5 — has the
+  richest source pile: two transcripts (2026-07-31-110303, 2026-08-02-143153)
+  plus the session prompt. The Paradox-guards-unusable story is the headline
+  there, and it's the series' most delicate post — the one where the tool
+  disappoints on camera. Say the word and I'll send the agents in.
+
+❯ begin post four                                                               
+
+● 2 Explore agents finished (ctrl+o to expand)
+   ├─ Mine tutorial-5 first transcript · 14 tool uses · 62.0k tokens
+   │  ⎿  Done
+   └─ Mine tutorial-5 second transcript · 15 tool uses · 64.1k tokens
+      ⎿  Done
+
+● The agents came back, and I've got two flags before any outline gets blessed.
+
+  Flag one — the two transcripts look like the same session. Both agents quote
+  the identical human lines at identical line numbers ("what is rcl 3 mean?" at
+  ~2217, "i want you to investigate" at ~2284, the 9p-mount ruling at ~2732 — in
+   both files). Either 2026-08-02-143153 is a re-save of the 07-31-110303
+  session, or a glob went wide. Worth you eyeballing before draft time; the
+  outline will cite one transcript until proven otherwise.
+
+  Flag two — the headline has no transcript receipt. The guards story — Paradox
+  guards looking purpose-built for observations and turning out unusable, the
+  pivot to flat product events — is in NEITHER transcript. The spec gets written
+   flat from the first line; the pivot was decided before capture. Same with
+  Memory.trace: it's in the session prompt, never implemented on record — the
+  diagnosis tool that actually appears is Memory.stats telemetry. The title
+  "When the Fancy Feature Fails You" is currently a claim with no scene behind
+  it. The one place the guards decision exists in writing is
+  docs/session-prompt-tutorial-5.md (~lines 40–46) — your own assignment.
+  Artifact, not dialogue.
+
+  What IS on record is better than what we lost. Three complete fail→fix→pass
+  loops:
+  1. Paradox rejects a one-field product type (~609–686) — generate fails,
+  TowerContext gains a field, Z3 signs off. A real "tool bit us" scene, on
+  camera.
+  2. The RCL surgery fails silently — itest times out (~1831), diagnosis, second
+   failure (~2093), root cause: MongoDB $set unsupported, fix + verification
+  probe (~2126–2162).
+  3. The live bug hunt — this is the crown jewel: "upgrader-192 has stopped 
+  doing anything carrying no energy" (~2237) → "the other creeps have stopped" →
+   "i want you to investigate" (~2284) → the Memory.stats telemetry fingers both
+   builders self-looping in building + sinksFull → spec bug, two transitions
+  fixed → "yes fix it and deploy" (~2514). A human watching the game catches
+  what every checker missed — because the spec was wrong, and wrong specs pass
+  their own checks.
+
+  The question you need to rule on: does post four keep the guards headline
+  (told honestly as artifact — "the assignment itself records the retreat from
+  guards") with the three loops as the body — or does it re-center on loop
+  three, where the title becomes about the spec being the fancy feature that
+  fails you when it encodes the wrong policy? Both are honest. They're different
+   posts.
+
+✻ Churned for 2m 42s
+
+❯ explicate this better '  The question you need to rule on: does post four     
+keep the guards headline (told honestly as                                      
+  artifact — "the assignment itself records the retreat from guards") with the  
+three loops as the                                                              
+  body — or does it re-center on loop three, where the title becomes about the  
+spec being the fancy                                                            
+   feature that fails you when it encodes the wrong policy? Both are honest.    
+They're different                                                               
+  posts.'                                                                       
+
+● Alright, let me lay both doors open properly.
+
+  Door A — the post is about Paradox failing you.
+
+  The "fancy feature" = Paradox guards. The story: guards looked purpose-built
+  for observations — the obvious, elegant way to express "when the tower sees a
+  hostile." You reached for the shiny feature and it couldn't do the job, so the
+   design retreated to something dumber and sturdier: a flat event vocabulary,
+  plain union variants, priority by ordering, with tsc proving the event names
+  against the generated type. The lesson: the method doesn't depend on the 
+  tool's polish — when a feature fails, you fall back to primitives and the
+  checkers still hold the line.
+
+  - Evidence problem: no scene exists. Nobody tries guards on camera; no error
+  output, no pivot argument. The only written trace is your own assignment
+  (session-prompt-tutorial-5.md), which records the decision as already made. So
+   The Session opens with an artifact and an admission: "the fight happened off
+  the record; here's the surviving document." That's honest, but it's telling,
+  not showing — and every other post in this series shows.
+  - What it buys: tool-criticism credibility. A series that dings its own
+  favorite tool in public is harder to dismiss as advocacy.
+
+  Door B — the post is about your own spec failing you.
+
+  The "fancy feature" = the verified spec itself. The story: by post four the
+  reader might believe the pitch too much — spec in, Z3 blesses, tsc blesses,
+  ship it. Loop three detonates that: the spec said building + sinksFull → 
+  building. Every checker passed, because the checkers verify the spec is
+  consistent, not that it's right. The policy was wrong, and the only detector
+  was a human watching the game: "upgrader-192 has stopped doing anything." Then
+   — and this is the redemption arc — the same machinery that missed the bug
+  diagnoses and fixes it: telemetry fingers the self-loop, the fix is two
+  transitions in the spec, the checkers bless the correction, deploy. The
+  lesson: verification tells you the brain is coherent, never that it's wise —
+  which is exactly the "human is the final word" doctrine, dramatized.
+
+  - Evidence: wall to wall. Your questions on record, live diagnosis, spec diff,
+   "yes fix it and deploy," three green gates after. It's the strongest Session
+  material in the entire series.
+  - What it costs: the guards story shrinks to a paragraph of context (or moves
+  elsewhere), and the title's meaning shifts from "the tool's fancy feature" to
+  "the fanciest feature of all — the proof."
+
+  Why they're different posts: Door A's villain is Paradox; Door B's villain is
+  misplaced faith in green checkmarks. Door A teaches "tools have gaps"; Door B
+  teaches "verified ≠ correct." You already spent "interrogate the green" in
+  post one — Door B is its heavyweight sequel. Door A has thin receipts for a
+  headline claim; Door B has receipts to burn but retires the story the roadmap
+  promised.
+
+  Rule on it.
+
+❯ door B, reword the title if needed                                            
+
+● Door B it is. Titles on the table:
+
+  1. "Verified and Wrong" — my pick. Two words, states the lesson, sits clean
+  next to "Your First Brain" and "The Enemy Gets a Spec Too."
+  2. "The Bug Every Checker Blessed"
+  3. "Green Across the Board" — game-forward but vaguer.
+
+  Outline as it'll be written (title slot pending your pick):
+
+  Blog post four — branch 7-tutorial-5, source transcript 2026-07-31-110303
+  (draft-time note: the 2026-08-02-143153 file appears to be a duplicate capture
+   — verify before quoting).
+
+  1. The Promise — objectives:
+  1. The brain isn't just for creeps — the tower gets an FSM from the same spec,
+   same pipeline, and what the checkers actually promise about it: consistency
+  and totality, never wisdom.
+  2. Verified ≠ correct: every gate can pass while the spec encodes the wrong
+  policy — and why that's a feature of the division of labor, since checkers
+  verify the brain agrees with itself, and the human verifies it agrees with the
+   world.
+  3. How telemetry turns a live world into a debuggable one — per-creep {role, 
+  event, fsm, action} in Memory.stats, read straight off the running server.
+
+  2. The Session —
+  - Setup, brief: the tower FSM ports in; Paradox rejects a one-field product
+  type (~609–686), field added, Z3 signs off — tools bite, the loop absorbs it,
+  two sentences.
+  - The RCL-surgery itest saga summarized in three: timeout (~1831), second
+  failure proving the surgery itself (~2093), MongoDB $set → find-modify-update
+  fix plus a verification probe (~2126–2162).
+  - The headline, spent whole: "im running tituorial 5, what behaviors can I 
+  expect" (~2174) → "what is rcl 3 mean?" (~2217) → "upgrader-192 has stopped 
+  doing anything carrying no energy" (~2237) → "the other creeps have stopped"
+  (~2262) → "i want you to investigate" (~2284) → telemetry fingers both
+  builders self-looping building + sinksFull (~2342–2359) → spec bug named, two
+  transitions fixed with rationale (~2361–2381, ~2516–2537) → "yes fix it and 
+  deploy" (~2514) → three gates green (~2403–2410).
+  - Guards context, one paragraph, cited from docs/session-prompt-tutorial-5.md
+  as artifact — the flat event vocabulary was chosen after guards proved
+  unusable; no scene exists, so no scene is staged.
+
+  3. The Proof — GIF: the tower one-shotting the invader. Still: Memory.stats
+  per-creep telemetry mid-diagnosis. Caption law holds.
+
+  4. The Postscript — exercises mapped 1/2/3; the wrong-policy exercise is the
+  star (read the old building + sinksFull → building line, explain why every
+  checker passed anyway); assignment last: docs/session-prompt-tutorial-5.md
+  checked against the post's evidence; stretch = interrogation rep five.
+
+  One more thing that needs your word: the roadmap slate still carries "When the
+   Fancy Feature Fails You" and the guards-headline description for post 4. When
+   you say write, I update both the new outline and that slate entry to match
+  Door B. Say write — and pick the title.
+
+✻ Sautéed for 38s
+
+❯ verified and wrong, write it                                                  
+
+● Write(blog/four/outline.md)
+  ⎿  User rejected update to blog/four/outline.md
+      13    tower gets its brain from the same spec as the creeps. Every 
+           checker                                                       
+      14    passes. And the colony freezes anyway.                       
+      15  - What you'll learn:                                           
+      16 -  1. The brain works for more than creeps — the tower gets an  
+         -FSM from                                                       
+      17 -     the same spec, same pipeline, and what the checkers       
+         -promise about                                                  
+      18 -     it: the machine is consistent and total.                  
+      19 -  2. Every gate can pass while the spec encodes the wrong      
+         -policy. The                                                    
+      20 -     checkers verify the brain agrees with itself; the human   
+         -verifies                                                       
+      21 -     it agrees with the world. That division of labor is the   
+         -design,                                                        
+      22 -     and this post shows both halves doing their jobs.         
+      16 +  1. The brain isn't just for creeps — the tower gets an FSM   
+         +from the                                                       
+      17 +     same spec, same pipeline, and what the checkers actually  
+         +promise                                                        
+      18 +     about it: consistency and totality, never wisdom.         
+      19 +  2. Verified is not correct: every gate can pass while the    
+         +spec                                                           
+      20 +     encodes the wrong policy. The checkers verify the brain   
+         +agrees                                                         
+      21 +     with itself; the human verifies it agrees with the world. 
+         + That                                                          
+      22 +     division of labor is the design, and this post shows both 
+         + halves                                                        
+      23 +     doing their jobs.                                         
+      24    3. How telemetry turns a live world into a debuggable one —  
+          per-creep                                                      
+      25       `{role, event, fsm, action}` in `Memory.stats`, read      
+          straight off                                                   
+      26       the running server.                                       
+     ...
+      37    bite, the loop absorbs it — two sentences.                   
+      38  - The RCL-surgery itest saga, summarized: the defense test     
+          times out                                                      
+      39    (~1831), a second failure proves the surgery itself never    
+          took                                                           
+      40 -  (~2093), root cause: the storage module rejects MongoDB      
+         -`$set` —                                                       
+      41 -  fix is find-modify-update, plus a verification probe so the  
+         -failure                                                        
+      42 -  can never again be silent (~2126–2162).                      
+      40 +  (~2093), root cause: the storage module doesn't support      
+         +MongoDB                                                        
+      41 +  `$set` — fix is find-modify-update, plus a verification      
+         +probe so                                                       
+      42 +  the failure can never be silent again (~2126–2162).          
+      43  - **The headline, spent whole — the live bug hunt:**           
+      44    - **~2174** — "im running tituorial 5, what behaviors can I  
+          expect"                                                        
+      45      — the author watching the world, expectations set on       
+          record.                                                        
+     ...
+      51    - ~2342–2359 — the telemetry fingers both builders           
+          self-looping:                                                  
+      52      `building + sinksFull → building`. The spec bug named:     
+          sinksFull                                                      
+      53      masks noSites; the builder holds a full store forever.     
+      54 -  - Every checker had passed this spec — they proved it        
+         -consistent.                                                    
+      54 +  - Every checker had passed this spec. The checkers proved it 
+      55 +    consistent. Consistent and wrong.                          
+      56    - ~2361–2381, ~2516–2537 — two transitions fixed with        
+          rationale in                                                   
+      57      the spec: building + sinksFull → assisting; gathering +    
+          sinksFull                                                      
+      58      → building.                                                
+     ...
+      68  the game catches what every checker blessed, and the same      
+          pipeline                                                       
+      69  that missed the bug diagnoses and fixes it. Keep the author's  
+      70  escalation sequence intact; it reads like a detective story.   
+          The RCL                                                        
+      71 -saga gets three sentences of harness engineering.              
+      71 +saga gets three sentences; it's harness engineering, not the   
+         +lesson.                                                        
+      72                                                                 
+      73  ## 3. The Proof                                                
+      74                                                                 
+     ...
+      88       `building + sinksFull → building` in the spec. Run        
+      89       `paradox check --path dox` and `nix run .#generate` —     
+          watch every                                                    
+      90       gate pass on a spec that deadlocks the colony. Explain    
+          what the                                                       
+      91 -     checkers proved.                                          
+      91 +     checkers actually proved.                                 
+      92    3. (objective 3) Boot your VM, deploy, and read              
+      93       `Memory.stats.creeps` off the running server. Find each   
+          creep's                                                        
+      94       `{role, event, fsm, action}` and match it to the machine  
+          in the                                                         
+     ...
+       97       author's written orders, three acts and success          
+           criteria. Check                                               
+       98       each criterion against the evidence in this post — find  
+           where the                                                     
+       99       post proves it, or fails to.                             
+      100 -- Stretch (objective 2): ask an LLM what Z3 verifies about an 
+          - FSM                                                          
+      101 -  spec, then test the answer against this post's bug. The     
+      102 -  interrogation habit, fifth rep.                             
+      100 +- Stretch (objective 2): ask an LLM what Z3 verifies about an 
+          + FSM spec                                                     
+      101 +  and what it cannot verify in principle, then test the       
+          +answer against                                                
+      102 +  this post's bug. The interrogation habit, fifth rep.        
+
+❯ keep the klanker-speak out of this , i've told you several times to avoud     
+contrasts 'consistency and totality, never wisdom.'                             
+
+● Write(blog/four/outline.md)
+  ⎿  Wrote 102 lines to blog/four/outline.md
+     # Blog post four — outline
+
+     **Title:** Verified and Wrong
+     **Branch:** `7-tutorial-5`
+     **Source transcript:** `docs/unedited/one/2026-07-31-110303-*.txt`
+     (draft-time note: `2026-08-02-143153-*` appears to be a duplicate
+     capture
+     of the same session — verify before quoting from it)
+     **Source artifacts:** `docs/session-prompt-tutorial-5.md`
+
+     ## 1. The Promise
+     … +92 lines (ctrl+o to expand)
+
+● Update(blog/roadmap.md)
+  ⎿  Added 9 lines, removed 7 lines
+      113     looking like plain old string indexing. The Proof: the     
+           colony surviving                                              
+      114     its own deaths.                                            
+      115                                                                
+      116 -4. **"When the Fancy Feature Fails You                        
+          -."** — branch: `7-tutorial-5`                                 
+      117 -   Paradox guards looked purpose-built for observations and   
+          -were unusable                                                 
+      118 -   for them; the flat product event union won, with tsc       
+          -proving                                                       
+      119 -   template-literal concat against the generated type. The    
+          -method survives                                               
+      120 -   the tool's gaps because it depends on the checkers.        
+          -Memory.trace as                                               
+      121 -   flight recorder vs one-tick transients rides along in The  
+          -Session. The                                                  
+      122 -   Proof: the tower one-shotting the invader.                 
+      116 +4. **"Verified and Wrong."** — branch: `7-tutorial-5`         
+      117 +   The tower gets an FSM from the same spec, and every        
+          +checker passes                                                
+      118 +   while the colony freezes: the spec said building +         
+          +sinksFull →                                                   
+      119 +   building, a self-loop the gates blessed, because the       
+          +checkers prove                                                
+      120 +   the brain consistent. The live bug hunt lands in The       
+          +Session — the                                                 
+      121 +   author watching the world stop, telemetry fingering the    
+          +self-loop,                                                    
+      122 +   the two-transition spec fix, the gates green on the        
+          +correction. The                                               
+      123 +   guards retreat survives as a context paragraph cited from  
+          +the                                                           
+      124 +   session prompt. The Proof: the tower one-shotting the      
+          +invader.                                                      
+      125                                                                
+      126  5. **"The Enemy Gets a Spec Too."** — branch:                 
+           `11-attack-defense`                                           
+      127     No handwritten JS brains, ever — the raider is             
+           Paradox-specified, built                                      
+
+● Written: blog/four/outline.md under the title "Verified and Wrong," contrasts
+  scrubbed, and the roadmap slate entry updated to match.
+
+  One outline left — post five, "The Enemy Gets a Spec Too," branch
+  11-attack-defense, transcripts 2026-08-01-201058 and 2026-08-02-135932 plus
+  the raider-offense and live-invader session prompts. Say the word.
+
+✻ Sautéed for 1m 0s
+❯ we can do better with the title                                               
+
+● Agreed — "The Enemy Gets a Spec Too" states the thesis but it's flat on the
+  marquee, and this is the post you called the traffic driver. Candidates:
+
+  1. "First Blood" — my pick. It's literally the name of the itest, it's a war
+  movie, and it obeys the caption-law spirit: the title IS a receipt. Two words,
+   sits clean in the slate next to "Verified and Wrong."
+  2. "Give the Devil His Spec" — the thesis with teeth: even the enemy gets no
+  handwritten brain.
+  3. "Know Your Enemy" — recognizable, but it's about reading the raider spec
+  more than building it.
+  4. "The Devil's Brain" — shorter version of 2, punchier, vaguer.
+
+  The thesis line ("no handwritten JS brains, ever — the raider comes off the
+  same pipeline") survives either way as the post's first sentence; it just
+  stops working as the headline.
+
+  Pick one, offer your own, or hear the case for any of them argued harder. Then
+   I send the agents into the two transcripts.
+
+❯ first blood                                                                   
+
+● 2 Explore agents finished (ctrl+o to expand)
+   ├─ Mine raider-offense transcript · 8 tool uses · 29.2k tokens
+   │  ⎿  Done
+   └─ Mine live-invader transcript · 16 tool uses · 46.5k tokens
+      ⎿  Done
+
+● Both mines came back rich — and these two transcripts are genuinely different
+  sessions, no duplication. Two honest flags, then the proposed outline.
+
+  Flag one: the ERR_NO_BODYPART masquerade has no fail→fix→pass loop on record.
+  It appears as historical context in a comment being edited (~487–490 in the
+  second transcript): the code sounds like "missing body part," it actually
+  means "safe mode is on, no hostile actions allowed yet." One paragraph of
+  context, told as artifact. The roadmap slate entry promises more than the
+  record holds — needs trimming when I update the title anyway.
+
+  Flag two, the good kind: the record holds something better than the roadmap
+  promised — your own laws colliding on camera. The tower-latch ruling and the
+  raid-gate ruling deadlock each other the moment the tower spends ten energy
+  (990 < 1000, forever). And you amending your own no-surgery doctrine, on the
+  record, down to one arming write. The human-as-final-word doctrine gets its
+  richest material here: the final word revises itself under evidence.
+
+  Blog post five — "First Blood" — branch 11-attack-defense, both transcripts.
+
+  1. The Promise — objectives:
+  1. The enemy gets no special treatment — the raider brain is
+  Paradox-specified, same pipeline, seeded as an NPC user (the uid-2 engine
+  quirk and the raiders-user workaround).
+  2. A test may claim only what the world produced — and how you force the world
+   to produce more: the escalating-wave protocol, n raiders then n+1 until blood
+   lands.
+  3. Rulings are code too — the author's own two laws deadlock the tower at 990,
+   and the no-surgery doctrine gets amended by its own author: one arming write,
+   then observation only.
+
+  2. The Session — two sessions, told in order:
+  - Session one (2026-08-01): "why is damageTaken off the stand?" (~260) — the
+  author cross-examining his own weakened test; the answer on record: run #5
+  produced zero damage, and a probe that demands what the world doesn't deliver
+  "isn't a check, it's a hunger strike." → "ship as is, strengthening test is 
+  it's own task." (~309) → the escalating-wave design, in your words (~725–727):
+   one raider, then two, then n+1 until damage happens. NPC-user law as context:
+   uid-2 creeps run engine AI, so the raiders user exists.
+  - Session two (2026-08-02): "what problem are you trying to solve right now"
+  (~41) → the tower deadlock: two rulings collide at 990 energy → "what does 
+  this mean 'rewriting the spec so a tower is a sink whenever it's below 1000'"
+  (~75) → "do it" (~109). The surgery doctrine amendment (~413–427). Then the
+  fail→fix→pass: "you did not set up correct conditions, the gates are still 
+  locked" (~1124), "do you understand why this is a problem" with poll output
+  quoted (~1495) → arming write rebuilt to seed RCL 3, safe mode off, tower
+  standing (~1249–1255) → first blood asserted: damageTaken >= 1.
+  - ERR_NO_BODYPART masquerade: one context paragraph, cited from the code
+  comment.
+
+  3. The Proof — GIF: raiders against the tower, first blood on camera. Still:
+  the SUCCESS poll line. Caption law holds.
+
+  4. The Postscript — exercises mapped 1/2/3; assignment last: the
+  raider-offense and live-invader session prompts checked against the post's
+  evidence; stretch = rep six.
+
+  Plus the roadmap slate entry gets retitled "First Blood" and trimmed to match
+  the record. Say write.
+
+✻ Churned for 2m 23s
+
+❯ colliding on camera? i can back this up with a recording or are you saying    
+this recording already exists                                                   
+
+● Loose language on my part — let me tighten it. "On camera" meant on the 
+  transcript record, and that record exists: the deadlock is documented in the
+  2026-08-02 session (~lines 20–28) with the live-server evidence quoted — tower
+   trace t26765: hostileIntactReserveOk → attack, rc 0, tower fires one shot,
+  drops to 990, latch shut at 1000, raid gate needs 1000, nothing refills it.
+  The verdict on record: "Your two rulings deadlock the moment the tower spends
+  a dime."
+
+  No screen recording exists. Under the series' own rules, that receipt belongs
+  in The Session as a transcript excerpt, not in The Proof.
+
+  Could you record it? Yes — check out the pre-fix commit, boot the VM, deploy,
+  and watch the tower stall at 990 while creeps walk past it. That would make a
+  strong Proof shot: the deadlock GIF next to the fixed-law GIF where the tower
+  gets refilled. But it's extra work re-shooting a bug you already fixed, and
+  the post stands without it — post four already carries a still of telemetry
+  mid-diagnosis; this post's Proof centerpiece stays first blood itself.
+
+  Want the outline to list the deadlock re-shoot as an optional Proof shot, or
+  keep the deadlock as Session material only?
+
+❯ re-visit and explicate the flags                                              
+
+● Alright, both flags, laid out in full.
+
+  Flag one — the ERR_NO_BODYPART masquerade is promised big, recorded small.
+
+  What the roadmap slate entry says: "The NPC-user law saga, the surgery
+  doctrine (one arming write, then observation only), and the first-blood itest
+  land in The Session" — and the evidence map row adds "ERR_NO_BODYPART
+  masquerade" as a named story beat. That phrasing implies a scene: an error
+  code misleads somebody, a diagnosis chases the wrong thing, the mask comes
+  off, a fix lands.
+
+  What the record actually holds: no scene. The masquerade appears in the
+  2026-08-02 transcript (~487–490) only as a comment being edited out of
+  tests/integration.nix. The content of the masquerade is real and worth a
+  paragraph — the engine returns ERR_NO_BODYPART (-12) for every hostile creep
+  action while safe mode runs; the code reads like "your creep is missing a body
+   part" when it actually means "the world forbids hostile actions right now";
+  the raid mod reads that signal and defers raids until safe mode lapses. But
+  there is no fail→fix→pass loop, no bolded question, no diagnosis on record.
+  Whatever chase happened, it happened before capture.
+
+  Consequence: under the no-quoting-ghosts law, the masquerade gets one context
+  paragraph in The Session, cited from the code comment as an artifact. And the
+  roadmap's slate entry gets trimmed when I retitle it, so the roadmap stops
+  promising a saga the record can't back.
+
+  Flag two — the record holds a story the roadmap never promised: your own 
+  rulings deadlocking each other.
+
+  What happened, per the 2026-08-02 transcript (~20–28): you had two laws in
+  force. Law one, the tower-refill latch — the tower stops being a sink at 1000
+  energy, reopens below 500. Law two, the raid gate — the war doesn't start
+  until the tower stands at a full 1000, the fair-fight bar. Live server: the
+  tower fills to 1000, the latch shuts, the tower fires ONE shot at a stray
+  hostile — ten energy — 990. Now it's below the raid gate's bar and above the
+  latch's reopen line. No creep will ever feed it again; the war can never
+  start. Verdict quoted on the record: "Your two rulings deadlock the moment the
+   tower spends a dime. The creeps ain't broken — they're obeying."
+
+  Why this matters for the series: it's the strongest possible demonstration of
+  the trust doctrine. Every prior post shows the human as the final word —
+  ruling on evidence, correcting the machine. This is the completion of that
+  argument: the final word is also revisable word. Your laws were internally
+  consistent, the spec obeyed them perfectly, and they were jointly wrong — the
+  exact shape of post four's lesson, except this time the wrong policy came from
+   the author's rulings, and the record shows the author amending himself: the
+  sink-below-1000 rewrite ("do it", ~109) and the no-surgery doctrine amended to
+   one arming write (~413–427). Authority that can't revise itself is dogma; the
+   record shows yours revising under evidence.
+
+  Consequence: this goes in The Session as headline material, sourced from
+  transcript excerpts. And per the exchange we just had — the deadlock lives in
+  Session as excerpts; there's no recording, though a pre-fix commit re-shoot is
+   possible if you ever want a Proof shot of it.
+
+  Both flags point the same direction: shrink the masquerade to a paragraph,
+  promote the deadlock to a headline, and align the slate entry with what the
+  record can prove. That's the shape awaiting your write.
+
+❯ what is 'the session' you keep referring to                                   
+
+● "The Session" is section 2 of the four-part template every post follows — the
+  skeleton you laid down and I wrote into blog/roadmap.md:
+
+  1. The Promise — what this post is about, what you'll learn. Objectives stated
+   up front.
+  2. The Session — curated excerpts from the captured build transcripts in
+  docs/unedited/, with your questions set in bold as the through-line. The
+  reader watches the LLM work each step and watches you cross-examine it.
+  Checker verdicts — Paradox, Z3, tsc, itest — appear where they actually
+  happened in the conversation.
+  3. The Proof — the manual test, captured: GIFs and stills of the world doing
+  the thing, every caption naming the command that produced it.
+  4. The Postscript — the exercises, each mapped to a stated objective.
+
+  So when I say "the deadlock goes in The Session," I mean: it gets told through
+   quoted transcript excerpts in section 2 — the reader sees your actual words
+  and the actual verdicts. When I say the masquerade is "Session material as
+  artifact," I mean it appears in that same section but quoted from a committed
+  code comment instead of dialogue, because no dialogue exists for it.
+
+  Every outline written so far — zero through four — uses these four headings.
+  Post five follows suit.
+
+❯ what changes do you propose considering these flags                           
+
+● Three changes, concretely:
+
+  1. The post five outline — promote the deadlock, demote the masquerade.
+
+  - The Session gets a third headline block alongside the damageTaken
+  cross-examination and the gates-locked loop: the two-laws deadlock (~20–28) —
+  tower at 990, latch shut, raid gate unreachable, "the creeps ain't broken —
+  they're obeying" — followed by the two self-amendments on record: the
+  sink-below-1000 rewrite ("what does this mean..." → "do it") and the surgery
+  doctrine (one arming write, ~413–427).
+  - The Promise's objective 3 carries it: rulings are code too — the author's
+  own laws deadlock, and get debugged the same way the spec did in post four.
+  - ERR_NO_BODYPART shrinks to one context paragraph, cited from the code
+  comment as artifact, under the no-quoting-ghosts law.
+  - Draft-time note in the outline: optional Proof re-shoot of the deadlock
+  exists (pre-fix commit, tower stalled at 990) — listed as optional, decided at
+   draft time.
+
+  2. The roadmap slate entry — retitle and re-scope.
+
+  Current entry promises "the ERR_NO_BODYPART masquerade" as a Session saga.
+  Proposed replacement: title becomes "First Blood"; description names what the
+  record proves — the raider off the same pipeline seeded as an NPC user, the
+  damageTaken cross-examination and escalating-wave protocol, the two-laws
+  deadlock and the author amending his own doctrine, first blood asserted
+  damageTaken >= 1. The masquerade drops out of the slate description entirely.
+
+  3. The evidence map row — trim one phrase.
+
+  The 11-attack-defense row ends with "ERR_NO_BODYPART masquerade" as a story
+  beat. It stays accurate to say the masquerade exists in the record, but as
+  context, not saga. I'd cut the phrase from the row or leave it — your call;
+  the row describes what the sessions contain, and the comment does appear in
+  one. My vote: cut it, since the row's job is to point at stories worth telling
+   and this one's a footnote.
+
+  Say write — and rule on the evidence map phrase — and all of it lands.
+
+❯  write it                                                                     
+
+● Write(blog/five/outline.md)
+  ⎿  Wrote 121 lines to blog/five/outline.md
+     # Blog post five — outline
+
+     **Title:** First Blood
+     **Branch:** `11-attack-defense`
+     **Source transcripts:** `docs/unedited/2026-08-01-201058-*.txt`,
+     `docs/unedited/2026-08-02-135932-*.txt`
+     **Source artifacts:** `docs/session-prompt-raider-offense.md`,
+     `docs/session-prompt-live-invader.md`
+
+     ## 1. The Promise
+     … +111 lines (ctrl+o to expand)
+
+● Update(blog/roadmap.md)
+  ⎿  Added 7 lines, removed 5 lines
+      123     guards retreat survives as a context paragraph cited from  
+           the                                                           
+      124     session prompt. The Proof: the tower one-shotting the      
+           invader.                                                      
+      125                                                                
+      126 -5. **"The Enemy Gets a Spec Too                               
+          -."** — branch: `11-attack-defense`                            
+      126 +5. **"First Blood."** — branch: `11-attack-defense`           
+      127     No handwritten JS brains, ever — the raider is             
+           Paradox-specified, built                                      
+      128 -   by the same pipeline, seeded as an NPC user. The NPC-user  
+          -law saga, the                                                 
+      129 -   surgery doctrine (one arming write, then observation       
+          -only), and the                                                
+      130 -   first-blood itest land in The Session. The Proof: raiders  
+          -against the                                                   
+      131 -   defender, first blood on camera.                           
+      128 +   by the same pipeline, seeded as an NPC user. The Session:  
+          +the author                                                    
+      129 +   cross-examining his own weakened test ("why is damageTaken 
+          + off the                                                      
+      130 +   stand?"), the escalating-wave protocol, the two-laws tower 
+          + deadlock at                                                  
+      131 +   990 energy, and the no-surgery doctrine amended by its own 
+          + author to                                                    
+      132 +   one arming write. First blood asserted: damageTaken >= 1.  
+          +The Proof:                                                    
+      133 +   raiders against the tower, first blood on camera.          
+      134                                                                
+      135  *(future)* **"Evolution."**                                   
+      136     The hybrid mutator from `docs/evolution-plan.md`:          
+           deterministic genome                                          
+
+● Update(blog/roadmap.md)
+  ⎿  Added 1 line, removed 1 line
+      69  | `8-fix-dev-iso`, `9-tick-speed` | `one/2026-07-31-132923`,   
+          session-prompts vm-repo-mount + tick-speed | dd-pattern        
+          installer, tests mirror the dev env, parameterized tick |      
+      70  | `7-tutorial-5` | `one/2026-07-31-110303`,                    
+          `2026-08-02-143153`, session-prompt-tutorial-5 | Tower FSM;    
+          Paradox guards unusable → flat product event vocabulary;       
+          Memory.trace flight recorder vs one-tick transients |          
+      71  | `10-test-analysis` | ("had claude sum up the tutorial") | CI 
+           dedup via flake gitlab overlay; oracle sweep replaces         
+          regression pins |                                              
+      72 -| `11-attack-defense` | `2026-08-01-201058`,                   
+         -`2026-08-02-135932`, session-prompts raider-offense +          
+         -live-invader | The enemy is Paradox-specified too. Raiders NPC 
+         -user, relentless war, first-blood itest, ERR_NO_BODYPART       
+         -masquerade |                                                   
+      72 +| `11-attack-defense` | `2026-08-01-201058`,                   
+         +`2026-08-02-135932`, session-prompts raider-offense +          
+         +live-invader | The enemy is Paradox-specified too. Raiders NPC 
+         +user, relentless war, first-blood itest, the two-laws          
+         +tower deadlock |                                               
+      73  | `12-flakehub-prep` | `2026-08-12-180526` (upstream rename) | 
+           Going public: FlakeHub, generated CI, mirror parity |         
+      74  | `13-detsys-install` | — | Determinate Nix drives the dev VM; 
+           vm-boot asserts it (`tests/vm.nix`); fh + flake-checker in    
+          the devShell; disko pinned via FlakeHub release |              
+      75  | (future) | `docs/evolution-plan.md` | The hybrid mutator;    
+          the engine kit |                                               
+
+  Recalled 1 memory, wrote 1 memory (ctrl+o to expand)
+
+● All landed:
+
+  - blog/five/outline.md — "First Blood," two sessions in order, the deadlock as
+   doctrinal peak, masquerade as one artifact paragraph, optional pre-fix
+  re-shoot noted for draft time.
+  - Roadmap slate entry 5 retitled and re-scoped to what the record proves.
+  - Evidence map row: "ERR_NO_BODYPART masquerade" replaced with "the two-laws
+  tower deadlock."
+
+  That's the full slate — six outlines, zero through five, every one holding the
+   template: objectives first, receipts with line numbers, caption law,
+  exercises mapped, assignment last. What remains is draft work: verify every
+  quote against the transcripts, pin the tutorial-source and typed-screeps URLs,
+   and the Hetzner ISO link before post zero ships.
+
+✻ Brewed for 1m 23s
+
+❯ there's one more blog post. 'about me'. the thing about me, I don't have a    
+college degree. I took a freshmen calc class, a few c programming classes and   
+self-taught graph theory. I self taught haskell. my background is as a liberal  
+arts dropout. my formal technical area of study besides the programming and     
+math classes were ancient greek and modern german. the point here is, you don't 
+ need to be a cs major to be successful                                         
+
+● Now that's the missing piece — and I'll tell you why it matters more than a
+  feel-good bio. The audience paragraph in the roadmap makes a claim: "the
+  aspirant with QEMU and an afternoon — that floor is the claim." Right now that
+   claim is charity from on high. The About Me turns it into testimony: the
+  author IS that reader, twenty-some years downstream. Liberal arts dropout,
+  freshman calc, a few C classes, self-taught graph theory, self-taught Haskell,
+   formal training in ancient Greek and modern German — and he built a
+  machine-verified game AI pipeline. The floor isn't hypothetical; the author
+  stood on it.
+
+  Before I outline anything, three rulings I need from you:
+
+  1. Does it obey the template? Promise/Session/Proof/Postscript was built for
+  build-session posts. An About Me has no transcript, no checkers, no GIF. I'd
+  argue it gets its own shape — but your doctrine says every post ends with a
+  lesson plan. Does About Me carry exercises, or is it exempt? (There's an
+  honest version of an exercise: "write down what you think disqualifies you,
+  then go do post zero's homework anyway." But that's me inventing — you rule.)
+  2. Where does it sit? Options: unnumbered — an about page that lives beside
+  the slate, linked from every post; or a numbered post shipped alongside post
+  zero, since the manifesto's audience claim is exactly what the bio backs up.
+  My lean: unnumbered about page, shipped with post zero — the manifesto states
+  the claim, the bio signs it.
+  3. The tone trap to name now: the measured-tone law applies double here.
+  Played wrong, "dropout builds verified pipeline" reads like a bootcamp ad —
+  the exact snake oil the roadmap swore off. Played right, it's scope-honest:
+  one person's path, no promise it generalizes, offered as evidence the door
+  isn't locked, not that the room is easy. The n=1 honesty from post zero
+  applies to the biography too.
+
+  Rule on those three and I'll bring you a shape to bless.
+
+✻ Sautéed for 31s
+
+❯ 1. no, it has it's own structure. I'll have an 'about me' link that links to  
+this post. 2. see 1 3. scope-honest, avoid boot camp snake oil. i never have    
+never would and would not promote engaging a boot camp (unless I make one).     
+
+● Clean rulings. Here's the shape I'd bring — four short sections, no template
+  machinery:
+
+  About page — "About Me" — unnumbered, lives at blog/about/, linked from the
+  masthead/every post.
+
+  1. Why this page exists. The series assumes no CS degree — that's a promise
+  about the reader. This page is the disclosure behind it: the author didn't
+  take the credentialed path either. One paragraph, ties to the roadmap's
+  audience claim without restating it.
+  2. The record, plain. Liberal arts dropout. Formal coursework: freshman
+  calculus, a few C programming classes, ancient Greek, modern German.
+  Self-taught: graph theory, Haskell. Stated as facts, no dramatization — the
+  flat delivery IS the credibility.
+  3. What this means. Your point, in your words: you don't need to be a CS major
+   to be successful. Scope-honest framing: this is one path, not a program;
+  evidence the door isn't locked, with no claim the room is easy. Explicit
+  disclaimer territory if you want it on record: no bootcamp endorsement —
+  nothing to enroll in, nothing for sale; the equipment list is post zero's
+  homework and it's free.
+  4. Where to start. One pointer: post zero, the ISO, the exercises. The page
+  ends by handing the reader the same on-ramp, no pitch.
+
+  Two things I deliberately left out and want your ruling on: any narrative
+  connective tissue between Greek/German/graph theory and this project (I can
+  see the temptation to draw the "languages and formal grammars" line — but
+  that's me inventing a through-line you didn't state), and any timeline/career
+  details you haven't given me. The outline will hold slots only for facts
+  you've stated; you fill anything more at draft time.
+
+  Bless the shape or rework it.
+
+❯ i didn't start a sofware engineering career until in my 40's. my entry into   
+tech was on the sys admin/help desk/it side                                     
+● That fact carries more weight than everything else on the page — the 16-to-25
+  aspirant hears "self-taught" and thinks it has a deadline. A software
+  engineering career started in your 40s, entered through the help desk and
+  sysadmin side, kills the deadline myth flat. And it's scope-honest by nature:
+  the IT-side entry is the unglamorous door, which is exactly what separates
+  this from bootcamp copy — no montage, just years.
+
+  The record section, updated:
+
+  2. The record, plain. Liberal arts dropout. Formal coursework: freshman
+  calculus, a few C programming classes, ancient Greek, modern German.
+  Self-taught: graph theory, Haskell. Entered tech on the sys admin / help desk
+  / IT side. Started a software engineering career in his 40s.
+
+  Ordering note for draft time: I'd put the 40s fact last in the list — it's the
+   one that lands hardest, and it reframes everything read before it.
+
+  Rest of the shape stands as blessed: why-this-page, the record,
+  what-this-means (no bootcamp, nothing for sale), where-to-start pointing at
+  post zero. Say write and it goes to blog/about/outline.md.
+
+❯ my first s.e job was in a perl shop, where I spent every ounce of social      
+capital pushing haskell into production. in the end i was not loved in the perl 
+ shop.                                                                          
+
+● That line — "in the end I was not loved in the perl shop" — is the best
+  sentence on the page, and you should keep it exactly that dry. It buys the one
+   thing the page still needed: a cost. Bootcamp copy shows only wins; a record
+  that includes spending every ounce of social capital and ending up unloved is
+  scope-honesty in its purest form. The unconventional path bills you, and the
+  page says so.
+
+  The record, now:
+
+  2. The record, plain. Liberal arts dropout. Formal coursework: freshman
+  calculus, a few C programming classes, ancient Greek, modern German.
+  Self-taught: graph theory, Haskell. Entered tech on the sys admin / help desk
+  / IT side. First software engineering job in his 40s, in a Perl shop — where
+  he spent every ounce of social capital pushing Haskell into production. In the
+   end, not loved in the Perl shop.
+
+  One curation note for draft time: the Haskell-into-production fight is also
+  the earliest sighting of the same person who later put a formal spec into a
+  video game — the pattern of dragging rigor into rooms that didn't order it. I
+  won't write that connective line into the outline unless you claim it; it
+  borders on me inventing your arc.
+
+  More record, or write?
+
+❯ this is exactly true 'the pattern of dragging rigor                           
+   into rooms that didn't order it' I sacrificed my growth in a perl shop which 
+ I had no interest in. perl still gives me the heebie jeebies                   
+
+● Claimed, then — the through-line goes in with your name on it. Full shape,
+  final form:
+
+  About page — "About Me" — blog/about/outline.md, unnumbered, linked from the
+  masthead.
+
+  1. Why this page exists. The series assumes no CS degree. This page is the
+  disclosure behind that promise.
+  2. The record, plain. Liberal arts dropout. Formal coursework: freshman
+  calculus, a few C classes, ancient Greek, modern German. Self-taught: graph
+  theory, Haskell. Entered tech on the sys admin / help desk / IT side. First
+  software engineering job in his 40s, in a Perl shop — no interest in Perl,
+  growth sacrificed to it, every ounce of social capital spent pushing Haskell
+  into production. In the end, not loved in the Perl shop. (Perl still gives him
+   the heebie-jeebies — drafted in your voice, kept dry.)
+  3. The pattern. The claimed through-line: dragging rigor into rooms that
+  didn't order it — Haskell into a Perl shop then, a machine-checked spec into a
+   video game now. The difference this time: the checkers back him up, and the
+  record is public.
+  4. What this means, and where to start. You don't need to be a CS major. One
+  path, no program, nothing for sale, no bootcamp — never has been, never would
+  be. The door: post zero, the ISO, the homework. Free.
+
+  The Perl-shop cost sits in the record; the pattern section redeems it without
+  softening it — the same fight, better witnesses this time. That last phrase is
+   my framing riding close to the line, so it goes in the outline as a
+  draft-time candidate, marked yours to keep or kill.
+
+  Say write.
+
+❯ write it, i made a about directory for your draft                             
+
+● Write(blog/about/outline.md)
+  ⎿  Wrote 50 lines to blog/about/outline.md
+     # About page — outline
+
+     **Title:** About Me
+     **Placement:** unnumbered — an about page, linked from the masthead
+     and
+     every post. Its own structure; the post template does not apply.
+     **Tone law:** scope-honest. One path, no program, nothing for sale. No
+     bootcamp endorsement, ever.
+
+     ## 1. Why this page exists
+
+     … +40 lines (ctrl+o to expand)
+
+  Wrote 1 memory (ctrl+o to expand)
+
+● Written to blog/about/outline.md — four sections, the record ordered so the
+  40s fact lands last, the through-line marked author-claimed, and the
+  no-bootcamp line on the record.
+
+  One loose end, your call: the roadmap doesn't mention the about page. A
+  one-line entry under the masthead ("About page: unnumbered, masthead-linked —
+  blog/about/") would keep the roadmap as the single map of the whole blog. Want
+   it added?
+
+❯ yes add it                                                                    
+
+● Update(blog/roadmap.md)
+  ⎿  Added 4 lines
+       2                                                                 
+       3  **Masthead:** *Dox Populi*. Two words, no subtitle.            
+       4                                                                 
+       5 +**About page:** unnumbered, linked from the masthead —         
+         +`blog/about/`.                                                 
+       6 +The author's record, scope-honest; the disclosure behind the   
+         +no-degree                                                      
+       7 +promise.                                                       
+       8 +                                                               
+       9  **Thesis:** No single tool is the story. The confluence of     
+          Determinate Nix                                                
+      10  (reproducible delivery, flake to bootable ISO), Paradox + Z3   
+          (decision                                                      
+      11  logic as a verified spec), and LLM agents (authorship and      
+          tutoring at                                                    
+
+● Added, right under the masthead. The roadmap now maps everything: the about
+  page, six numbered posts, and the Evolution cliffhanger.
+
+❯ work post zero, one paragraph at a time                                       
+
+● Paragraph one — the opening. The outline's orders: what this blog is, what
+  this post teaches, no throat-clearing. Draft:
+
+  ▎ This blog is the record of one project built an unusual way: an LLM wrote 
+  the code, machine checkers judged the work, and Nix delivers the whole thing 
+  to your machine. The project is a game AI — creeps that harvest, build, and 
+  fight in a programmable world. Every post shows the actual build sessions, the
+   author's actual questions, and the checkers' actual verdicts, and every claim
+   comes with a way to rerun it yourself. This post lays out what that 
+  combination could mean for a working developer, and it ends with homework: by 
+  the last exercise, the project's world is ticking on your own hardware.
+
+  Reasoning, brief: sentence one states the three-way confluence without naming
+  the tools yet — the title already named them, and the claim-per-tool beat
+  comes two paragraphs later, so repeating the brand names here would
+  double-fire. "Judged the work" keeps the trust doctrine clean — checkers
+  judge, they don't decide. "Rerun it yourself" plants the rerunnable-evidence
+  standard in the first breath. The last sentence is the Promise's contract:
+  could mean + homework + your hardware.
+
+  Jargon-link candidates in this paragraph: "LLM" links out on first use. "Nix"
+  I'd hold — the Determinate Nix beat two paragraphs down is the natural link
+  point, but that's a call you make.
+
+  Your edit.
+
+✻ Brewed for 2m 18s
+
+❯ maybe you are the wrong tool for the job , this is not true 'by the last      
+exercise'                                                                       
+
+● Caught clean — the outline I wrote myself says exercise 4 is the world ticking
+   and exercise 5 is the context-source downloads. "By the last exercise" claims
+   a sequence that isn't there. Corrected closing sentence:
+
+  ▎ This post lays out what that combination could mean for a working developer,
+   and it ends with homework: boot the project's world on your own hardware, 
+  then download the same source material the author fed the LLM.
+
+  That's the two objectives in outline order, both stated true. Full paragraph
+  with the fix:
+
+  ▎ This blog is the record of one project built an unusual way: an LLM wrote 
+  the code, machine checkers judged the work, and Nix delivers the whole thing 
+  to your machine. The project is a game AI — creeps that harvest, build, and 
+  fight in a programmable world. Every post shows the actual build sessions, the
+   author's actual questions, and the checkers' actual verdicts, and every claim
+   comes with a way to rerun it yourself. This post lays out what that 
+  combination could mean for a working developer, and it ends with homework: 
+  boot the project's world on your own hardware, then download the same source 
+  material the author fed the LLM.
+
+  Your edit.
+
+❯ /export                                                                       
+  ⎿  Export cancelled
