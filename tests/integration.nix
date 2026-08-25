@@ -17,6 +17,9 @@
   # flake's tickMs binding so the test and the dev server share one
   # setting.
   tickMs ? 100
+, # VM sizing; the flake passes its hardware contract's values.
+  memorySize ? 32768
+, cores ? 8
 }:
 let
   email = "itest";
@@ -384,10 +387,7 @@ testers.runNixOSTest {
     # The server runs storage, backend, and engine child processes
     # plus runner and processor workers, and holds the whole world db
     # in memory (LokiJS).
-    virtualisation = {
-      memorySize = 32768;
-      cores = 8;
-    };
+    virtualisation = { inherit memorySize cores; };
 
     systemd.services.screeps = {
       description = "dox-populi private Screeps server (headless)";

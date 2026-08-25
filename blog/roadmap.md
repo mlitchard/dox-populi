@@ -81,8 +81,9 @@ get with vim and vibes? If a post reads like a nix flex, it doesn't ship.
 
 ## The slate (6 posts, plus one future post)
 
-0. **"What the Confluence of Determinate Nix, Paradox, and LLM Agents
-   Points To for the Working Developer."** — branch: `main`
+0. **"How's the Water? What LLM Agents, Formal Methods, and
+   Reproducible Environments Could Point To for the Working
+   Developer."** — branch: `main`
    The manifesto. The claim, stated carefully: an LLM wrote the
    infrastructure, the harness, and the spec; Paradox checked the spec
    and generated the decision logic from it; every change had to compile

@@ -3,6 +3,8 @@
   nixosModule,
   self,
   testName ? "dox-populi-vm-boot",
+  # VM sizing; the flake passes its hardware contract's value.
+  memorySize ? 16384,
 }:
 testers.runNixOSTest {
   name = testName;
@@ -11,7 +13,7 @@ testers.runNixOSTest {
 
   nodes.machine = {
     imports = [ nixosModule ];
-    virtualisation.memorySize = 16384;
+    virtualisation.memorySize = memorySize;
     virtualisation.sharedDirectories.repodir = {
       source = "${self}";
       target = "/home/dev/dox-populi";
