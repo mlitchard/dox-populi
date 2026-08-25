@@ -1,30 +1,49 @@
 # Blog post zero — outline
 
-**Title:** What the Confluence of Determinate Nix, Paradox, and LLM Agents
-Points To for the Working Developer
+**Title:** How's the Water? What LLM Agents, Formal Methods, and
+Reproducible Environments Could Point To for the Working Developer
 **Branch:** `main`
 **Dependency:** the per-release ISO must be live on Hetzner before this
 post ships — the exercises link to it.
 
 ## 1. The Promise
 
-- Opening paragraph: what this blog is — the record of building a Screeps
-  bot where an LLM wrote the infrastructure, the harness, and the spec;
-  Paradox checked the spec and generated the decision logic; every change
-  had to compile and pass the tests; and nix delivers the whole thing to
-  your machine. What this post teaches: what that combination points to,
-  and homework that ends with the project's world ticking on your own
-  hardware.
-- Why Screeps, one paragraph, three reasons: it's simple, it's a game, and
-  the tutorial already exists — an official, public specification of what
-  the creeps should do, written before this project touched it. A fixed
-  target nobody can quietly move. Link to the game.
-- The claim, one beat per tool:
-  - **Determinate Nix** — delivery. Flake to bootable ISO; every claim in
-    the series is rerunnable.
-  - **Paradox** — the decision logic lives in a verified spec.
-  - **LLM agents** — authorship at conversational speed; also the tutor.
-  - What none of them does alone; what the three do together.
+- Opening (as written in intro.md): the two-fish joke, DFW's "This Is
+  Water" linked on the word water. Then the anecdote: an LLM agent built
+  a bot that plays Screeps — it wrote the spec the code is generated from
+  and most of the infrastructure; the author directed it and inspected
+  everything it produced. One disk image; with QEMU you boot it and watch
+  the bot play. There's no one thing that happened to make this possible.
+  Thesis: what the confluence of LLM agents, formal methods, and a
+  reproducible environment points to for the working developer. Coda:
+  "We're swimming in new waters, and the currents of discovery flow."
+  What this post teaches: what that combination points to, and homework
+  that ends with the project's world ticking on your own hardware.
+- "We stand on the shoulders of giants" (as written in intro.md): every
+  load-bearing piece of this project was built by someone else. A
+  curriculum for a working developer, or an aspirant, needs an artifact;
+  games are handy. Screeps, three reasons: simple enough to approach, it
+  has a user base, and its tutorial hands us a starting point somebody
+  else defined — "fit for purpose" was already answered. The game, the
+  open-source server, the tutorial, years of players writing about it —
+  in place before this project; the curriculum stands on it. The artifact
+  arrives whole: one download, one boot. Link to the game.
+- The claim, one beat per category, in the title's order (as written in
+  intro.md):
+  - **LLM agents** — the tutor; it wrote the lines it explains, so
+    understanding comes from interrogating it and verification comes from
+    elsewhere.
+  - **Formal methods** — Paradox is the exhibit: the agent writes a spec
+    of the bot's decisions, Paradox checks it, the code is generated from
+    the spec that survives.
+  - **Reproducible environment** — delivery. Works-on-my-machine is a
+    claim you can't interrogate; this series asks you to reproduce and
+    interrogate. Therefore nix.
+  - The access paragraph delivers the alone/together beat: agent
+    unchecked alone, Paradox waiting on an expert alone; together the
+    on-ramp into formal methods gets wider and less steep, expertise
+    stays with the people who built the tools, the author is one step up
+    the ramp.
 - The loop survives: code, test, code, test, until the checks pass — then
   delivery. CI/CD carries more weight than it ever did.
 - The human is the final word: Paradox, tsc, and the tests produce
@@ -33,7 +52,7 @@ post ships — the exercises link to it.
   the spec it wrote. Every post in this series puts the author's actual
   questions on the page.
 - Scope honesty: one project, a domain the tooling fits, n=1 — which is
-  why the title points instead of promises.
+  why the title says could point instead of promising.
 - What you'll learn:
   1. Onboarding takes one host dependency — proven by doing it.
   2. What equipment the rest of the series requires and why — the same
