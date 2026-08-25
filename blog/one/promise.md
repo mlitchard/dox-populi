@@ -20,5 +20,54 @@ What you'll learn:
    failing test into a fix.
 3. How to interrogate a green test.
 
-<!-- SIDE-BY-SIDE PLACEHOLDER: the official tutorial's role JS next to
-     the spec's machine. Snippets ruled on separately. -->
+The same job, twice. The official tutorial's harvester:
+
+```js
+var roleHarvester = {
+
+    /** @param {Creep} creep **/
+    run: function(creep) {
+        if(creep.store.getFreeCapacity() > 0) {
+            var sources = creep.room.find(FIND_SOURCES);
+            if(creep.harvest(sources[0]) == ERR_NOT_IN_RANGE) {
+                creep.moveTo(sources[0]);
+            }
+        }
+        else if(Game.spawns['Spawn1'].energy < Game.spawns['Spawn1'].energyCapacity) {
+            if(creep.transfer(Game.spawns['Spawn1'], RESOURCE_ENERGY) == ERR_NOT_IN_RANGE) {
+                creep.moveTo(Game.spawns['Spawn1']);
+            }
+        }
+    }
+};
+```
+
+The spec's harvester, the delivering state:
+
+```
+deliveringStoreEmpty: Transition HarvesterState CreepEvent CreepContext
+  Transition:
+    event: CreepEvent.storeEmpty
+    target: HarvesterState.harvesting
+
+deliveringStoreFull: Transition HarvesterState CreepEvent CreepContext
+  Transition:
+    event: CreepEvent.storeFull
+    target: HarvesterState.delivering
+
+deliveringSpawnFull: Transition HarvesterState CreepEvent CreepContext
+  Transition:
+    event: CreepEvent.spawnFull
+    target: HarvesterState.harvesting
+
+deliveringTick: Transition HarvesterState CreepEvent CreepContext
+  Transition:
+    event: CreepEvent.tick
+    target: HarvesterState.delivering
+```
+
+The tutorial's harvester holds the whole job in one if/else; a full store
+at a full spawn slips past both branches, and the creep stands still. The
+spec writes that case down: `deliveringSpawnFull`, target `harvesting`.
+Every state and event pair gets a written target, and Paradox rejects a
+spec that drops one.
