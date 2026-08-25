@@ -6,7 +6,7 @@ boot it as in post zero, and inside the VM:
 
 ```
 cd ~/dox-populi
-git checkout 2-tutorial-two
+git checkout 1-tutorial-one
 ```
 
 Objective 1 was where the decisions live.
@@ -49,7 +49,7 @@ your list.
 **The assignment.** These are the orders I gave the LLM for the next
 session, kept word for word. Run them yourself: same VM, your own agent,
 starting from the branch you're on — where the orders say "from main,"
-stay on `2-tutorial-two`. The next post shows my session. Bring yours.
+stay on `1-tutorial-one`. The next post shows my session. Bring yours.
 
 ```
 # Session prompt: Tutorial 3 — builder role, and the shell becomes an interpreter

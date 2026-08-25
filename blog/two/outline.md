@@ -1,7 +1,7 @@
 # Blog post two — outline
 
 **Title:** The Harness Knows Nothing, Jon Snow
-**Branch:** `3-tutorial-3`
+**Branch:** `2-tutorial-two`
 **Source transcript:** `docs/unedited/one/2026-07-30-this-session-*.txt`
 **Source artifacts:** `docs/session-prompt-tutorial-3.md`,
 `docs/paradox-check-generate-asymmetry.md`
