@@ -295,31 +295,26 @@ harvestingStoreEmpty: Transition HarvesterState CreepEvent CreepContext
   Transition:
     event: CreepEvent.storeEmpty
     target: HarvesterState.harvesting
-    guard: ()
 
 harvestingStoreFull: Transition HarvesterState CreepEvent CreepContext
   Transition:
     event: CreepEvent.storeFull
     target: HarvesterState.delivering
-    guard: ()
 
 harvestingSinksFull: Transition HarvesterState CreepEvent CreepContext
   Transition:
     event: CreepEvent.sinksFull
     target: HarvesterState.harvesting
-    guard: ()
 
 harvestingSawSite: Transition HarvesterState CreepEvent CreepContext
   Transition:
     event: CreepEvent.sawSite
     target: HarvesterState.harvesting
-    guard: ()
 
 harvestingNoSites: Transition HarvesterState CreepEvent CreepContext
   Transition:
     event: CreepEvent.noSites
     target: HarvesterState.harvesting
-    guard: ()
 
 harvestingConfig: StateConfig HarvesterState CreepEvent CreepContext
   StateConfig:
@@ -330,31 +325,26 @@ deliveringStoreEmpty: Transition HarvesterState CreepEvent CreepContext
   Transition:
     event: CreepEvent.storeEmpty
     target: HarvesterState.harvesting
-    guard: ()
 
 deliveringStoreFull: Transition HarvesterState CreepEvent CreepContext
   Transition:
     event: CreepEvent.storeFull
     target: HarvesterState.delivering
-    guard: ()
 
 deliveringSinksFull: Transition HarvesterState CreepEvent CreepContext
   Transition:
     event: CreepEvent.sinksFull
     target: HarvesterState.harvesting
-    guard: ()
 
 deliveringSawSite: Transition HarvesterState CreepEvent CreepContext
   Transition:
     event: CreepEvent.sawSite
     target: HarvesterState.delivering
-    guard: ()
 
 deliveringNoSites: Transition HarvesterState CreepEvent CreepContext
   Transition:
     event: CreepEvent.noSites
     target: HarvesterState.delivering
-    guard: ()
 
 deliveringConfig: StateConfig HarvesterState CreepEvent CreepContext
   StateConfig:
@@ -378,31 +368,26 @@ collectingStoreEmpty: Transition UpgraderState CreepEvent CreepContext
   Transition:
     event: CreepEvent.storeEmpty
     target: UpgraderState.collecting
-    guard: ()
 
 collectingStoreFull: Transition UpgraderState CreepEvent CreepContext
   Transition:
     event: CreepEvent.storeFull
     target: UpgraderState.upgrading
-    guard: ()
 
 collectingSinksFull: Transition UpgraderState CreepEvent CreepContext
   Transition:
     event: CreepEvent.sinksFull
     target: UpgraderState.upgrading
-    guard: ()
 
 collectingSawSite: Transition UpgraderState CreepEvent CreepContext
   Transition:
     event: CreepEvent.sawSite
     target: UpgraderState.collecting
-    guard: ()
 
 collectingNoSites: Transition UpgraderState CreepEvent CreepContext
   Transition:
     event: CreepEvent.noSites
     target: UpgraderState.collecting
-    guard: ()
 
 collectingConfig: StateConfig UpgraderState CreepEvent CreepContext
   StateConfig:
@@ -413,31 +398,26 @@ upgradingStoreEmpty: Transition UpgraderState CreepEvent CreepContext
   Transition:
     event: CreepEvent.storeEmpty
     target: UpgraderState.collecting
-    guard: ()
 
 upgradingStoreFull: Transition UpgraderState CreepEvent CreepContext
   Transition:
     event: CreepEvent.storeFull
     target: UpgraderState.upgrading
-    guard: ()
 
 upgradingSinksFull: Transition UpgraderState CreepEvent CreepContext
   Transition:
     event: CreepEvent.sinksFull
     target: UpgraderState.upgrading
-    guard: ()
 
 upgradingSawSite: Transition UpgraderState CreepEvent CreepContext
   Transition:
     event: CreepEvent.sawSite
     target: UpgraderState.upgrading
-    guard: ()
 
 upgradingNoSites: Transition UpgraderState CreepEvent CreepContext
   Transition:
     event: CreepEvent.noSites
     target: UpgraderState.upgrading
-    guard: ()
 
 upgradingConfig: StateConfig UpgraderState CreepEvent CreepContext
   StateConfig:
@@ -462,31 +442,26 @@ gatheringStoreEmpty: Transition BuilderState CreepEvent CreepContext
   Transition:
     event: CreepEvent.storeEmpty
     target: BuilderState.gathering
-    guard: ()
 
 gatheringStoreFull: Transition BuilderState CreepEvent CreepContext
   Transition:
     event: CreepEvent.storeFull
     target: BuilderState.building
-    guard: ()
 
 gatheringSinksFull: Transition BuilderState CreepEvent CreepContext
   Transition:
     event: CreepEvent.sinksFull
     target: BuilderState.gathering
-    guard: ()
 
 gatheringSawSite: Transition BuilderState CreepEvent CreepContext
   Transition:
     event: CreepEvent.sawSite
     target: BuilderState.gathering
-    guard: ()
 
 gatheringNoSites: Transition BuilderState CreepEvent CreepContext
   Transition:
     event: CreepEvent.noSites
     target: BuilderState.gathering
-    guard: ()
 
 gatheringConfig: StateConfig BuilderState CreepEvent CreepContext
   StateConfig:
@@ -497,31 +472,26 @@ buildingStoreEmpty: Transition BuilderState CreepEvent CreepContext
   Transition:
     event: CreepEvent.storeEmpty
     target: BuilderState.gathering
-    guard: ()
 
 buildingStoreFull: Transition BuilderState CreepEvent CreepContext
   Transition:
     event: CreepEvent.storeFull
     target: BuilderState.building
-    guard: ()
 
 buildingSinksFull: Transition BuilderState CreepEvent CreepContext
   Transition:
     event: CreepEvent.sinksFull
     target: BuilderState.building
-    guard: ()
 
 buildingSawSite: Transition BuilderState CreepEvent CreepContext
   Transition:
     event: CreepEvent.sawSite
     target: BuilderState.building
-    guard: ()
 
 buildingNoSites: Transition BuilderState CreepEvent CreepContext
   Transition:
     event: CreepEvent.noSites
     target: BuilderState.assisting
-    guard: ()
 
 buildingConfig: StateConfig BuilderState CreepEvent CreepContext
   StateConfig:
@@ -532,31 +502,26 @@ assistingStoreEmpty: Transition BuilderState CreepEvent CreepContext
   Transition:
     event: CreepEvent.storeEmpty
     target: BuilderState.gathering
-    guard: ()
 
 assistingStoreFull: Transition BuilderState CreepEvent CreepContext
   Transition:
     event: CreepEvent.storeFull
     target: BuilderState.assisting
-    guard: ()
 
 assistingSinksFull: Transition BuilderState CreepEvent CreepContext
   Transition:
     event: CreepEvent.sinksFull
     target: BuilderState.assisting
-    guard: ()
 
 assistingSawSite: Transition BuilderState CreepEvent CreepContext
   Transition:
     event: CreepEvent.sawSite
     target: BuilderState.building
-    guard: ()
 
 assistingNoSites: Transition BuilderState CreepEvent CreepContext
   Transition:
     event: CreepEvent.noSites
     target: BuilderState.assisting
-    guard: ()
 
 assistingConfig: StateConfig BuilderState CreepEvent CreepContext
   StateConfig:

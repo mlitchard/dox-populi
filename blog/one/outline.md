@@ -1,6 +1,6 @@
 # Blog post one — outline
 
-**Title:** Your First Spec
+**Title:** The Harvester Isn't Doing Anything
 **Branch:** `1-tutorial-2`
 **Source transcript:** `docs/unedited/one/2026-07-30-local-command-caveat*.txt`
 
