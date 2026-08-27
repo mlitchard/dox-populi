@@ -52,21 +52,21 @@ starting from the branch you're on — where the orders say "from main,"
 stay on `2-tutorial-two`. The next post shows my session. Bring yours.
 
 ```
-# Session prompt: Tutorial 4 — auto-spawning, and the colony survives its own deaths
+# Session prompt: Tutorial three — auto-spawning, and the colony survives its own deaths
 
-Branch: create `<issue>-tutorial-4` from main. Reference:
+Branch: create `3-tutorial-three` from main. Reference:
 `~/github/tutorial-scripts/section4/` (main.js, role.harvester.js,
 role.upgrader.js). Full evolutionary context: `docs/evolution-plan.md`
 (this session is still Phase 0).
 
 FRAMING — read this first: section 4 is the tutorial's "auto-spawning"
-chapter, and this project has auto-spawned since tutorial 2: memory
+chapter, and this project has auto-spawned since tutorial one: memory
 cleanup and spawnQueue-driven population are already spec policy. A
 naive port is a no-op — which is exactly the trap. Section 4's real
 subject is population TURNOVER: the colony as an organism that outlives
 its cells. Nothing in the pipeline yet proves a death→respawn cycle;
 creeps have simply never lived long enough in a test to die. And
-tutorial 3 left a debt: extensions raised energy capacity that the
+tutorial two left a debt: extensions raised energy capacity that the
 spawn never uses, because every role spawns the same minimal body
 forever. Both are spec policy. This session makes death observable,
 recovery provable, and capacity spendable.
