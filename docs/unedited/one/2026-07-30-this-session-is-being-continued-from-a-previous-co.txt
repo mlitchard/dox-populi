@@ -1,0 +1,476 @@
+ ▐▛███▜▌   Claude Code v2.1.81
+▝▜█████▛▘  Opus 4.6 (1M context) · Claude Max
+  ▘▘ ▝▝    ~/gitlab/dox-populi
+
+✻ Conversation compacted (ctrl+o for history)
+
+  ⎿  Read docs/paradox-check-generate-asymmetry.md (74 lines)
+  ⎿  Referenced file tests/integration.nix
+  ⎿  Read tests/fsm-behavior.ts (216 lines)
+  ⎿  Read shell/main.ts (302 lines)
+  ⎿  Referenced file flake.nix
+
+● On disk. docs/paradox-check-generate-asymmetry.md — symptom, mechanism with
+  file:line receipts (check at Commands.hs:935 skips what generate runs at
+  830–834), birth commit d88d277c, pinned rev 4231e71a, the one-liner ready to
+  paste into an upstream issue. No more "it lives in the conversation." Disk is
+  truth, and truth got committed to disk.
+
+  Where we stand on the branch:
+
+  - Spec, shell, fsm-behavior tests, integration.nix — all rewritten, all cheap
+  checks green: generate ✓, strict typecheck ✓, fsm-behavior ALL PASSED ✓,
+  bundle ✓.
+  - The bug doc — written.
+  - Not done: the itest. That VM boot is your trigger, and you ain't pulled it.
+  And nothing's committed on 3-tutorial-3 yet.
+
+  So here's my cross-examination, same as before the recess: you got a working
+  tree full of finished work and zero commits protecting it. You want the
+  extension proven built, say "run the itest." You want the work in the ledger
+  first — smart, by the way — say "commit." I argue, then I deliver. Your move.
+
+✻ Churned for 1m 42s
+
+❯ there was a timeout nix log                                                   
+/nix/store/7y2mlbc58f2wb05ycfbls365njg98bgs-vm-test-run-dox-populi-itest.drv    
+
+● Bash(nix log /nix/store/7y2mlbc58f2wb05ycfbls365njg98bgs-vm-test-run-dox-popul
+      i-itest.drv 2>&1 | tail -n 120)
+  ⎿  Jul 30 13:56:37 machine lii6lb0nf9i5hn8nwp79xsy5fxrhva7y-screeps-serve
+     r[660]: [backend] Steam Web API connection error Error: getaddrinfo EN
+     OTFOUND api.steampowered.com
+     … +183 lines (ctrl+o to expand)
+
+  Read 1 file (ctrl+o to expand)
+
+● User answered Claude's questions:
+  ⎿  · The ERR_FULL recovery subtest asserts a code path the interpreter 
+     refactor made unreachable (observe-first + filtered targeting means we 
+     never transfer to a full sink). How do we settle it? → Remove test + dead 
+     code (Recommended)
+
+  Searched for 1 pattern, read 2 files (ctrl+o to expand)
+
+● Update(shell/main.ts)
+  ⎿  Removed 1 line
+      244    }                                                           
+      245                                                                
+      246    // Generic creep loop: observe → transition (brain) →       
+           execute (hands).                                              
+      247 -  let errFullRecoveries = Memory.stats?.errFullRecoveries ??  
+          -0;                                                            
+      247    const obsCache = new Map<string, RoomObs>();                
+      248    const creepStats: Record<                                   
+      249      string,                                                   
+
+● Update(shell/main.ts)
+  ⎿  Added 2 lines, removed 12 lines
+      264      }                                                         
+      265                                                                
+      266      const event = emitEvent(creep, obs);                      
+      267 -    let next = step(state, event);                            
+      267 +    const next = step(state, event);                          
+      268      creep.memory.fsm = next;                                  
+      269 -    const result = execute(behaviors[next], creep, obs);      
+      269 +    execute(behaviors[next], creep, obs);                     
+      270                                                                
+      271 -    // Generic ERR_FULL feedback: the action landed on a full 
+          - receiver                                                     
+      272 -    // (e.g. a partial transfer). Tell the brain the sinks    
+          -are full and                                                  
+      273 -    // execute its revised decision once — no further         
+          -feedback loop.                                                
+      274 -    if (result === ERR_FULL) {                                
+      275 -      errFullRecoveries++;                                    
+      276 -      next = step(next, "sinksFull");                         
+      277 -      creep.memory.fsm = next;                                
+      278 -      execute(behaviors[next], creep, obs);                   
+      279 -    }                                                         
+      280 -                                                              
+      271      creepStats[name] = {                                      
+      272        role: creep.memory.role,                                
+      273        event,                                                  
+
+● Update(shell/main.ts)
+  ⎿  Removed 1 line
+      285      extensionsBuilt,                                          
+      286      extensionProgress,                                        
+      287      creeps: creepStats,                                       
+      288 -    errFullRecoveries,                                        
+      288    };                                                          
+      289  };                                                            
+● Update(shell/memory.d.ts)
+  ⎿  Removed 1 line
+      17          string,                                                
+      18          { role: string; event: string; fsm: string; action:    
+          string }                                                       
+      19        >;                                                       
+      20 -      errFullRecoveries: number;                               
+      20      };                                                         
+      21    }                                                            
+      22  }                                                              
+
+● Update(tests/integration.nix)
+  ⎿  Removed 24 lines
+       81      ' > /dev/null                                             
+       82    '';                                                         
+       83                                                                
+       84 -  # Regression test for the partial-transfer deadlock: when   
+          -transfer()                                                    
+       85 -  # returns ERR_FULL (the receiver accepted part of the       
+          -energy but is now                                             
+       86 -  # full), the shell re-evaluates with a sinksFull event so   
+          -the harvester                                                 
+       87 -  # goes back to harvesting. Each recovery increments         
+       88 -  # stats.errFullRecoveries. Succeeds when the counter > 0,   
+          -proving the                                                   
+       89 -  # code path was exercised.                                  
+       90 -  pollErrFullRecovery = writeShellScript                      
+          -"poll-errfull-recovery" ''                                    
+       91 -    set -euo pipefail                                         
+       92 -    TOKEN=$(${curl}/bin/curl -sS -X POST                      
+          -"${url}/api/auth/signin" \                                    
+       93 -      -H "Content-Type: application/json" \                   
+       94 -      --data '{"email":"${email}","password":"${password}"}'  
+          -\                                                             
+       95 -      | ${jq}/bin/jq -r '.token // empty')                    
+       96 -    [ -n "$TOKEN" ]                                           
+       97 -    DATA=$(${curl}/bin/curl -sS -H "X-Token: $TOKEN" \        
+       98 -      "${url}/api/user/memory?path=stats.errFullRecoveries" | 
+          - ${jq}/bin/jq -r '.data // empty')                            
+       99 -    case "$DATA" in                                           
+      100 -      gz:*) ;;                                                
+      101 -      *) echo "no stats.errFullRecoveries in memory yet (got: 
+          - $DATA)" >&2; exit 1 ;;                                       
+      102 -    esac                                                      
+      103 -    N=$(printf '%s' "''${DATA#gz:}" | ${coreutils}/bin/base64 
+          - -d | ${gzip}/bin/zcat)                                       
+      104 -    echo "ERR_FULL recoveries: $N"                            
+      105 -    [ "$N" -gt 0 ]                                            
+      106 -  '';                                                         
+      107 -                                                              
+       84    # One-shot probe: sign in, read                             
+           Memory.stats.controllerProgress via the                       
+       85    # memory API. Succeeds as soon as progress > 0, proving the 
+            upgrader                                                     
+       86    # collected energy and called upgradeController at least    
+           once.                                                         
+
+● Update(tests/integration.nix)
+  ⎿  Removed 19 lines
+      236                  raise Exception("timed out waiting for        
+           harvester sinksFull event")                                   
+      237              time.sleep(2)                                     
+      238                                                                
+      239 -    with subtest("harvester recovers from ERR_FULL partial    
+          -transfer"):                                                   
+      240 -        # Regression: when the harvester delivers a partial   
+          -load and the                                                  
+      241 -        # receiver fills up, transfer() returns ERR_FULL. The 
+          - shell feeds                                                  
+      242 -        # sinksFull back to the FSM, which transitions to     
+          -harvesting.                                                   
+      243 -        # Without this fix, the creep is stuck cycling        
+      244 -        # delivering+sawSite/noSites forever.                 
+      245 -        deadline = time.time() + 600                          
+      246 -        while True:                                           
+      247 -            status, out =                                     
+          -machine.execute("${pollErrFullRecovery} 2>&1")                
+      248 -            print(f">>> poll: {out.strip()}")                 
+      249 -            if status == 0:                                   
+      250 -                print(">>> SUCCESS: ERR_FULL recovery path    
+          -exercised")                                                   
+      251 -                break                                         
+      252 -            if time.time() > deadline:                        
+      253 -                print(">>> TIMEOUT — server log tail for      
+          -diagnosis:")                                                  
+      254 -                print(machine.succeed("journalctl -u screeps  
+          ---no-pager | tail -n 100"))                                   
+      255 -                raise Exception("timed out waiting for        
+          -ERR_FULL recovery")                                           
+      256 -            time.sleep(2)                                     
+      257 -                                                              
+      239      with subtest("controller progress increases"):            
+      240          deadline = time.time() + 600                          
+      241          while True:                                           
+
+● Update(tests/integration.nix)
+  ⎿  Added 2 lines, removed 2 lines
+      141  testers.runNixOSTest {                                        
+      142    name = "dox-populi-itest";                                  
+      143                                                                
+      144 -  # Worst-case sum of subtest deadlines (4                    
+          - x 600s + 1500s) plus boot and                                
+      145 -  # deploy exceeds the driver's default 3600s global timeout. 
+      144 +  # Worst-case sum of subtest deadlines (3                    
+          + x 600s + 1500s) plus boot and                                
+      145 +  # deploy approaches                                         
+          + the driver's default 3600s global timeout.                   
+      146    globalTimeout = 5400;                                       
+      147                                                                
+      148    nodes.machine = {                                           
+
+● Now the testimony corrections — comments that still preach the old gospel of
+  recovery when the new covenant is prevention.
+
+● Update(tests/fsm-behavior.ts)
+  ⎿  Added 2 lines, removed 1 line
+      49  // Scenario: harvester has a full store and every energy sink  
+          is full.                                                       
+      50  // emitEvent emits "sinksFull" (compound: store full AND all   
+          sinks full)                                                    
+      51  // so the FSM transitions to harvesting (idle) instead of      
+          stuck delivering.                                              
+      52 -// This is also the ERR_FULL partial-transfer recovery         
+         -re-entry event.                                                
+      52 +// Observe-first: this event fires BEFORE any doomed transfer  
+         +is attempted,                                                  
+      53 +// which is what makes the old ERR_FULL deadlock structurally  
+         +impossible.                                                    
+      54  console.log("Harvester: sinksFull while delivering");          
+      55  assert(                                                        
+      56    "delivering + sinksFull → harvesting (go back to source)",   
+
+● Update(dox/creeps.dox)
+  ⎿  Added 4 lines, removed 4 lines
+      74  | sinksFull is deliberately compound: "ready to deliver but    
+          nowhere to                                                     
+      75  | put it." It only fires when the creep's store is ALSO full,  
+          which                                                          
+      76  | prevents premature transitions (e.g. the upgrader switching  
+          to                                                             
+      77 -| upgrading with 2 energy just because the sinks are full). It 
+         -is also                                                        
+      78 -| the ERR_FULL recovery path: when transfer() would return     
+         -ERR_FULL,                                                      
+      79 -| the next tick observes sinksFull and the delivering          
+         -harvester                                                      
+      80 -| re-enters harvesting instead of being stuck forever.         
+      77 +| upgrading with 2 energy just because the sinks are full). It 
+         +also                                                           
+      78 +| supersedes the tutorial-2 ERR_FULL recovery: the shell       
+         +observes sink                                                  
+      79 +| fullness BEFORE acting, so a transfer against a full sink is 
+         + never                                                         
+      80 +| attempted and the old partial-transfer deadlock cannot       
+         +occur.                                                         
+      81  |                                                              
+      82  | sawSite/noSites are the residual pair replacing the old bare 
+           `tick`:                                                       
+      83  | when nothing urgent is happening, the one remaining fact the 
+           brain                                                         
+
+● Update(dox/creeps.dox)
+  ⎿  Added 2 lines, removed 3 lines
+      288    body: workerBody                                            
+      289                                                                
+      290  | Harvester machine: harvest until full, deliver until empty. 
+            sinksFull                                                    
+      291 -| sends delivering back to harvesting (nowhere to put the     
+          -energy — the                                                  
+      292 -| ERR_FULL recovery).                                         
+          -Construction-site events are noise to this role:              
+      293 -| explicit self-loops.                                        
+      291 +| sends delivering back to harvesting (nowhere to put the     
+          +energy).                                                      
+      292 +| Construction-site events are noise to this role:            
+          + explicit self-loops.                                         
+      293                                                                
+      294  harvestingStoreEmpty: Transition HarvesterState CreepEvent    
+           CreepContext                                                  
+      295    Transition:                                                 
+
+● Bash(nix run .#generate 2>&1 | tail -n 5 && nix build
+      .#checks.x86_64-linux.typecheck 2>&1 | tail -n 5 && nix build
+      .#checks.x86_64-linux.fsm-behavior --print-build-…)
+  ⎿  building '/nix/store/b584wfpgbgrnbabg000z46hplsk64pdg-dox-populi-gener
+     ated.drv'...
+     copying 1 paths...
+     … +16 lines (ctrl+o to expand)
+  ⎿  (timeout 10m)
+
+● Bash(nix build .#checks.x86_64-linux.itest.driver 2>&1 | tail -n 3 && echo
+      DRIVER-OK)
+  ⎿  Interrupted · What should Claude do instead?
+
+❯  give me a commit message for the work just done                              
+
+● Here's the message — styled after the ledger (tutorial-2: FSM-driven harvester
+   + upgrader, spawnFull event fix, ...), covering everything on this branch
+  since nothing's committed yet:
+
+  tutorial-3: builder role + generic FSM interpreter shell
+
+  The shell is now a generic interpreter: observe → emit event → brain
+  transitions → execute {action, target}. Zero role names, state names,
+  or policy constants outside dox/creeps.dox; the only shell switches are
+  over the fixed Action/TargetKind vocabularies. Generated valid*State
+  validators double as machine ownership guards.
+
+  Spec: builder FSM (gathering/building/assisting, no-sites falls back to
+  assisting the upgrader), per-role state unions + CreepState namespace
+  union (works around paradox check/generate verification asymmetry —
+  see docs/paradox-check-generate-asymmetry.md), spawnQueue with builders,
+  extension count + placement offsets as spec data.
+
+  Events: storeEmpty > sinksFull > storeFull > sawSite|noSites. sinksFull
+  observes sink fullness BEFORE acting, making the tutorial-2 ERR_FULL
+  partial-transfer deadlock structurally impossible — the recovery block,
+  errFullRecoveries telemetry, and its itest subtest are removed as dead.
+
+  itest: sinksFull runtime probe, extension-gets-built end-to-end probe,
+  tick compression via server CLI.
+
+  Say the word and I stage and cut it. And when you do — remember the itest
+  still hasn't gone green end-to-end; the ERR_FULL subtest was the roadblock we
+  just removed, but the extension probe never got its turn on the stand. Commit
+  now, retry the trial after — that's the order I'd argue for.
+
+❯ commit it                                                                     
+
+● Bash(git status)
+  ⎿  On branch 3-tutorial-3
+     Changes to be committed:
+       (use "git restore --staged <file>..." to unstage)
+     … +12 lines (ctrl+o to expand)
+
+● Bash(git diff --stat && git diff --cached --stat)
+  ⎿   .claude/settings.local.json                        |   19 +-
+      ...he-project-trying-to-extract-an-abstraction.txt |  638 ++++++++++
+      docs/paradox-check-generate-asymmetry.md           |   73 ++
+     … +9 lines (ctrl+o to expand)
+
+● Bash(git mv
+      2026-07-30-133202-study-the-project-trying-to-extract-an-abstraction.txt
+      docs/unedited/ && git commit -m "$(cat <<'EOF'
+      tutorial-3: builder role + generi…)
+  ⎿  [3-tutorial-3 ed20cc1] tutorial-3: builder role + generic FSM interpre
+     ter shell
+      10 files changed, 2908 insertions(+), 264 deletions(-)
+     … +6 lines (ctrl+o to expand)
+
+● Bash(git status && git log --oneline -3)
+  ⎿  On branch 3-tutorial-3
+     nothing to commit, working tree clean
+     ed20cc1 tutorial-3: builder role + generic FSM interpreter shell
+     … +3 lines (ctrl+o to expand)
+● ed20cc1 — sealed, tree clean, transcript filed where transcripts belong.
+
+  Recalled 1 memory, wrote 2 memories (ctrl+o to expand)
+
+● Ledger's balanced:
+
+  - ed20cc1 on 3-tutorial-3 — builder role, generic interpreter, ERR_FULL
+  excision, the Paradox bug doc, and the stray transcript filed into
+  docs/unedited/. Working tree clean.
+  - All cheap checks were green before the seal: generate ✓, strict typecheck ✓,
+   fsm-behavior ALL PASSED ✓.
+
+  One charge still pending, and you know which one: the extension probe never 
+  testified. The itest died on the now-deleted ERR_FULL subtest before
+  "extension gets built" got its turn. The roadblock's gone — the retry should
+  sail through sinksFull and land on the real tutorial-3 proof. Say "run the
+  itest" and we finish the trial.
+
+✻ Sautéed for 50s
+
+❯ i already ran the test                                                        
+
+● Then let's read the verdict instead of speculating — if your run passed, the
+  result's already in the store and a dry-run will show nothing left to build.
+
+● Bash(nix build .#checks.x86_64-linux.itest --dry-run 2>&1 | tail -n 10)
+  ⎿  Interrupted · What should Claude do instead?
+
+❯ prepare a prompt for the next session, implementing tutorial 4                
+
+  Read 4 files (ctrl+o to expand)
+
+● Write(docs/session-prompt-tutorial-4.md)
+  ⎿  User rejected update to docs/session-prompt-tutorial-4.md
+       1  # Session prompt: Tutorial 4 — auto-spawning, and the colony   
+          survives its own deaths                                        
+       2                                                                 
+       3 -Branch: create `<issue>-tutorial-4` from main. Reference:      
+       3 +Branch: merge `3-tutorial-3` to main if not already merged,    
+         +then create                                                    
+       4 +`<issue>-tutorial-4` from main. Reference:                     
+       5  `~/github/tutorial-scripts/section4/` (main.js,                
+          role.harvester.js,                                             
+       6  role.upgrader.js). Full evolutionary context:                  
+          `docs/evolution-plan.md`                                       
+       7 -(this session is still Phase 0).                               
+       7 +(this session is still Phase 0). Entry assumption: the         
+         +tutorial-3 itest                                               
+       8 +is green; if it is not, server-doctor triage comes before      
+         +everything.                                                    
+       9                                                                 
+      10  FRAMING — read this first: section 4 is the tutorial's         
+          "auto-spawning"                                                
+      11  chapter, and this project has auto-spawned since tutorial 2:   
+          memory                                                         
+     ...
+      43     (deaths detected in the existing memory-cleanup sweep —     
+          observation,                                                   
+      44     not policy). The itest gains a generational probe: at       
+          compressed                                                     
+      45     tick rate (1500-tick lifespan ≈ 150 s at 100 ms ticks) wait 
+           for a                                                         
+      46 -   natural death, then assert the colony recovers — deaths ≥   
+         -1, the                                                         
+      47 -   dead role refilled to desired strength, and                 
+         -controllerProgress                                             
+      48 -   still rising after the funeral. That is the section-4 claim 
+         - the                                                           
+      49 -   tutorial never proves: unattended self-repair.              
+      46 +   natural death, then assert the colony recovers — deaths ≥   
+         +1,                                                             
+      47 +   births > deaths' role refilled to desired strength, and     
+      48 +   controllerProgress still rising after the funeral. That is  
+         +the                                                            
+      49 +   section-4 claim the tutorial never proves: unattended       
+         +self-repair.                                                   
+      50                                                                 
+      51  ## Constraints (CLAUDE.md in full force)                       
+      52                                                                 
+
+❯ assume tutorial-3 merged                                                      
+
+● Write(docs/session-prompt-tutorial-4.md)
+  ⎿  Wrote 71 lines to docs/session-prompt-tutorial-4.md
+     # Session prompt: Tutorial 4 — auto-spawning, and the colony survives
+     its own deaths
+
+     Branch: create `<issue>-tutorial-4` from main. Reference:
+     `~/github/tutorial-scripts/section4/` (main.js, role.harvester.js,
+     role.upgrader.js). Full evolutionary context: `docs/evolution-plan.md`
+     (this session is still Phase 0).
+
+     FRAMING — read this first: section 4 is the tutorial's "auto-spawning"
+     chapter, and this project has auto-spawned since tutorial 2: memory
+     cleanup and spawnQueue-driven population are already spec policy. A
+     … +61 lines (ctrl+o to expand)
+
+● docs/session-prompt-tutorial-4.md — written, tutorial-3 assumed merged.
+
+  The prompt's three-count charge:
+
+  1. Port audit first — section 4 is mostly already absorbed (cleanup,
+  auto-spawn = spec policy since tutorial 2); the room.visual badge becomes
+  Memory.stats.spawning telemetry. Name what's covered before writing code.
+  2. Capacity-tiered bodies — the real section-4 upgrade: RoleSpec gets an
+  ordered body list, shell spawns first-affordable (the extensionOffsets pattern
+   — spec ranks, world disposes). The energyAvailable-vs-energyCapacityAvailable
+   question is flagged as an explicit spec decision.
+  3. Turnover proof — the claim the tutorial never proves: at compressed ticks a
+   creep dies of old age (~150s wall clock) and the itest asserts the colony
+  refills the role and keeps upgrading. Births/deaths counters ride the existing
+   memory-cleanup sweep.
+
+  And the constraints section now carries this session's scars:
+  generate-not-just-check (the asymmetry doc), and fsm-behavior.ts being a
+  separate check that rotted silently once. The next session inherits the
+  wounds, not just the wins.
+
+  Want it committed, or does it ride uncommitted till next session?

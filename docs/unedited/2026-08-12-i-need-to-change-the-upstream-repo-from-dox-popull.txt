@@ -1,0 +1,63 @@
+ ▐▛███▜▌   Claude Code v2.1.81
+▝▜█████▛▘  Opus 4.6 (1M context) · Claude Max
+  ▘▘ ▝▝    ~/gitlab/dox-populi
+
+❯ i need to change the upstream repo from dox-populli/core to                   
+dox-populi/screeps . give me the step by step to do this safely and correctly   
+
+● Let me see what you're working with first.
+
+● Bash(git remote -v)
+  ⎿  origin     git@gitlab.com:dox-populli/core.git (fetch)
+     origin     git@gitlab.com:dox-populli/core.git (push)
+     origin     ssh://git@app.operation.sh:2222/mlitchard/dox-populi.git
+     (push)
+     origin     git@github.com:mlitchard/dox-populi.git (push)
+
+● Alright. Here's the situation — you got a triple-push origin: one fetch URL
+  and three push URLs. The fetch and first push point to dox-populli/core (the
+  one you want changed), plus push mirrors to app.operation.sh and github.com.
+
+  Here's your step-by-step. All local, all reversible, all safe.
+
+  1. Change the fetch URL
+
+  git remote set-url origin git@gitlab.com:dox-populi/screeps.git
+
+  This replaces the fetch URL (and the first push URL).
+
+  2. Re-add the two mirror push URLs
+
+  set-url wipes ALL push URLs and sets just the one. So re-add the mirrors:
+
+  git remote set-url --add --push origin git@gitlab.com:dox-populi/screeps.git
+  git remote set-url --add --push origin
+  ssh://git@app.operation.sh:2222/mlitchard/dox-populi.git
+  git remote set-url --add --push origin git@github.com:mlitchard/dox-populi.git
+
+  3. Verify
+
+  git remote -v
+
+  You should see:
+
+  origin  git@gitlab.com:dox-populi/screeps.git (fetch)
+  origin  git@gitlab.com:dox-populi/screeps.git (push)
+  origin  ssh://git@app.operation.sh:2222/mlitchard/dox-populi.git (push)
+  origin  git@github.com:mlitchard/dox-populi.git (push)
+
+  4. Smoke test the fetch
+
+  git fetch origin
+
+  If that resolves clean, you're wired up. If it errors, the repo on GitLab
+  either doesn't exist yet or the path is wrong — fix it there before pushing.
+
+  ---
+  Prerequisite: the repo dox-populi/screeps needs to exist on gitlab.com before
+  you fetch or push. If you're renaming the existing project in GitLab's UI
+  (Settings → General → Advanced → Change path), do that first — GitLab sets up
+  a redirect from the old path automatically for a while, but don't lean on
+  that.
+
+  Want me to run any of these, or you handling it?
