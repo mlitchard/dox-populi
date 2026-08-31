@@ -1,0 +1,748 @@
+ ▐▛███▜▌   Claude Code v2.1.223
+▝▜█████▛▘  Fable 5 · Claude Max
+  ▘▘ ▝▝    ~/gitlab/dox-populi
+
+
+❯ I'm in trouble claude, I am missing the first tutorial code                   
+  /home/mlitchard/github/screeps/tutorial-scripts/section1. the point of this   
+  project is to show step by step how I used nix/claude/formal methods to       
+  produce the final code base. It's a sjaky start when the initial tutorial     
+  does not exist. any ideas? we may have to construct an artificial session     
+  where we pretend to construct section1, or we can just confess. not sure.     
+  what is your analysis                                                         
+
+● He asked for analysis — reading workflow rules first as required, then I'll
+  take a quick look at the reference repo before answering, since "missing" may
+  just mean "on a branch."
+
+  Recalled 1 memory (ctrl+o to expand)
+
+● Quick look at the reference repo before I answer — the sections there have
+  historically lived on branches, so "missing directory" may not mean "lost."
+
+  Ran 1 shell command (ctrl+o to expand)
+
+✻ Cooked for 34s
+
+❯ you need to focus on what I am telling you and not second guess me            
+
+● Understood. Taking it as fact: section1 is gone.
+
+  My analysis:
+
+  The staged session is a bad idea. The whole pitch of this project is a record
+  a human can inspect. A fabricated session is a fake entry in that record, and
+  one fake entry poisons the rest of it. If a reader ever notices the seams, the
+  trust argument of every post dies with it. I also won't help present a staged
+  transcript as a real one.
+
+  Confession is cheaper than it feels. Section1 is the official Screeps
+  tutorial's own JS — the upstream source is public and stable. The reference
+  copy was always just a snapshot of someone else's published code. What readers
+  inspect is the dox-populi side: the spec, the shell, the git history of the
+  port. Losing the upstream snapshot costs the story very little.
+
+  So two honest options:
+
+  1. Recreate the snapshot and say so. Re-copy section1 from the official
+  tutorial into the reference repo, with one plain sentence wherever it matters:
+  "the original section1 snapshot was lost; this copy was recreated from the
+  official tutorial." Done.
+  2. Run the session for real. If you want a genuine session record for
+  section1, we do the work now and date it now. It's a real record with a late
+  date, and the step-by-step claim stays true.
+
+  My recommendation is option 1. The step-by-step evidence lives in dox-populi's
+  history, which you still have.
+
+✻ Worked for 15s
+
+❯ what is missing is the work nessecary to duplicate the work using             
+  paradox/typescript/nix devflow, the current repo starts at section 2          
+
+● That changes the picture: the missing piece is your own work, and your own
+  work can be done for real. There's nothing to fake and nothing to confess —
+  just a section 1 port that hasn't been done yet.
+
+  So the move is: do the section 1 port now, in the same devflow — spec in
+  Paradox, shell in TypeScript, checked and built through the flake — and record
+  it as its own branch/session like every other section. The session record is
+  genuine because the work is genuine. The only unrecoverable thing is
+  chronology: the commits will be dated after sections 2–5. If any post claims a
+  timeline, one sentence covers it ("section 1 was ported after the later
+  sections"); if the posts just walk the sections in order, the dates never come
+  up.
+
+  The staged-session idea only made sense when the work itself seemed
+  unreproducible. It isn't. Doing it for real is both the honest option and the
+  easier one.
+
+  Say the word and I'll start with tutorial-porter on section 1.
+
+✻ Cooked for 15s
+
+❯ the problem is this is not exactly reproducable because you are starting with 
+  the final result of the project as context. this is not how real projects     
+  work. it's allowed to provide a degree of artifice in an educational project, 
+  but pretending it's reproducable is not helpful                               
+
+● Agreed. A redo done today is written with the finished architecture in hand —
+  the brain/hands split, the spec conventions, the harness shape all exist and
+  will leak into it. The original section 1 was worked out without any of that.
+  So the redo is a worked example, and calling it a reproduction of the original
+  process would be false.
+
+  That gives you the honest label: sections 2–5 have real session records from
+  when the architecture was being worked out. Section 1 is a worked example,
+  produced later, with the final architecture already known. Every textbook does
+  this — the cleaned-up derivation is standard educational artifice, and
+  readers accept it as long as it's labeled. One sentence in the section 1 post
+  does the labeling, and the reproducibility claim attaches only to what
+  actually reproduces: a reader following the section 1 example gets working
+  code through the same checkers. The claim you drop is that this is how the
+  work first happened.
+
+  The alternative — engineering a "clean room" session that hides the final repo
+  from me — chases a purity it can't reach (the conventions are in the agent
+  definitions, the memory, this conversation) and buys nothing the label
+  doesn't.
+
+  So my verdict: do section 1 for real, present it as a hindsight worked
+  example, keep the discovery story attached to the sections that have real
+  records.
+
+✻ Worked for 17s
+
+❯ the finished arch is the main branch, tutorial 1 was supposed to be the       
+  minimal first step that completes tutorial 1. we can't do that and the main   
+  branch is the finished arch.                                                  
+
+● The bind is real for a fresh rewrite. But there's a version that doesn't start
+  from main: the repo's earliest commit is a period artifact. It's the state
+  section 2 started from, which means it contains the section-1-complete
+  baseline plus whatever section 2 had added by that point — and its
+  architecture is the early one, whatever that was at the time, since main's
+  finished shape came later.
+
+  So instead of writing section 1 forward from the finished arch, derive it
+  backward from that first commit: strip out the section 2 additions and what
+  remains is the base the real project actually stood on when section 1 was
+  done. The hindsight involved is subtraction from a real artifact. Then two
+  pieces of evidence attach to it, both inspectable: the tutorial-1 itest
+  witnesses that this baseline completes tutorial 1, and the diff from this
+  baseline to the real earliest commit shows it sits strictly inside the
+  recorded history.
+
+  The honest claim that survives is "this is the base the recorded history is
+  consistent with, and it completes tutorial 1." The claim that dies is "this is
+  the minimal first step as it was originally found" — that record is gone and
+  nothing rebuilds it. The post says so in one sentence.
+
+  If the earliest commit already carries too much later structure to subtract
+  cleanly, then the derivation fails on inspection and the fallback is the other
+  honest shape: the blog starts at section 2 and says the section 1 record
+  wasn't kept.
+
+✻ Crunched for 28s
+
+❯ i am making some changes. one is branch naming i have moved from              
+  0-tutorial-zero to tutorial-one, this is keep parity with section-x naming. I 
+  also need to change hands/brains metaphor to harness/(some other metaphor     
+  than 'brains')                                                                
+
+● Noted on the branch rename — tutorial-one, matching section numbering.
+
+  For the "brains" replacement: the earlier vocabulary ruling already has the
+  candidates — the artifact is the spec (the .dox file) and what it generates is
+  the decision logic. Either pairs cleanly with harness:
+
+  - harness / spec — names the two files a reader actually looks at
+  - harness / decision logic — names the two jobs: the harness talks to the
+  game, the decision logic picks what happens next
+
+  My pick is harness / decision logic when you mean the split of
+  responsibilities, spec when you mean the .dox file itself. Both are already in
+  the ruled vocabulary, so nothing new gets coined.
+
+  Where do you want the rename applied — prose only, or also code/agent files
+  and directory names?
+
+✻ Baked for 14s
+
+❯ harness/spec changed everywhere I have already changed directory from shell   
+  to harness                                                                    
+
+● Recording the ruling in memory, then I'll ask about the sweep.
+
+  Recalled 1 memory, wrote 1 memory (ctrl+o to expand)
+
+● Ruling recorded: harness/spec everywhere, shell/ directory now harness/,
+  branches named tutorial-one style.
+
+  Do you want me to sweep the rest of the repo for remaining shell/brain/hands
+  references — flake.nix, agent files, docs, dox comments — and update them, or
+  are you handling those yourself?
+
+✻ Baked for 21s
+
+※ recap: Section 1 will be redone honestly as a hindsight worked example, derived from the repo's earliest commit. You renamed the branch to tutorial-one and ruled harness/spec vocabulary everywhere. Next: tell me whether I sweep remaining shell/brain references or you handle them. (disable recaps in /config)
+
+❯ yes, sweep the repo                                                           
+  Searched for 2 patterns (ctrl+o to expand)
+
+● Three files have real references; the devShell/writeShellScript nix idioms
+  stay. Making the edits:
+
+● Update(tsconfig.json)
+  ⎿  Added 1 line, removed 1 line
+      10      "types": []
+      11    },
+      12    "include": [
+      13 -    "shell/**/*.ts",                                           
+      13 +    "harness/**/*.ts",                                         
+      14      "generated/**/*.ts",
+      15      "vendor/screeps.d.ts"
+      16    ]
+
+  Read 1 file (ctrl+o to expand)
+
+● Update(harness/main.ts)
+  ⎿  Added 2 lines, removed 2 lines
+      1 -// dox-populi shell: the "hands". All Screeps API calls live her
+        -e.                                                              
+      2 -// The "brain" (types, policy, later FSMs) is generated from dox
+        -/ by Paradox.                                                   
+      1 +// dox-populi harness: all Screeps API calls live here.         
+      2 +// The decision logic is generated from the spec (dox/) by Parad
+        +ox.                                                             
+      3  import { harvesterBody, validCreepRole } from "../generated/inde
+         x";
+      4  
+      5  export const loop = (): void => {
+
+  Read 1 file (ctrl+o to expand)
+
+● Update(flake.nix)
+  ⎿  Added 2 lines, removed 2 lines
+      40          '';
+      41        };
+      42  
+      43 -      # Assemble the full TS project (shell + generated + vendo
+         -red types).                                                    
+      43 +      # Assemble the full TS project (harness + generated + ven
+         +dored types).                                                  
+      44        tsSrc = pkgs.runCommand "dox-populi-ts-src" { } ''
+      45          mkdir -p $out/vendor
+      46 -        cp -r ${./shell} $out/shell                            
+      46 +        cp -r ${./harness} $out/harness                        
+      47          cp -r ${generated} $out/generated
+      48          cp ${typed-screeps}/dist/index.d.ts $out/vendor/screeps
+          .d.ts
+      49          cp ${./tsconfig.json} $out/tsconfig.json
+
+● Update(flake.nix)
+  ⎿  Added 1 line, removed 1 line
+      54          src = tsSrc;
+      55          nativeBuildInputs = [ pkgs.esbuild ];
+      56          buildPhase = ''
+      57 -          esbuild shell/main.ts --bundle --format=cjs --platfor
+         -m=node \                                                       
+      57 +          esbuild harness/main.ts --bundle --format=cjs --platf
+         +orm=node \                                                     
+      58              --outfile=main.js
+      59          '';
+      60          installPhase = ''
+
+● Sweep done. Three files carried real references:
+
+  - tsconfig.json — include path now harness/**/*.ts
+  - harness/main.ts — header comment now says harness and decision logic
+  generated from the spec
+  - flake.nix — tsSrc copies ./harness, esbuild bundles harness/main.ts, comment
+  updated
+
+  The remaining "shell" hits in flake.nix are nix idioms (devShell, mkShell,
+  shellHook, writeShellScript) and the devShell greeting line; those stay.
+
+✻ Sautéed for 34s
+
+❯ okay, recall for me the overall plan today                                    
+
+● The plan as it stands from this session:
+
+  The problem: the repo's record starts at section 2. The tutorial 1 work — the
+  minimal first step through the paradox/typescript/nix devflow — was never
+  preserved, and it can't be honestly redone from scratch because anyone doing
+  it now knows the finished architecture on main.
+
+  The decision: no staged session. Derive the tutorial 1 baseline backward from
+  the repo's earliest real commit — strip the section 2 additions, and what
+  remains is the base the recorded history actually stood on. Two pieces of
+  inspectable evidence attach: the tutorial-1 itest witnesses the baseline
+  completes tutorial 1, and the diff to the earliest commit shows the baseline
+  sits inside the real history. The post labels it in one sentence as a derived
+  reconstruction; the discovery story belongs to sections 2–5, which have real
+  records. Fallback if the subtraction doesn't come out clean: the blog starts
+  at section 2 and says so.
+
+  The renames (in progress): branch naming moved to section parity —
+  tutorial-one replaces 0-tutorial-zero. Vocabulary is harness/spec everywhere.
+  You renamed shell/ to harness/; I swept the repo — tsconfig.json, flake.nix,
+  and harness/main.ts updated.
+
+✻ Baked for 7s
+
+❯ start the tutorial 1 derivation from the earliest commit. here is the         
+  javascript we model after for tutorial one.                                   
+  /home/mlitchard/github/tutorial-scripts/section1                              
+
+● Starting the derivation. First step: look at the earliest commit of this repo
+  and the section1 reference JS.
+
+  Read 2 files, listed 1 directory, ran 2 shell commands (ctrl+o to expand)
+
+✻ Brewed for 21s
+
+❯ why did you stop, i cancelled your time-wasting tool usage and you stopped    
+
+● You stopped my tool batch and the harness ordered me to stop and wait — that's
+  the mechanics. Continuing now, working from the tree in front of me instead
+  of git archaeology.
+
+  Read 4 files (ctrl+o to expand)
+
+● The derivation is done — the current tree sits very close to the section 1
+  scope already.
+
+  Comparing the earliest state against section1/ JS:
+
+  - Harness loop body — matches section 1's harvester behavior exactly: harvest
+  while there's free capacity, deliver to Spawn1 otherwise. (One divergence:
+  findClosestByPath instead of sources[0] — a safer version of the same step.)
+  - Auto-spawn and dead-creep memory reclaim — the tutorial has the player spawn
+  Harvester1 by console command. This devflow has no human at a console; the
+  itest drives the server, so the spawn-one-harvester block and the reclaim loop
+  are the harness's stand-in for that console command. They stay in the
+  baseline.
+  - The spec — this is where the section 2 material lives: the CreepRole union
+  declares upgrader and builder, and nothing in the tree gives them behavior.
+  Those are the forward declarations section 2 started from.
+
+  So the tutorial 1 baseline is the earliest state with one subtraction —
+  dox/creeps.dox:
+
+  union CreepRole
+    harvester
+
+  with BodyPart and harvesterBody unchanged. After that, Paradox regenerates the
+  decision logic and validCreepRole accepts only harvester, which is the only
+  role the harness handles.
+
+  Want me to write that edit, or are you taking it?
+
+✻ Crunched for 1m 12s
+
+❯ write the edit                                                                
+
+● Update(dox/creeps.dox)
+  ⎿  Removed 2 lines
+      2  
+      3  union CreepRole
+      4    harvester
+      5 -  upgrader                                                      
+      6 -  builder                                                       
+      5  
+      6  union BodyPart
+      7    work
+
+● Written. CreepRole is now harvester only.
+
+✻ Worked for 10s
+
+❯ tell me what I need to do to deliver the code and see it running              
+
+● Checking the flake for the exact commands before I answer.
+  Read 1 file (ctrl+o to expand)
+
+● This baseline's flake deploys to screeps.com. Two commands:
+
+  1. nix flake check — Paradox checks the spec, tsc typechecks the harness
+  against the regenerated decision logic, and the build bundles main.js. This is
+  where the spec edit gets verified.
+  2. nix run .#deploy — rebuilds main.js from the current spec and harness,
+  decrypts the Screeps token with ~/.ssh/gitlab, and pushes to branch default on
+  screeps.com.
+
+  To see it running: open your room at screeps.com. The harness spawns
+  harvester-<tick> on its own as soon as the spawn is free and no creep exists,
+  then you watch it cycle between the source and Spawn1.
+
+  If you also want your editor to see the regenerated types locally, nix run 
+  .#generate rewrites ./generated and ./vendor.
+
+✻ Worked for 21s
+
+❯ tell me what itest tests                                                      
+
+● The itest lives on main — reading it there.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+✻ Cooked for 11s
+
+❯ si there is no itest in this branch? what is being tested when i run nix      
+  flake check                                                                   
+
+● Correct — this branch has no itest. nix flake check here runs three checks,
+  from the flake's checks block:
+
+  1. paradox-check — runs paradox check on dox/. Paradox (with Z3) verifies the
+  spec's named properties and rejects a malformed spec.
+  2. typecheck — runs tsc --noEmit over the assembled project: the harness, the
+  decision logic freshly generated from the spec, and the vendored Screeps
+  types. A harness call that disagrees with the generated types is a compile
+  error.
+  3. build — esbuild bundles harness/main.ts into main.js. It checks that the
+  bundle assembles.
+
+  Nothing here runs the game. Witnessing the harvester actually complete
+  tutorial 1 against a server is the itest's job, and that harness came later —
+  it's on main, and pulling it back into this baseline would be section-2-era
+  tooling arriving early. For this baseline, "see it running" is you watching
+  the room after deploy.
+
+✻ Worked for 6s
+
+❯ walk me through how this is supposed to work, i logged onto screeps server    
+  and it asked me to pick as room and then asked me to place my spawn           
+
+● That room-pick and spawn-placement is the game's own onboarding — every
+  account places its first spawn by hand, and that's the last manual act. From
+  there:
+
+  1. Pick a room and place the spawn. Put it within easy reach of an energy
+  source. Keep the default name Spawn1 — the harness looks up
+  Game.spawns["Spawn1"] by that exact name; a different name and the code finds
+  nothing.
+  2. Deploy (nix run .#deploy, if you haven't since placing). The server runs
+  whatever sits on branch default every game tick — your bundled main.js is now
+  the colony's only operator.
+  3. First ticks: the loop sees zero creeps and a free spawn, so it calls
+  spawnCreep with the spec's harvesterBody (WORK, CARRY, MOVE — 200 energy). The
+  spawn accumulates energy on its own, so shortly after placement it has
+  enough. You'll see harvester-<tick> emerge.
+  4. The cycle you watch: free carry capacity → walk to the nearest source and
+  harvest; full → walk back and transfer to Spawn1. That's tutorial 1's loop
+  running from the generated decision logic plus the harness.
+  5. When the creep dies (creeps age out after 1500 ticks), the memory-reclaim
+  block clears its record and the spawn block builds a replacement. The colony
+  keeps itself at one harvester with no console input.
+
+  If nothing spawns after a minute or two: check the in-game console for errors,
+  and check the spawn's name first — that's the single assumption the harness
+  makes about the world.
+
+✻ Churned for 21s
+
+❯ i see a creep moving                                                          
+
+● That's the harvester running. When you see it reach the source, fill up, and
+  walk the energy back to Spawn1, you've watched tutorial 1 complete — spec
+  through Paradox, harness through tsc, bundle through the flake, running on the
+  live server.
+
+✻ Baked for 4s
+
+❯ i need to start over i placed too far away                                    
+
+● Two ways on screeps.com:
+
+  - Console: Game.spawns['Spawn1'].destroy() — losing your last spawn puts you
+  back in room/placement mode.
+  - Or the menu: the world view has a Respawn option that wipes your structures
+  and returns you to placement.
+
+  Then place the new spawn next to a source, keep the name Spawn1. Your code is
+  still deployed, so once the spawn exists the loop builds a new harvester on
+  its own — no redeploy needed.
+
+✻ Worked for 11s
+
+※ recap: Goal: rebuild the tutorial 1 baseline honestly, derived from the repo's earliest commit. Code is deployed and the harvester ran on screeps.com. You were respawning to place Spawn1 closer to a source; place it and watch the new harvester cycle. (disable recaps in /config)
+
+❯ whats the easiest way to get a screenshot?                                    
+
+● If you've got the room open in Chrome, I can take the screenshot for you
+  through the Chrome extension — say go and I'll capture the tab and drop the
+  file here. Otherwise, your desktop's PrtSc key is the fastest manual route.
+
+✻ Worked for 8s
+
+❯ im using screeps client                                                       
+
+● In the Steam client, F12 is Steam's built-in screenshot key. Hit it with the
+  room on screen, then Steam → View → Screenshots → "Show on Disk" gives you the
+  file.
+
+✻ Brewed for 6s
+
+❯ not working                                                                   
+
+● Let me take it from this side — checking what screenshot tool your system has.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+✻ Worked for 29s
+
+❯ just give me a screenshot thing I can install on nix quick                    
+● nix run nixpkgs#flameshot -- gui
+
+  No install step — it runs straight from nixpkgs, you drag-select the region,
+  and the save button writes a PNG wherever you point it. If it complains about
+  Wayland, use nix run nixpkgs#grim -- shot.png instead — that captures the
+  whole screen to shot.png.
+
+✻ Brewed for 5s
+
+❯ [mlitchard@polymetis:~/gitlab/dox-populi]$ nix run nixpkgs#flameshot -- gui   
+  flameshot: warning: No DBus System Notification service found                 
+  flameshot: error: Could not locate the `org.freedesktop.portal.Desktop`       
+  service                                                                       
+  flameshot: warning: No DBus System Notification service found                 
+  flameshot: error: Unable to capture screen                                    
+  flameshot: warning: No DBus System Notification service found                 
+  flameshot: info: Screenshot aborted.                                          
+  (nix:dox-populi-dev-env)                                                      
+                                                                                
+
+● Wayland without the portal service — flameshot needs it, grim doesn't:
+
+  nix run nixpkgs#grim -- shot.png
+
+  Full screen to shot.png in the current directory. If you want just a region,
+  nix run nixpkgs#slurp piped in works, but for one screenshot cropping later is
+  quicker.
+
+✻ Churned for 4s
+
+❯ no, this wont work, i need something that doesnt need to be used on the       
+  terminal it is run in                                                         
+
+● A delay does that — run this, then alt-tab to the Screeps client and wait:
+
+  sleep 5 && nix run nixpkgs#grim -- shot.png
+
+  Five seconds after you hit enter it captures the whole screen, whatever is on
+  it, into shot.png. Bump the 5 if you need more switching time.
+
+✻ Baked for 6s
+
+❯ [mlitchard@polymetis:~/gitlab/dox-populi]$ sleep 5 && nix run nixpkgs#grim -- 
+  shot.png                                                                      
+  failed to create display                                                      
+  (nix:dox-populi-dev-env)                                                      
+                                                                                
+
+● grim needs Wayland and your session doesn't have it — you're on X11. scrot is
+  the X11 equivalent, with the delay built in:
+
+  nix run nixpkgs#scrot -- -d 5 shot.png
+
+  Five-second countdown, then full screen to shot.png.
+
+✻ Worked for 6s
+
+❯ the problem is it also captured the terminal running the capture, i'd rather  
+  not have to crop                                                              
+
+● Same command with -u — it captures only the window that has focus when the
+  timer fires:
+
+  nix run nixpkgs#scrot -- -d 5 -u shot.png
+
+  Alt-tab to the Screeps client during the countdown and the file contains just
+  that window, no terminal, no crop.
+
+✻ Crunched for 7s
+
+❯ next step, I don't believe there's any unedited session we can use. verify    
+  for me, use appropriate agents                                                
+  /home/mlitchard/gitlab/dox-main/screeps/docs/unedited                         
+
+● Sending an agent through the unedited sessions to check whether any covers the
+  tutorial 1 work.
+
+● Explore(Check unedited sessions for tutorial 1)
+  ⎿  Done (12 tool uses · 68.4k tokens · 21m 13s)
+  (ctrl+o to expand)
+
+● Verified — your belief holds. No transcript in docs/unedited records the
+  section 1 work. The earliest tutorial session on record is section 2 (the
+  2026-07-30 upgrader session, source for blog post one), and it refers to
+  section 1 as already existing before capture started.
+
+  One session comes close but doesn't cover it: docs/unedited/one/2026-07-26-thi
+  s-session-is-being-continued-from-a-previous-co.txt — chronologically first,
+  from when section 1 was the whole game. It's entirely VM/installer and flake
+  work; section 1 code appears in it only as a finished artifact being deployed
+  (deploy-local, placing Spawn1, creeps visible in the client). It witnesses the
+  section 1 result and contains none of its authoring.
+
+  Everything else in the directory is sections 2–5, attack-defense, VM/CI
+  infrastructure, evolution-lab and abstraction explorations, and blog planning.
+  The blog mapping fixed in the 2026-08-20 session likewise starts the build
+  posts at tutorial 2.
+
+  So the record supports the plan as decided: sections 2–5 have real session
+  records; tutorial 1 has no unedited session, and the derived baseline plus a
+  one-sentence label is what post one stands on.
+
+✻ Brewed for 2m 1s
+
+❯ okay help me structure the blog for tutorial-one. we'll have to deviate from  
+  the pattern of the other blogs.                                               
+
+● Pulling up the post template rulings and an existing outline so the deviation
+  is from the real pattern.
+
+  Recalled 1 memory (ctrl+o to expand)
+
+● The template holds for three of the four sections. The deviation is the
+  Session section — its law is curated excerpts from an unedited transcript, and
+  section 1 has none from the original work. Here's the structure I'd propose:
+
+  Promise — per template, objectives as skills. Candidates: reading the smallest
+  complete state of the apparatus (one union, one constant, one harness loop,
+  three checks); knowing what each check rejects; delivering code and watching
+  it run. This post has the least machinery of the series, so the objective list
+  stays short.
+
+  Session — the deviation, and there's an honest way to keep the dialogue form:
+  this session, today, is a real unedited transcript. It records the hole being
+  found, the decision against staging a fake session, the derivation from the
+  earliest commit, the subtraction edit, the deploy, and "i see a creep moving."
+  Export it to docs/unedited like the others and curate it the same way. The
+  label the post owes the reader ("the original section 1 record was never kept;
+  this baseline is derived") stops being a footnote — it's the story the
+  session tells. The trust doctrine is on the page by construction: the record
+  is evidence, the record had a hole, the hole is labeled and patched in the
+  open.
+
+  Proof — per template. You already have the screenshot; a GIF of the
+  harvest-deliver cycle matches the other posts.
+
+  Postscript — per template. Exercises mapped to objectives, reader on the
+  tutorial-one branch with its ISO; the assignment builds toward the
+  harvester/upgrader stage, which is post one's ground.
+
+  Two things only you can rule:
+
+  1. Numbering. The slate's post 1 ("The Harvester Isn't Doing Anything") stands
+  on 1-tutorial-one, which the 2026-08-25 ruling defines as the
+  harvester/upgrader stage. A tutorial-1 post lands between post zero and that —
+  whether it renumbers the slate or gets an off-series slot is your call.
+  2. Transcript export. If the Session section uses today's session, this
+  transcript needs to land in docs/unedited before drafting, so quotes verify
+  against it like every other post.
+
+✻ Crunched for 46s
+
+※ recap: We're structuring the tutorial-one blog post: template holds except the Session section, which can use today's real derivation-and-deploy transcript. Next you rule on post numbering and whether to export this session to docs/unedited. (disable recaps in /config)
+
+❯ about 1. does this end with section2 tutorial code working?                   
+
+● No. This branch ends with Screeps tutorial section 1 working: one harvester
+  spawning, harvesting, delivering to Spawn1. That's where today's deploy left
+  it.
+
+  Section 2 code working (the upgrader) is the endpoint of the existing post
+  one's stage — the branch the 2026-08-25 ruling named 1-tutorial-one. That's
+  what makes the numbering collision: the new post's branch ends one Screeps
+  section earlier than the branch whose name it nearly shares.
+
+✻ Churned for 7s
+
+❯ well it's working now, so this looks like an off-series session. all due to   
+  the missing first tutorial. unless you have a better idea                     
+● Off-series is the right call — I don't have a better one. The numbered posts
+  walk the stages a reader stands on; this one patches the record, which is a
+  different kind of post, and the about page already establishes that off-series
+  pages get their own structure. The slate's numbering stays ruled as-is, post
+  zero still hands the reader to post one, and this page sits linked between
+  them for whoever wants the smallest state of the apparatus.
+
+  It also keeps the honest framing clean: a numbered slot would present the
+  patch as a stage. Off-series, the post can say plainly what it is — the record
+  started at section 2, here's the derived section 1 baseline and the session
+  that produced it.
+
+✻ Cogitated for 8s
+
+❯ how do we solidify this plan, I dont want it to get lost                      
+
+● Two layers, matching how the other posts are kept:
+
+  1. Memory — I write the plan into a memory file now, so any future session
+  recalls it: off-series post, derived-baseline story, Session section from
+  today's transcript, the open items. That survives regardless of what happens
+  in the repo.
+  2. The repo as source of record — every post's plan lives in its outline.md,
+  and that's what the drafting sessions work from. This post needs the same: an
+  outline under the blog tree in dox-main. You name the directory and branch and
+  I'll draft it on your go, per the outline laws (objectives first, no quoting
+  ghosts, assignment last).
+
+  And one act only you can do: export this session's transcript into
+  docs/unedited when it ends, since the Session section quotes verify against
+  that file.
+
+  Writing the memory now.
+
+  Wrote 2 memories (ctrl+o to expand)
+
+● Memory written and indexed. The plan is now recalled by every future session:
+  the derivation, the off-series ruling, the four-section structure, and the
+  open items (your transcript export, the outline's location, the missing itest
+  on this branch).
+
+  For the repo layer: tell me the outline's directory and branch in dox-main and
+  I'll draft it.
+
+✻ Worked for 31s
+
+❯ we dont modify dox-main it's strictly for your reference                      
+
+  Wrote 2 memories (ctrl+o to expand)
+
+● Recorded: dox-main is reference only, all work happens here. So the outline
+  goes in this repo — where do you want it on tutorial-one?
+  blog/tutorial-one/outline.md would match the other posts' layout.
+
+✻ Baked for 18s
+
+❯ blog/tutorial-one/outline.md works, draft it                                  
+
+● Write(blog/tutorial-one/outline.md)
+  ⎿  Wrote 106 lines to blog/tutorial-one/outline.md
+      1 # Off-series: The Section 1 Baseline
+      2 
+      3 Title: unruled.
+      4 
+      5 Status: OFF-SERIES (ruled 2026-08-31). Unnumbered, linked between
+      6 zero and post one. The numbered posts walk the stages a reader st
+        ands
+      7 on; this page patches the record. Branch: tutorial-one.
+      8 
+      9 ## What this post is
+     … +112 lines (ctrl+o to expand)
+
+● Drafted at blog/tutorial-one/outline.md on tutorial-one. It follows the
+  outline laws — objectives first, four of them with every exercise mapped,
+  assignment last, and no quotes until you export the transcript (the Session
+  section carries the arc only, with the source marked pending). Off-series
+  status, the derivation claim, and the open items (title, ISO, GIF, export) are
+  all on the page.
+
+✻ Churned for 51s
+
+※ recap: The goal is an off-series blog post covering the derived tutorial 1 baseline, which is now deployed and running live. The outline is drafted at blog/tutorial-one/outline.md. Next action: you export this session's transcript into docs/unedited.
