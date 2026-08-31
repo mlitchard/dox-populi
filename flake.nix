@@ -40,10 +40,10 @@
         '';
       };
 
-      # Assemble the full TS project (shell + generated + vendored types).
+      # Assemble the full TS project (harness + generated + vendored types).
       tsSrc = pkgs.runCommand "dox-populi-ts-src" { } ''
         mkdir -p $out/vendor
-        cp -r ${./shell} $out/shell
+        cp -r ${./harness} $out/harness
         cp -r ${generated} $out/generated
         cp ${typed-screeps}/dist/index.d.ts $out/vendor/screeps.d.ts
         cp ${./tsconfig.json} $out/tsconfig.json
@@ -54,7 +54,7 @@
         src = tsSrc;
         nativeBuildInputs = [ pkgs.esbuild ];
         buildPhase = ''
-          esbuild shell/main.ts --bundle --format=cjs --platform=node \
+          esbuild harness/main.ts --bundle --format=cjs --platform=node \
             --outfile=main.js
         '';
         installPhase = ''

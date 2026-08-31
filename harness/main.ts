@@ -1,5 +1,5 @@
-// dox-populi shell: the "hands". All Screeps API calls live here.
-// The "brain" (types, policy, later FSMs) is generated from dox/ by Paradox.
+// dox-populi harness: all Screeps API calls live here.
+// The decision logic is generated from the spec (dox/) by Paradox.
 import { harvesterBody, validCreepRole } from "../generated/index";
 
 export const loop = (): void => {
