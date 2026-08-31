@@ -2,8 +2,6 @@ import std
 
 union CreepRole
   harvester
-  upgrader
-  builder
 
 union BodyPart
   work
