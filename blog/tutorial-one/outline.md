@@ -27,8 +27,6 @@ labeled instead of papered over.
    and the generated decision logic a compile error; the build
    assembles `main.js`.
 3. How to deliver code to the Screeps server and watch it run.
-4. How to audit a project record: determine what it witnesses, find its
-   holes, and check a derived claim against the commits.
 
 ## Promise
 
@@ -36,8 +34,7 @@ labeled instead of papered over.
   record of the first step was never kept. This post is the honest
   repair.
 - The derivation claim, stated up front: the baseline is the earliest
-  commit with the section-2 forward declarations removed. The reader
-  can check this claim by diff (exercise 4 below).
+  commit with the section-2 forward declarations removed.
 - The three objectives about the apparatus (1–3), phrased as skills.
 - Side-by-side candidate: `section1/role.harvester.js` from the
   official tutorial against the tutorial-one harness loop — the same
@@ -85,11 +82,6 @@ Objective 2 — what each check rejects:
 Objective 3 — deliver and watch:
 - Deploy to your own Screeps account (`nix run .#deploy` with your
   token) and watch the harvester spawn, harvest, and deliver.
-
-Objective 4 — audit the record:
-- Diff the tutorial-one baseline against the repo's earliest commit.
-  Identify the section-2 forward declarations. Decide for yourself
-  whether the derivation claim holds; the diff is the evidence.
 
 Assignment (LAST exercise, per outline law): the session prompt that
 starts the harvester/upgrader stage — the ground of post one

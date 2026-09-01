@@ -160,7 +160,8 @@
         # browser client (nix run .#client inside the VM) is served at
         # localhost:${toString hardware.ports.client}.
         #
-        # Env knobs (all optional): MEM (default ${memG hardware.runMemMiB}), CPUS (default ${toString hardware.runCpus}), DISK
+        # Env knobs (all optional): MEM, CPUS (default: half the host's
+        # memory and cores, capped at ${memG hardware.runMemMiB}/${toString hardware.runCpus}), DISK
         # (default ./dox-populi.qcow2), DISK_SIZE (default ${hardware.diskSize}, first run
         # only), ISO (default ./dox-populi-installer.iso), ISO_URL (where to
         # download the ISO; empty until a release is published), WORKDIR
@@ -174,10 +175,28 @@
         ISO="''${ISO:-$REPO/dox-populi-installer.iso}"
         ISO_URL="''${ISO_URL:-${hardware.isoUrl}}"
         WORKDIR="''${WORKDIR:-$HOME/vm-keys}"
-        MEM="''${MEM:-${memG hardware.runMemMiB}}"
-        CPUS="''${CPUS:-${toString hardware.runCpus}}"
-        INSTALL_MEM="''${INSTALL_MEM:-${memG hardware.installMemMiB}}"
-        INSTALL_CPUS="''${INSTALL_CPUS:-${toString hardware.installCpus}}"
+        # Auto-size from the host: half its memory and cores, capped at
+        # the declared hardware contract. MEM=, CPUS=, INSTALL_MEM=,
+        # INSTALL_CPUS= override.
+        HOST_MEM_MIB=1024
+        while read -r key val _; do
+          if [ "$key" = "MemTotal:" ]; then HOST_MEM_MIB=$((val / 1024)); break; fi
+        done < /proc/meminfo
+        HOST_CPUS=$(nproc 2>/dev/null || echo 1)
+        AUTO_MEM=$((HOST_MEM_MIB / 2))
+        [ "$AUTO_MEM" -gt ${toString hardware.runMemMiB} ] && AUTO_MEM=${toString hardware.runMemMiB}
+        AUTO_CPUS=$((HOST_CPUS / 2))
+        [ "$AUTO_CPUS" -lt 1 ] && AUTO_CPUS=1
+        [ "$AUTO_CPUS" -gt ${toString hardware.runCpus} ] && AUTO_CPUS=${toString hardware.runCpus}
+        AUTO_INSTALL_MEM=$((HOST_MEM_MIB / 2))
+        [ "$AUTO_INSTALL_MEM" -gt ${toString hardware.installMemMiB} ] && AUTO_INSTALL_MEM=${toString hardware.installMemMiB}
+        AUTO_INSTALL_CPUS=$((HOST_CPUS / 2))
+        [ "$AUTO_INSTALL_CPUS" -lt 1 ] && AUTO_INSTALL_CPUS=1
+        [ "$AUTO_INSTALL_CPUS" -gt ${toString hardware.installCpus} ] && AUTO_INSTALL_CPUS=${toString hardware.installCpus}
+        MEM="''${MEM:-''${AUTO_MEM}M}"
+        CPUS="''${CPUS:-$AUTO_CPUS}"
+        INSTALL_MEM="''${INSTALL_MEM:-''${AUTO_INSTALL_MEM}M}"
+        INSTALL_CPUS="''${INSTALL_CPUS:-$AUTO_INSTALL_CPUS}"
         SESSION="''${SESSION:-dox-populi-vm}"
 
         # KVM where writable, TCG emulation otherwise (works, slowly).

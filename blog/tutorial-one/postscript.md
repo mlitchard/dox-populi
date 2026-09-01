@@ -25,12 +25,6 @@ on the `tutorial-one` branch.
 - Deploy to your own Screeps account (`nix run .#deploy` with your
   token) and watch the harvester spawn, harvest, and deliver.
 
-## Objective 4 — audit the record
-
-- Diff the `tutorial-one` baseline against the repo's earliest commit.
-  Identify the section-2 forward declarations. Decide for yourself
-  whether the derivation claim holds; the diff is the evidence.
-
 ## Assignment
 
 <!-- TODO: the session prompt that starts the harvester/upgrader
