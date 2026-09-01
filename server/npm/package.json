@@ -1,0 +1,8 @@
+{
+  "name": "dox-populi-screeps-server",
+  "private": true,
+  "description": "Open-source Screeps server (the launcher package), nix-vendored — replaces the Steam-bundled server tree.",
+  "dependencies": {
+    "screeps": "4.3.0"
+  }
+}

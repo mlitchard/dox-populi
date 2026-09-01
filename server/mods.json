@@ -1,0 +1,6 @@
+{
+  "mods": [],
+  "bots": {
+    "simplebot": "node_modules/@screeps/simplebot/src"
+  }
+}

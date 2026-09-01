@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>dox-populi viewer</title>
+<style>
+  body { margin: 0; background: #111; color: #ddd; font-family: monospace; }
+  #connect { padding: 2rem; max-width: 24rem; }
+  #connect label { display: block; margin: 0.5rem 0 0.2rem; }
+  #connect input { width: 100%; padding: 0.3rem; background: #222; color: #ddd; border: 1px solid #444; }
+  #connect button { margin-top: 1rem; padding: 0.4rem 1.2rem; background: #2a4; color: #fff; border: none; cursor: pointer; }
+  #status { margin-top: 1rem; color: #e77; }
+  #viewer { display: none; height: 100vh; }
+  #room-wrap { position: relative; flex: 0 0 auto; }
+  #room { width: 90vh; height: 90vh; max-width: 65vw; }
+  #highlight { display: none; position: absolute; border: 1px solid #6f6; pointer-events: none; }
+  #panel { flex: 1; padding: 1rem; overflow-y: auto; border-left: 1px solid #333; }
+  #topbar { position: absolute; top: 0.3rem; left: 0.5rem; color: #888; }
+</style>
+</head>
+<body>
+  <div id="connect">
+    <h1>dox-populi viewer</h1>
+    <form id="connect-form">
+      <label for="server">server</label>
+      <input id="server" type="text">
+      <label for="email">username</label>
+      <input id="email" type="text" autocomplete="username">
+      <label for="password">password</label>
+      <input id="password" type="password" autocomplete="current-password">
+      <button type="submit">connect</button>
+    </form>
+    <div id="status"></div>
+  </div>
+  <div id="viewer">
+    <div id="room-wrap">
+      <div id="topbar"><span id="roomname"></span> · tick <span id="gametime"></span></div>
+      <div id="room"></div>
+      <div id="highlight"></div>
+    </div>
+    <div id="panel"><p>click an object to inspect it</p></div>
+  </div>
+  <script src="main.js"></script>
+</body>
+</html>

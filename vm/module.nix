@@ -43,6 +43,7 @@
     options = [ "trans=virtio" "version=9p2000.L" "msize=524288" "rw" "nofail" ];
   };
 
+  environment.variables.SCREEPS_HOST = "0.0.0.0";
   environment.variables.WORKDIR = "/home/dev/work";
   environment.variables.SCREEPS_IDENTITY = "/home/dev/work/identity";
 
@@ -69,20 +70,24 @@
       3. nix flake check             — Paradox checks the spec, tsc
                                        typechecks the harness, the
                                        build bundles main.js
-      4. nix run .#deploy            — push main.js to your screeps.com
-                                       account
+      4. nix run .#server            — private server on host port 21025
+                                       (nix-vendored — no purchase needed)
+      5. nix run .#deploy-local      — provision account, push main.js,
+                                       place Spawn1
+      6. nix run .#client            — browser viewer on host port 8080
+                                       (open-source renderer, offline)
 
-    Secrets (secrix, same workflow as native nix):
-      Apps decrypt secrets with YOUR key. Place it in the host dir
-      run-vm.sh shares (~/vm-keys by default; WORKDIR= to override)
-      named "identity" — it appears here as ~/work/identity, which
-      SCREEPS_IDENTITY already points to.
-      (Or export SCREEPS_IDENTITY=/path/to/your/key yourself.)
-      deploy decrypts secrets/SCREEPS_TOKEN (your screeps.com auth
-      token). Encrypt your own token to your key (from the dev shell):
-        secrix create secrets/SCREEPS_TOKEN -i "$SCREEPS_IDENTITY" -r "$(cat $SCREEPS_IDENTITY.pub)"
+    Watch: open http://localhost:8080 in the HOST browser and sign in
+    with your deploy-local credentials.
 
-    Watch: your room at screeps.com after a deploy.
+    Credentials: deploy-local reads SCREEPS_LOCAL_EMAIL /
+      SCREEPS_LOCAL_PASSWORD, or age-encrypted
+      secrets/SCREEPS_LOCAL_CREDS ("username:password"). Your key goes
+      in the host dir run-vm.sh shares (~/vm-keys by default; WORKDIR=
+      to override) named "identity" — it appears here as
+      ~/work/identity, which SCREEPS_IDENTITY already points to.
+      Encrypt your own creds to it (from the dev shell):
+        secrix create secrets/SCREEPS_LOCAL_CREDS -i "$SCREEPS_IDENTITY" -r "$(cat $SCREEPS_IDENTITY.pub)"
 
     ~/work is your host directory (if shared via run-vm.sh).
     SSH from the host: ssh -p 2222 dev@localhost  (password: dox-populi)
