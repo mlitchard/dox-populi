@@ -18,10 +18,15 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    gitlab-ci = {
+      url = "github:Platonic-Systems/gitlab-ci";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     determinate.url = "https://flakehub.com/f/DeterminateSystems/determinate/3";
   };
 
-  outputs = { self, nixpkgs, paradox, typed-screeps, secrix, disko, determinate }:
+  outputs = { self, nixpkgs, paradox, typed-screeps, secrix, disko, gitlab-ci, determinate }:
     let
       system = "x86_64-linux";
       pkgs = import nixpkgs { inherit system; };
@@ -398,6 +403,7 @@
           echo "  secrix create|edit|rekey ...  — manage encrypted secrets"
           echo "  nix run .#generate            — write ./generated + ./vendor for editors"
           echo "  nix run .#deploy              — bundle and push main.js to Screeps"
+          echo "  nix run .#gitlab-ci > .gitlab-ci.yml — regenerate the CI config"
           echo "  nix run .#installer-iso       — provision the dev VM disk (one-time dd install)"
           echo "  nix run .#gen-run-vm          — regenerate run-vm.sh after hardware changes"
           echo "  ./run-vm.sh                   — run the installed dev VM"
@@ -446,7 +452,43 @@
         build = main;
       };
 
+      # CI job filter, read by the gitlab-ci.nix generator (`flake.gitlab
+      # or null`, applied to the generated config). The generator maps
+      # every flake output to a job; one job building the deepest
+      # artifact proves the whole chain. Dropped:
+      # - VM chain: apps:installer-iso embeds vm-image-zst <- vm-image
+      #   <- the vm system, so those upstream jobs are redundant.
+      # - checks:build and packages:main are the same derivation as
+      #   packages:default.
+      # - flake:check rebuilds every check the test stage already ran.
+      # - flake:show: gitlab-ci:check runs `nix flake show --json` itself.
+      # removeAttrs, not `= null` (nulls survive into the YAML), plus a
+      # needs scrub (GitLab rejects undefined needs).
+      gitlab = prev:
+        let
+          dropped = [
+            "nixosConfigurations:vm"
+            "nixosConfigurations:installer"
+            "packages:vm-image"
+            "packages:vm-image-zst"
+            "packages:installer-iso"
+            "checks:build"
+            "packages:main"
+            "flake:check"
+            "flake:show"
+          ];
+          scrubNeeds = _: job:
+            if builtins.isAttrs job && job ? needs
+            then job // {
+              needs = builtins.filter (n: !(builtins.elem n dropped)) job.needs;
+            }
+            else job;
+        in builtins.mapAttrs scrubNeeds (builtins.removeAttrs prev dropped);
+
       apps.${system} = {
+        # Regenerate CI config: nix run .#gitlab-ci > .gitlab-ci.yml
+        gitlab-ci = gitlab-ci.apps.${system}.gitlab-ci;
+
         # Regenerate ./generated and ./vendor in the working tree for editor use.
         generate = {
           type = "app";
