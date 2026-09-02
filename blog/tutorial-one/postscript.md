@@ -22,8 +22,10 @@ on the `tutorial-one` branch.
 
 ## Objective 3 — deliver and watch
 
-- Deploy to your own Screeps account (`nix run .#deploy` with your
-  token) and watch the harvester spawn, harvest, and deliver.
+- Start the private server (`nix run .#server`), push your code
+  (`nix run .#deploy-local`), and open the viewer (`nix run .#client`)
+  in your browser. Place your spawn, then watch the harvester spawn,
+  harvest, and deliver.
 
 ## Assignment
 

@@ -20,7 +20,8 @@ From EXIT (postscript.md):
   `BodyPart.work` reference and read `paradox check`'s "Field not
   found"; then compare the harness against an undeclared role and read
   `tsc`'s no-overlap error.
-- Objective 3 — deliver and watch: deploy and watch the harvester
+- Objective 3 — deliver and watch: run the private server, deploy-local
+  your code, open the viewer, place the spawn, and watch the harvester
   spawn, harvest, deliver.
 
 From the build node (link):
@@ -30,11 +31,6 @@ From the build node (link):
 
 ## Open
 
-- Objective 3's exercise still names `nix run .#deploy` with a
-  screeps.com token; the reader path is now the local server
-  (deploy-local + the viewer). The exercise text needs to catch up —
-  flagged here because the index is where a stale exercise link would
-  mislead.
 - The arrival and build node outlines carry candidate exercises (verify
   an LLM claim against the primary source; break the proxy path and
   read the named failure; place a spawn in a controller-less room and
