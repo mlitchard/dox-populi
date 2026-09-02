@@ -69,6 +69,14 @@ export class Feed {
     }
   }
 
+  unsubscribe(channel: string): void {
+    this.subscriptions.delete(channel);
+    this.seenChannels.delete(channel);
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send(`unsubscribe ${channel}`);
+    }
+  }
+
   close(): void {
     if (this.ws) {
       this.ws.onclose = null;

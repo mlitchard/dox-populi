@@ -3,7 +3,7 @@
   "private": true,
   "description": "Browser viewer for the private Screeps server, built on the ISC-licensed @screeps/renderer. Serves fully offline: renderer, metadata, and images are nix-vendored; nothing proprietary.",
   "scripts": {
-    "build": "esbuild src/main.ts --bundle --minify --outfile=dist/main.js && cp src/index.html dist/index.html && rm -rf dist/assets && cp -r node_modules/@screeps/renderer-metadata/images dist/assets"
+    "build": "esbuild src/main.ts --bundle --sourcemap --outfile=dist/main.js && cp src/index.html dist/index.html && rm -rf dist/assets && cp -r node_modules/@screeps/renderer-metadata/images dist/assets"
   },
   "dependencies": {
     "@screeps/renderer": "1.6.10",

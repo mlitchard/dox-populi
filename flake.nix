@@ -166,6 +166,7 @@
         installPhase = ''
           mkdir -p $out
           cp -r dist/. $out/
+          cp proxy.mjs $out/
         '';
       };
 
@@ -905,19 +906,19 @@
           '');
         };
 
-        # Browser viewer: serve the nix-built page (renderer, images,
-        # and our bundle — nothing fetched at runtime) on port 8080.
-        # Open http://127.0.0.1:8080/ on the host and sign in with your
-        # deploy-local credentials; screepsmod-cors lets the page reach
-        # the server on 21025 from the viewer's origin.
+        # Browser viewer: one origin for everything. proxy.mjs serves
+        # the nix-built page (renderer, images, our bundle) on 8080 and
+        # forwards /api and /socket to the game server, so the browser
+        # never makes a cross-origin request. Open
+        # http://127.0.0.1:8080/ on the host and sign in with your
+        # deploy-local credentials.
         client = {
           type = "app";
           program = toString (pkgs.writeShellScript "screeps-viewer" ''
             set -euo pipefail
-            CLIENT_HOST="''${SCREEPS_CLIENT_HOST:-''${SCREEPS_HOST:-127.0.0.1}}"
-            echo "browser viewer: http://127.0.0.1:8080/  (server: http://127.0.0.1:21025, sign in with your deploy-local credentials)"
-            cd ${screepsViewer}
-            exec ${pkgs.python3}/bin/python3 -m http.server 8080 --bind "$CLIENT_HOST"
+            export VIEWER_HOST="''${SCREEPS_CLIENT_HOST:-''${SCREEPS_HOST:-127.0.0.1}}"
+            export SCREEPS_DATA_DIR="''${SCREEPS_DATA_DIR:-$(${pkgs.git}/bin/git rev-parse --show-toplevel)/.server-data}"
+            exec ${serverNode}/bin/node ${screepsViewer}/proxy.mjs
           '');
         };
 

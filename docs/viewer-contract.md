@@ -37,6 +37,11 @@ screepers/node-screeps-api, screepers/python-screeps docs.
 - Terrain: `setTerrain(array)` takes `{x, y, type}` tiles, type `wall`
   or `swamp`, plain tiles omitted — exactly the unencoded
   `/api/game/room-terrain` response.
+- The metadata package's dist file exports NOTHING as a module: it is
+  an IIFE that assigns `window.RENDERER_METADATA` (witnessed in the
+  published bundle's closing line). Import it for the side effect and
+  read the global. The renderer dist, by contrast, is a webpack UMD
+  with `GameRenderer` as a named export.
 - Assets: the images live in `@screeps/renderer-metadata/images/`
   (svg + png). The alias→file mapping is NOT in the metadata package —
   it lives in the renderer repo's demo (resourceMap.js) and is
@@ -67,10 +72,11 @@ screepers/node-screeps-api, screepers/python-screeps docs.
   → null` means the object left the room. Array-valued fields (creep
   `body`) can be diffed as index-keyed objects; the merge must handle
   an object-diff landing on an array.
-- The room feed carries NO users map. Seed objects+users in one shot
-  from `GET /api/game/room-objects?room=<r>` (array-shaped objects
-  plus `users`), then resolve new user ids from later diffs via
-  `GET /api/user/find?id=<id>`.
+- The room feed carries NO users map. Resolve user ids as they appear
+  in objects via `GET /api/user/find?id=<id>`. (`/api/game/room-objects`
+  is documented by newer clients but absent from backend 3.3.0 —
+  witnessed 404 in the VM; the socket's first snapshot is the only
+  object seed.)
 - Terrain REST: unencoded `/api/game/room-terrain?room=<r>` feeds
   `setTerrain` directly; rare private-server worlds answer with the
   encoded form regardless (a digit string; 0 plain, 1/3 wall,

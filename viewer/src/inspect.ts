@@ -44,7 +44,7 @@ export class Inspector {
     private readonly container: HTMLElement,
     private readonly highlight: HTMLElement,
     private readonly panel: HTMLElement,
-    private readonly view: RoomView,
+    public view: RoomView,
     private readonly state: RoomState,
   ) {
     container.addEventListener("mousemove", (ev) => {

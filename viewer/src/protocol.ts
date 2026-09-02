@@ -109,14 +109,32 @@ export class Api {
     return (res.terrain ?? []) as TerrainTile[];
   }
 
-  async roomObjects(
+  async worldStatus(): Promise<string> {
+    const res = await this.req<{ status?: string }>("/api/user/world-status");
+    return res.status ?? "";
+  }
+
+  async respawn(): Promise<void> {
+    await this.req("/api/user/respawn", { method: "POST", body: "{}" });
+  }
+
+  async placeSpawn(
     room: string,
-  ): Promise<{ objects: RoomObject[]; users: Record<string, UserInfo> }> {
-    const res = await this.req<{
-      objects: RoomObject[];
-      users: Record<string, UserInfo>;
-    }>(`/api/game/room-objects?room=${encodeURIComponent(room)}`);
-    return { objects: res.objects ?? [], users: res.users ?? {} };
+    x: number,
+    y: number,
+  ): Promise<{ ok: boolean; error?: string }> {
+    try {
+      const res = await this.req<{ ok?: number; error?: string }>(
+        "/api/game/place-spawn",
+        {
+          method: "POST",
+          body: JSON.stringify({ room, x, y, name: "Spawn1" }),
+        },
+      );
+      return { ok: res.ok === 1, error: res.error };
+    } catch (err) {
+      return { ok: false, error: (err as Error).message };
+    }
   }
 
   async findUser(id: string): Promise<UserInfo | undefined> {

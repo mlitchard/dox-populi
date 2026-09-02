@@ -21,16 +21,26 @@ async function start(server: string, email: string, password: string): Promise<v
   const me = await api.me();
 
   status.textContent = "finding room…";
+  // Your own room when you have one; otherwise a room where a spawn
+  // can be placed (the proxy reads controller ownership from the world
+  // database), so the room on screen is always one the placement
+  // click succeeds in.
   const rooms = await api.rooms(me._id);
-  const room = rooms[0] ?? (await api.worldStartRoom());
+  let room = rooms[0];
+  if (!room) {
+    const placeable = (await (await fetch("/placeable-rooms")).json()) as {
+      rooms: string[];
+    };
+    room = placeable.rooms[0] ?? (await api.worldStartRoom());
+  }
   if (!room) throw new Error("no room found for this account — run deploy-local first");
 
   status.textContent = `loading ${room}…`;
   const terrain = await api.terrain(room);
-  const seed = await api.roomObjects(room);
 
+  // No REST object seed: backend 3.3.0 has no room-objects endpoint.
+  // The socket's first message per subscription is a full snapshot.
   const state = new RoomState();
-  state.seed(seed.objects, seed.users);
   state.addUser({ _id: me._id, username: me.username });
 
   el<HTMLElement>("connect").style.display = "none";
@@ -38,11 +48,19 @@ async function start(server: string, email: string, password: string): Promise<v
   el<HTMLElement>("roomname").textContent = room;
 
   const container = el<HTMLElement>("room");
-  const view = await createRoomView(container, {
+  const viewstatus = el<HTMLElement>("viewstatus");
+  const stage = (text: string): void => {
+    if (viewstatus.textContent === text) return;
+    console.log(`stage: ${text}`);
+    viewstatus.textContent = text;
+  };
+  stage("starting renderer…");
+  let view = await createRoomView(container, {
     apiBase: api.base,
     playerId: me._id,
     terrain,
   });
+  stage("connecting socket…");
   const inspector = new Inspector(
     container,
     el<HTMLElement>("highlight"),
@@ -51,6 +69,51 @@ async function start(server: string, email: string, password: string): Promise<v
     state,
   );
 
+  // The game's own onboarding: an empty world puts you in placement
+  // mode — click a tile to place Spawn1; a lost colony offers respawn
+  // first, which then enters the same placement mode.
+  let placing = false;
+  const enterPlacement = (): void => {
+    placing = true;
+    stage("click a tile to place Spawn1");
+  };
+  container.addEventListener("click", (ev) => {
+    if (!placing) return;
+    const rect = container.getBoundingClientRect();
+    const tile = view.tileAt(ev.clientX - rect.left, ev.clientY - rect.top);
+    if (!tile) return;
+    void api.placeSpawn(room, tile.x, tile.y).then((result) => {
+      if (result.ok) {
+        placing = false;
+        stage(`Spawn1 placed at ${tile.x},${tile.y}`);
+      } else {
+        stage(`placement refused: ${result.error ?? "unknown"} — try another tile`);
+      }
+    });
+  });
+  const respawnBtn = el<HTMLButtonElement>("respawnbtn");
+  respawnBtn.style.display = "inline";
+  respawnBtn.addEventListener("click", () => {
+    if (!confirm("Release your colony and place a new spawn?")) return;
+    console.log("respawn requested");
+    api.respawn().then(
+      () => {
+        console.log("respawn accepted — entering placement mode");
+        enterPlacement();
+      },
+      (err: Error) => {
+        console.error(err);
+        stage(`respawn failed: ${err.message}`);
+      },
+    );
+  });
+  const worldStatus = await api.worldStatus();
+  if (worldStatus === "empty") {
+    enterPlacement();
+  } else if (worldStatus === "lost") {
+    stage("colony lost — respawn to place again");
+  }
+
   view.applyState(state.toRenderState(), 0);
 
   let lastTickAt = 0;
@@ -58,7 +121,8 @@ async function start(server: string, email: string, password: string): Promise<v
   const feed = new Feed(api.wsUrl, {
     onTokenRotated: (token) => api.adoptToken(token),
     onChannel: (channel, payload, first) => {
-      if (!channel.startsWith("room:")) return;
+      if (channel !== `room:${room}`) return;
+      if (!placing) stage(first ? "snapshot received" : "live");
       state.apply(payload as Parameters<RoomState["apply"]>[0], first);
       const now = performance.now();
       if (lastTickAt) tickSeconds = Math.min(5, (now - lastTickAt) / 1000);
@@ -73,13 +137,12 @@ async function start(server: string, email: string, password: string): Promise<v
       }
     },
     onClosed: () => {
-      status.textContent = "connection lost — reload to reconnect";
-      el<HTMLElement>("connect").style.display = "block";
+      stage("connection lost — reload to reconnect");
     },
   });
   await feed.connect(api.currentToken);
   feed.subscribe(`room:${room}`);
-  status.textContent = "";
+  if (!placing) stage("subscribed, waiting for first snapshot…");
 }
 
 const form = el<HTMLFormElement>("connect-form");
@@ -89,8 +152,13 @@ form.addEventListener("submit", (ev) => {
   const email = el<HTMLInputElement>("email").value;
   const password = el<HTMLInputElement>("password").value;
   start(server, email, password).catch((err: Error) => {
+    console.error(err);
     el<HTMLElement>("status").textContent = err.message;
+    const viewstatus = document.getElementById("viewstatus");
+    if (viewstatus) viewstatus.textContent = err.message;
   });
 });
 
-el<HTMLInputElement>("server").value = `http://${location.hostname}:21025`;
+// Same origin as the page: the proxy forwards /api and /socket to the
+// game server, so no cross-origin requests happen.
+el<HTMLInputElement>("server").value = location.origin;
