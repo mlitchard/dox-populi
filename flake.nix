@@ -673,16 +673,24 @@
               STEAM_API_KEY=$(${secrixCli}/bin/secrix decrypt secrets/STEAM_TOKEN -i "$IDENTITY")
             fi
             if [ -z "$STEAM_API_KEY" ]; then
-              echo "note: no Steam Web API key; starting without Steam auth (password signin via screepsmod-auth)" >&2
+              # The backend demands a key: empty means it hunts for the
+              # Steam client's greenworks library and crash-loops. Any
+              # non-empty value disables that path; password signin via
+              # screepsmod-auth is what actually authenticates users.
+              STEAM_API_KEY="dox-populi-no-steam"
+              echo "note: no Steam Web API key; using a dummy (password signin via screepsmod-auth)" >&2
             fi
 
             mkdir -p "$DATA/logs"
             [ -e "$DATA/assets" ]       || ln -s "$LAUNCHER/init_dist/assets" "$DATA/assets"
             [ -e "$DATA/node_modules" ] || ln -s "$LAUNCHER/init_dist/node_modules" "$DATA/node_modules"
             # mods.json is regenerated every launch: the versioned
-            # template plus the nix-vendored auth mod's entry path.
+            # template plus the nix-vendored mods' entry paths. The cors
+            # mod lets the browser viewer on :8080 reach this server's
+            # API across origins.
             ${pkgs.jq}/bin/jq --arg auth "${serverMods}/node_modules/screepsmod-auth/index.js" \
-              '.mods += [$auth]' ${./server/mods.json} > "$DATA/mods.json.tmp"
+              --arg cors "${serverMods}/node_modules/screepsmod-cors/index.js" \
+              '.mods += [$auth, $cors]' ${./server/mods.json} > "$DATA/mods.json.tmp"
             mv -f "$DATA/mods.json.tmp" "$DATA/mods.json"
             # Seed the world database on first run (screeps init's job).
             # -s: also replace a 0-byte stub left by a failed GUI launch.
@@ -756,8 +764,8 @@
 
         # Push main.js to the private server (default http://127.0.0.1:21025),
         # self-provisioning: if signin fails it registers the account via
-        # screepsmod-auth and retries; after deploy it auto-places Spawn1 if
-        # the account owns nothing. Credentials come from env vars, or from
+        # screepsmod-auth and retries. Spawn placement is the player's
+        # act, in the viewer. Credentials come from env vars, or from
         # age-encrypted secrets/SCREEPS_LOCAL_CREDS containing one line
         # "username:password":
         #   secrix create secrets/SCREEPS_LOCAL_CREDS -i <your-key> -r "$(cat <your-key>.pub)"
@@ -826,70 +834,6 @@
                 -H "X-Token: $TOKEN" -H "Content-Type: application/json" --data @-
             echo
             echo "deployed main.js to $URL (branch 'default')"
-
-            # Auto-spawn: if the account owns nothing yet, place Spawn1.
-            # place-spawn demands a room that exists in db.rooms AND has
-            # an unowned controller (the server's world-start-room falls
-            # back to W5N5, a controller-less center room). No HTTP
-            # endpoint exposes controller ownership, so read candidates
-            # from the world db and try them in order.
-            STATUS=$($CURL -sS -H "X-Token: $TOKEN" "$URL/api/user/world-status" \
-              | $JQ -r '.status // empty')
-            echo "world-status: $STATUS"
-            if [ "$STATUS" = "lost" ]; then
-              # Owns objects but no spawn+controller pair (spawn destroyed,
-              # or leftovers from an earlier session). Respawn releases the
-              # old objects and resets the account to "empty".
-              $CURL -sS -X POST -H "X-Token: $TOKEN" "$URL/api/user/respawn" >/dev/null
-              STATUS=$($CURL -sS -H "X-Token: $TOKEN" "$URL/api/user/world-status" \
-                | $JQ -r '.status // empty')
-              echo "respawned — world-status now: $STATUS"
-            fi
-            if [ "$STATUS" = "empty" ]; then
-              if [ -n "''${SCREEPS_LOCAL_ROOM:-}" ]; then
-                CANDIDATES="$SCREEPS_LOCAL_ROOM"
-              else
-                DATA="''${SCREEPS_DATA_DIR:-$(${pkgs.git}/bin/git rev-parse --show-toplevel)/.server-data}"
-                CANDIDATES=$($JQ -r '.collections[] | select(.name == "rooms.objects")
-                  | .data[]
-                  | select(.type == "controller"
-                           and ((.user // "") == "")
-                           and ((.reservation // null) == null))
-                  | .room' "$DATA/db.json")
-              fi
-              PLACED=
-              for ROOM in $CANDIDATES; do
-                TERRAIN=$($CURL -sS "$URL/api/game/room-terrain?room=$ROOM&encoded=true" \
-                  | $JQ -r '.terrain[0].terrain')
-                IDX=$(${pkgs.gawk}/bin/awk -v s="$TERRAIN" 'BEGIN {
-                  for (d = 0; d <= 1250; d++) for (k = 1; k >= -1; k -= 2) {
-                    i = 1275 + d * k
-                    if (i < 0 || i >= 2500) continue
-                    ch = substr(s, i + 1, 1); x = i % 50; y = int(i / 50)
-                    # 0 = plain, 2 = swamp (buildable); keep off the room edges
-                    if ((ch == "0" || ch == "2") && x > 2 && x < 47 && y > 2 && y < 47) {
-                      print i; exit
-                    }
-                  }
-                }')
-                [ -z "$IDX" ] && continue
-                X=$((IDX % 50)); Y=$((IDX / 50))
-                RESULT=$($CURL -sS -X POST "$URL/api/game/place-spawn" \
-                  -H "X-Token: $TOKEN" -H "Content-Type: application/json" \
-                  --data "$($JQ -n --arg r "$ROOM" --argjson x "$X" --argjson y "$Y" \
-                    '{room: $r, x: $x, y: $y, name: "Spawn1"}')")
-                if [ "$(printf '%s' "$RESULT" | $JQ -r '.ok // empty')" = "1" ]; then
-                  echo "auto-placed Spawn1 in $ROOM at ($X,$Y)"
-                  PLACED=1
-                  break
-                fi
-                echo "place-spawn in $ROOM refused: $RESULT — trying next room" >&2
-              done
-              if [ -z "$PLACED" ]; then
-                echo "error: auto-spawn failed — no candidate room accepted a spawn" >&2
-                exit 1
-              fi
-            fi
           '');
         };
 
