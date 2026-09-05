@@ -22,6 +22,8 @@ export type TerrainTile = { x: number; y: number; type: "wall" | "swamp" };
 
 export class Api {
   private token = "";
+  private email = "";
+  private password = "";
 
   constructor(public readonly base: string) {}
 
@@ -37,7 +39,7 @@ export class Api {
     this.token = token;
   }
 
-  private async req<T>(path: string, init?: RequestInit): Promise<T> {
+  private async req<T>(path: string, init?: RequestInit, retried = false): Promise<T> {
     const headers = new Headers(init?.headers);
     headers.set("Content-Type", "application/json");
     if (this.token) {
@@ -48,6 +50,13 @@ export class Api {
     const rotated = res.headers.get("x-token");
     if (rotated) this.token = rotated;
     if (!res.ok) {
+      // The server expires tokens 60 seconds after issue, so an idle
+      // page's next request is unauthorized: sign in again and retry
+      // the request once.
+      if (res.status === 401 && this.email && !retried) {
+        await this.signin(this.email, this.password);
+        return this.req<T>(path, init, true);
+      }
       throw new Error(`${path}: HTTP ${res.status} ${await res.text()}`);
     }
     return (await res.json()) as T;
@@ -58,8 +67,11 @@ export class Api {
     const res = await this.req<{ ok: number; token: string }>(
       "/api/auth/signin",
       { method: "POST", body },
+      true,
     );
     this.token = res.token;
+    this.email = email;
+    this.password = password;
   }
 
   me(): Promise<UserInfo> {
