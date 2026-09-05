@@ -69,7 +69,7 @@
 
       tsSrc = pkgs.runCommand "dox-populi-ts-src" { } ''
         mkdir -p $out/vendor
-        cp -r ${./shell} $out/shell
+        cp -r ${./harness} $out/harness
         cp -r ${generated} $out/generated
         cp ${typed-screeps}/dist/index.d.ts $out/vendor/screeps.d.ts
         cp ${./tsconfig.json} $out/tsconfig.json
@@ -78,9 +78,10 @@
       main = pkgs.stdenv.mkDerivation {
         name = "dox-populi-main";
         src = tsSrc;
-        nativeBuildInputs = [ pkgs.esbuild ];
+        nativeBuildInputs = [ pkgs.esbuild pkgs.typescript ];
         buildPhase = ''
-          esbuild shell/main.ts --bundle --format=cjs --platform=node \
+          tsc --noEmit -p tsconfig.json
+          esbuild harness/main.ts --bundle --format=cjs --platform=node \
             --outfile=main.js
         '';
         installPhase = ''
@@ -89,14 +90,14 @@
         '';
       };
 
-      # Raider brain (dox/invader spec + shell/invader.ts); apps.server
+      # Raider brain (dox/invader spec + harness/invader.ts); apps.server
       # seeds it as the "raiders" NPC user's users.code.
       invaderMain = pkgs.stdenv.mkDerivation {
         name = "dox-populi-invader-main";
         src = tsSrc;
         nativeBuildInputs = [ pkgs.esbuild ];
         buildPhase = ''
-          esbuild shell/invader.ts --bundle --format=cjs --platform=node \
+          esbuild harness/invader.ts --bundle --format=cjs --platform=node \
             --outfile=invader.js
         '';
         installPhase = ''
@@ -113,7 +114,7 @@
         src = tsSrc;
         nativeBuildInputs = [ pkgs.esbuild ];
         buildPhase = ''
-          esbuild shell/raidmod.ts --bundle --format=cjs --platform=node \
+          esbuild harness/raidmod.ts --bundle --format=cjs --platform=node \
             --outfile=raidmod.js
         '';
         installPhase = ''
@@ -787,7 +788,7 @@
               cp "$LAUNCHER/init_dist/db.json" "$DATA/db.json"
               chmod u+w "$DATA/db.json"
               # Seed a dedicated NPC user ("raiders") with the raider
-              # brain (dox/invader → shell/invader.ts → invaderMain).
+              # brain (dox/invader → harness/invader.ts → invaderMain).
               # Not uid 2: the engine drives user-2 creeps itself and
               # never runs its users.code, and uid 2 owns a stock
               # stronghold that muddies combat probes. The doc mirrors a

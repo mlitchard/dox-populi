@@ -10,7 +10,7 @@
     "types": []
   },
   "include": [
-    "shell/**/*.ts",
+    "harness/**/*.ts",
     "generated/**/*.ts",
     "vendor/screeps.d.ts"
   ]

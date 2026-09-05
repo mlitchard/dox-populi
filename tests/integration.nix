@@ -244,9 +244,9 @@ let
   # to level 3 (towers become legal to own) and nulls safeMode, since
   # the raid mod defers any room whose safeMode is still a number.
   # Sets every source's invaderHarvested to 50000, which must match
-  # raidPolicy.goal in shell/raidmod.ts. Inserts a tower two tiles
+  # raidPolicy.goal in harness/raidmod.ts. Inserts a tower two tiles
   # southwest of the spawn holding 1000 energy, which must match
-  # towerFullEnergy in shell/raidmod.ts; the insert is skipped when a
+  # towerFullEnergy in harness/raidmod.ts; the insert is skipped when a
   # tower already exists, so the retry loop can't stack towers.
   armWarConditions = writeShellScript "arm-war-conditions" ''
     set -euo pipefail
@@ -352,7 +352,7 @@ let
     echo "$OUT" | grep -o "FORENSICS:.*" || echo "$OUT"
   '';
 
-  # stats.combat.damageTaken is a running total the shell builds by
+  # stats.combat.damageTaken is a running total the harness builds by
   # diffing hits each tick, so damage that lands and is healed within
   # a single tick still counts.
   readDamageTaken = writeShellScript "read-damage-taken" ''
@@ -441,7 +441,7 @@ testers.runNixOSTest {
 
     # The raid mod is loaded from boot via mods.json, but it only
     # raids rooms holding a fully loaded tower (raidPolicy.minTowers
-    # and towerFullEnergy in shell/raidmod.ts), so the tutorial
+    # and towerFullEnergy in harness/raidmod.ts), so the tutorial
     # subtests run undisturbed until the arming write inserts that
     # tower.
 
@@ -585,22 +585,22 @@ testers.runNixOSTest {
                 print(machine.succeed("journalctl -u screeps --no-pager | tail -n 100"))
                 raise Exception("timed out arming the war conditions via the CLI")
             time.sleep(5)
-        # Waiting until the shell reports RCL 3 proves the world
+        # Waiting until the harness reports RCL 3 proves the world
         # accepted the write.
         deadline = time.time() + 120
         while True:
             status, out = machine.execute("${pollControllerLevel3} 2>&1")
             print(f">>> poll: {out.strip()}")
             if status == 0:
-                print(">>> SUCCESS: shell observes RCL 3")
+                print(">>> SUCCESS: harness observes RCL 3")
                 break
             if time.time() > deadline:
                 print(">>> TIMEOUT — server log tail for diagnosis:")
                 print(machine.succeed("journalctl -u screeps --no-pager | tail -n 100"))
-                raise Exception("timed out waiting for the shell to observe the seeded RCL 3")
+                raise Exception("timed out waiting for the harness to observe the seeded RCL 3")
             time.sleep(2)
 
-    with subtest("shell observes the seeded tower, standing and full"):
+    with subtest("harness observes the seeded tower, standing and full"):
         # These polls prove the brain sees the seeded tower:
         # stats.towersBuilt counts owned towers and stats.towers
         # reports their energy.
@@ -609,12 +609,12 @@ testers.runNixOSTest {
             status, out = machine.execute("${pollTowerBuilt} 2>&1")
             print(f">>> poll: {out.strip()}")
             if status == 0:
-                print(">>> SUCCESS: shell observes the tower")
+                print(">>> SUCCESS: harness observes the tower")
                 break
             if time.time() > deadline:
                 print(">>> TIMEOUT — server log tail for diagnosis:")
                 print(machine.succeed("journalctl -u screeps --no-pager | tail -n 100"))
-                raise Exception("timed out waiting for the shell to observe the seeded tower")
+                raise Exception("timed out waiting for the harness to observe the seeded tower")
             time.sleep(2)
         deadline = time.time() + 180
         while True:

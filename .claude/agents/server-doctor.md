@@ -42,7 +42,7 @@ engine children), started with `nix run .#server`.
 
 ## Rules
 - Diagnose and report; fix runtime state, not source. Code/flake fixes go
-  to shell-hands / spec-author / nix-pipeline via your report.
+  to harness-hands / spec-author / nix-pipeline via your report.
 - `nix run .#reset-local` DESTROYS the world — only with explicit user
   approval. `nix run .#stop` (state preserved) is the safe reset.
 - Never decrypt or print secrets. Credentials come from env or the user's

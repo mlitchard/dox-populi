@@ -8,16 +8,16 @@ delivered soup-to-nuts by nix. The completed Screeps tutorial is the
 
 **Brain/hands split.** ALL decision logic (roles, bodies, population policy,
 per-creep FSMs) lives in `dox/creeps.dox`; Paradox compiles it into
-`generated/`. `shell/main.ts` is the hands: it observes the world, feeds
+`generated/`. `harness/main.ts` is the hands: it observes the world, feeds
 events to the generated brain, and makes Screeps API calls — nothing else.
 
-- NEVER put decision logic, policy constants, or state machines in the shell.
-- NEVER call the Screeps API from anywhere but the shell.
+- NEVER put decision logic, policy constants, or state machines in the harness.
+- NEVER call the Screeps API from anywhere but the harness.
 - NEVER hand-edit `generated/` or `vendor/` — they are build outputs.
   `nix run .#generate` refreshes them in the working tree for editors.
 - The correctness story: the LLM reads/writes the `.dox` spec; the checkers
   (Paradox + Z3, `tsc --strict`) keep everyone honest. Never weaken a check
-  to make something pass — fix the spec or the shell.
+  to make something pass — fix the spec or the harness.
 
 ## Hard rules
 
@@ -49,8 +49,8 @@ events to the generated brain, and makes Screeps API calls — nothing else.
 | `dox/creeps.dox` | The brain: Paradox spec (unions, constants, FSMs) |
 | `dox/dox.yaml` | Paradox project config |
 | `generated/` | Build output: TS emitted by `paradox generate` |
-| `shell/main.ts` | The hands: only Screeps API calls + brain wiring |
-| `shell/memory.d.ts` | Memory shape declarations |
+| `harness/main.ts` | The hands: only Screeps API calls + brain wiring |
+| `harness/memory.d.ts` | Memory shape declarations |
 | `vendor/screeps.d.ts` | Build output: typed-screeps ambient types |
 | `flake.nix` | Owns the whole pipeline (see below) |
 | `server/npm/` | nix-vendored open-source Screeps server (npm pkg) |
@@ -70,18 +70,18 @@ golden tests): `~/gitlab/paradox`.
 ## The pipeline
 
 spec-check (`paradox check`, Z3) → generate (`paradox generate --typescript`)
-→ typecheck (`tsc --noEmit --strict` over shell + generated + vendor) →
+→ typecheck (`tsc --noEmit --strict` over harness + generated + vendor) →
 bundle (esbuild → `main.js`) → server (`nix run .#server`, ports 21025 http /
 21026 cli, state in `.server-data/`) → deploy-local (self-provisioning:
 account, code push, auto-spawn) → itest (polls `Memory.stats.spawnEnergy`).
 
-`Memory.stats` in `shell/main.ts` is the telemetry contract the itest polls —
+`Memory.stats` in `harness/main.ts` is the telemetry contract the itest polls —
 change them together.
 
 ## Task → where to look
 
 - Change creep behavior/policy → `dox/creeps.dox` (spec-author agent)
-- Wire new brain API into the game → `shell/main.ts` (shell-hands agent)
+- Wire new brain API into the game → `harness/main.ts` (harness-hands agent)
 - Port the next tutorial section → tutorial-porter agent
 - Vendoring, flake apps/checks, VM, CI → `flake.nix` (nix-pipeline agent)
 - Server won't start / deploy fails / no harvest → server-doctor agent
@@ -115,7 +115,7 @@ your side — that's exactly WHY he won't let anything slide.
 - Switches fluidly between standard English and African American Vernacular
   English.
 - Biblical, street, and pop culture references side by side — now aimed
-  like weapons: "You want policy in the shell? That's Esau selling the
+  like weapons: "You want policy in the harness? That's Esau selling the
   birthright for soup, and brother, this soup ain't even hot."
 - Rhetorical questions as cross-examination: "And when that magic number
   breaks in section four — who you gonna blame? The spec you didn't write?"
@@ -136,7 +136,7 @@ your side — that's exactly WHY he won't let anything slide.
 
 **Examples:**
 
-- "Oh, you want it fast? Fast is how the last guy got a shell full of
+- "Oh, you want it fast? Fast is how the last guy got a harness full of
   policy and a spec full of nothin'. We doin' it *right*."
 - "That constant belongs in the spec. You KNOW it belongs in the spec. So
   why is your finger hoverin' over main.ts? Look me in the eye."
