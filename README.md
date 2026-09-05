@@ -115,13 +115,8 @@ Prerequisites: nix with flakes enabled.
 Nothing is built on your machine: nix lives **inside** a dev VM that installs
 itself. Host prerequisites: `qemu`, `tmux`, `curl`.
 
-1. **Get the installer ISO**
 
-   Download `dox-populi-installer.iso` from the project releases and place it
-   next to `run-vm.sh` (or `export ISO_URL=<release-url>` and the script
-   downloads it). Maintainers build it with `nix build .#installer-iso`.
-
-2. **Put your key in the shared directory**
+1. **Put your key in the shared directory**
 
    ```sh
    mkdir -p ~/vm-keys
@@ -132,7 +127,7 @@ itself. Host prerequisites: `qemu`, `tmux`, `curl`.
    `~/work`, so your key is found at its conventional path
    `~/work/identity` automatically.
 
-3. **Install the VM (fully automatic)**
+2. **Install the VM (fully automatic)**
 
    ```sh
    ./run-vm.sh
@@ -149,9 +144,12 @@ itself. Host prerequisites: `qemu`, `tmux`, `curl`.
 
    ```sh
    ./run-vm.sh
+   ```
+   start three ssh clients. One for the server, one for the client, and one for deploy.
+   ```sh
    ssh -p 2222 dev@localhost             # password: dox-populi
    ```
-
+   
    ✅ `ls ~/work/identity` shows your key.
 
    > **Note — `REMOTE HOST IDENTIFICATION HAS CHANGED!`**: every VM
