@@ -5,6 +5,7 @@ import { RoomState } from "./state";
 import { Feed } from "./feed";
 import { createRoomView } from "./render";
 import { Inspector } from "./inspect";
+import { GameConsole } from "./console";
 
 function el<T extends HTMLElement>(id: string): T {
   const found = document.getElementById(id);
@@ -68,6 +69,20 @@ async function start(server: string, email: string, password: string): Promise<v
     view,
     state,
   );
+  const gameConsole = new GameConsole(
+    {
+      live: el<HTMLElement>("console-live"),
+      log: el<HTMLElement>("console-log"),
+      form: el<HTMLFormElement>("console-form"),
+      input: el<HTMLInputElement>("console-input"),
+      repl: el<HTMLElement>("console-repl"),
+      code: el<HTMLElement>("console-code"),
+      tabLive: el<HTMLButtonElement>("tab-live"),
+      tabConsole: el<HTMLButtonElement>("tab-console"),
+      tabCode: el<HTMLButtonElement>("tab-code"),
+    },
+    api,
+  );
 
   // The game's own onboarding: an empty world puts you in placement
   // mode — click a tile to place Spawn1; a lost colony offers respawn
@@ -121,6 +136,10 @@ async function start(server: string, email: string, password: string): Promise<v
   const feed = new Feed(api.wsUrl, {
     onTokenRotated: (token) => api.adoptToken(token),
     onChannel: (channel, payload, first) => {
+      if (channel === `user:${me._id}/console`) {
+        gameConsole.receive(payload as Parameters<GameConsole["receive"]>[0]);
+        return;
+      }
       if (channel !== `room:${room}`) return;
       if (!placing) stage(first ? "snapshot received" : "live");
       state.apply(payload as Parameters<RoomState["apply"]>[0], first);
@@ -142,6 +161,7 @@ async function start(server: string, email: string, password: string): Promise<v
   });
   await feed.connect(api.currentToken);
   feed.subscribe(`room:${room}`);
+  feed.subscribe(`user:${me._id}/console`);
   if (!placing) stage("subscribed, waiting for first snapshot…");
 }
 

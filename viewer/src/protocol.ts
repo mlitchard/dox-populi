@@ -137,6 +137,20 @@ export class Api {
     }
   }
 
+  async code(): Promise<Record<string, string>> {
+    const res = await this.req<{ modules?: Record<string, string> }>(
+      "/api/user/code",
+    );
+    return res.modules ?? {};
+  }
+
+  async console(expression: string): Promise<void> {
+    await this.req("/api/user/console", {
+      method: "POST",
+      body: JSON.stringify({ expression }),
+    });
+  }
+
   async findUser(id: string): Promise<UserInfo | undefined> {
     const res = await this.req<{ user?: UserInfo }>(
       `/api/user/find?id=${encodeURIComponent(id)}`,
