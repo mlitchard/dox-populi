@@ -1,6 +1,6 @@
 // Wrapper around @screeps/renderer: metadata compilation, world
-// configuration, and the fixed whole-room camera. Config values come
-// from the renderer repo's demo (docs/viewer-contract.md).
+// configuration, and the room camera (wheel zoom, drag pan). Config
+// values come from the renderer repo's demo (docs/viewer-contract.md).
 
 import * as rendererPkg from "@screeps/renderer";
 // The metadata dist is an IIFE with no module exports: importing it
@@ -44,12 +44,20 @@ export const ROOM_TILES = 50;
 const CELL_SIZE = 100;
 export const WORLD_SIZE = ROOM_TILES * CELL_SIZE;
 
+const MAX_ZOOM_IN = 20;
+
 export interface RoomView {
   applyState(state: Record<string, unknown>, tickSeconds: number): void;
-  // Screen pixels → room tile, exact because the camera is fixed to
-  // show the whole room at a known scale.
+  // Screen pixels → room tile under the current pan and zoom.
   tileAt(px: number, py: number): { x: number; y: number } | undefined;
-  scale: number;
+  // Screen-pixel square of a tile, for the hover highlight.
+  tileRect(tile: { x: number; y: number }): {
+    left: number;
+    top: number;
+    size: number;
+  };
+  // Resize the canvas to a new square side, keeping the framing.
+  setSize(side: number): void;
   release(): void;
 }
 
@@ -75,7 +83,7 @@ export async function createRoomView(
   }
   console.log("constructing GameRenderer…");
 
-  const side = Math.min(container.clientWidth, container.clientHeight);
+  let side = Math.min(container.clientWidth, container.clientHeight);
   const renderer = new GameRenderer({
     size: { width: side, height: side },
     resourceMap,
@@ -109,19 +117,111 @@ export async function createRoomView(
   await renderer.setTerrain(opts.terrain);
   console.log("renderer ready");
 
-  const scale = side / WORLD_SIZE;
-  renderer.zoomLevel = scale;
-  renderer.cameraPosition = { x: WORLD_SIZE / 2, y: WORLD_SIZE / 2 };
+  // zoomLevel is the stage scale: screen pixels per world pixel
+  // (engine/src/lib/GameRenderer.js). The fit value shows the whole
+  // room; the stage stays at the origin until the user pans.
+  const stage = renderer.app.stage;
+  const fitZoom = (): number => side / WORLD_SIZE;
+  renderer.zoomLevel = fitZoom();
+
+  // Keep the zoom between whole-room and MAX_ZOOM_IN×, and keep the
+  // room covering the canvas so no empty space scrolls into view.
+  const clampView = (): void => {
+    const zoom = Math.min(
+      fitZoom() * MAX_ZOOM_IN,
+      Math.max(fitZoom(), stage.scale.x),
+    );
+    if (zoom !== stage.scale.x) renderer.zoomLevel = zoom;
+    const extent = WORLD_SIZE * zoom;
+    for (const axis of ["x", "y"] as const) {
+      const min = Math.min(0, side - extent);
+      stage.position[axis] = Math.max(min, Math.min(0, stage.position[axis]));
+    }
+  };
+
+  container.addEventListener(
+    "wheel",
+    (ev) => {
+      ev.preventDefault();
+      const rect = container.getBoundingClientRect();
+      const factor = ev.deltaY < 0 ? 1.15 : 1 / 1.15;
+      renderer.zoomTo(
+        stage.scale.x * factor,
+        ev.clientX - rect.left,
+        ev.clientY - rect.top,
+      );
+      clampView();
+    },
+    { passive: false },
+  );
+
+  // Drag pans; a drag also fires a click on release, which this
+  // swallows before the placement and inspector handlers (registered
+  // later, so they run after this one).
+  let dragging = false;
+  let dragMoved = false;
+  let startX = 0;
+  let startY = 0;
+  let lastX = 0;
+  let lastY = 0;
+  container.addEventListener("pointerdown", (ev) => {
+    if (ev.button !== 0) return;
+    dragging = true;
+    dragMoved = false;
+    startX = lastX = ev.clientX;
+    startY = lastY = ev.clientY;
+    container.setPointerCapture(ev.pointerId);
+  });
+  container.addEventListener("pointermove", (ev) => {
+    if (!dragging) return;
+    if (!dragMoved && Math.hypot(ev.clientX - startX, ev.clientY - startY) > 4) {
+      dragMoved = true;
+    }
+    if (dragMoved) {
+      renderer.pan(ev.clientX - lastX, ev.clientY - lastY);
+      clampView();
+    }
+    lastX = ev.clientX;
+    lastY = ev.clientY;
+  });
+  const endDrag = (): void => {
+    dragging = false;
+  };
+  container.addEventListener("pointerup", endDrag);
+  container.addEventListener("pointercancel", endDrag);
+  container.addEventListener("click", (ev) => {
+    if (dragMoved) {
+      ev.stopImmediatePropagation();
+      dragMoved = false;
+    }
+  });
 
   return {
     applyState: (state, tickSeconds) => renderer.applyState(state, tickSeconds),
     tileAt(px, py) {
-      const x = Math.floor(px / scale / CELL_SIZE);
-      const y = Math.floor(py / scale / CELL_SIZE);
+      const x = Math.floor((px - stage.position.x) / stage.scale.x / CELL_SIZE);
+      const y = Math.floor((py - stage.position.y) / stage.scale.y / CELL_SIZE);
       if (x < 0 || y < 0 || x >= ROOM_TILES || y >= ROOM_TILES) return undefined;
       return { x, y };
     },
-    scale,
+    tileRect(tile) {
+      const size = stage.scale.x * CELL_SIZE;
+      return {
+        left: stage.position.x + tile.x * size,
+        top: stage.position.y + tile.y * size,
+        size,
+      };
+    },
+    setSize(newSide) {
+      if (!newSide || Math.abs(newSide - side) < 1) return;
+      const factor = newSide / side;
+      renderer.resize({ width: newSide, height: newSide });
+      renderer.zoomLevel = stage.scale.x * factor;
+      stage.position.x *= factor;
+      stage.position.y *= factor;
+      side = newSide;
+      clampView();
+    },
     release: () => renderer.release(),
   };
 }

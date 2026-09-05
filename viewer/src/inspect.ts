@@ -6,8 +6,6 @@ import type { RoomState } from "./state";
 import type { RoomView } from "./render";
 import type { RoomObject } from "./protocol";
 
-const CELL_SIZE = 100;
-
 function fieldRows(obj: RoomObject, state: RoomState): string[] {
   const rows: string[] = [];
   const owner = typeof obj.user === "string" ? state.users[obj.user] : undefined;
@@ -67,12 +65,12 @@ export class Inspector {
   }
 
   private moveHighlight(tile: { x: number; y: number }): void {
-    const px = this.view.scale * CELL_SIZE;
+    const rect = this.view.tileRect(tile);
     this.highlight.style.display = "block";
-    this.highlight.style.width = `${px}px`;
-    this.highlight.style.height = `${px}px`;
-    this.highlight.style.left = `${tile.x * px}px`;
-    this.highlight.style.top = `${tile.y * px}px`;
+    this.highlight.style.width = `${rect.size}px`;
+    this.highlight.style.height = `${rect.size}px`;
+    this.highlight.style.left = `${rect.left}px`;
+    this.highlight.style.top = `${rect.top}px`;
   }
 
   // Re-render the panel each tick so the selected tile shows live data.

@@ -129,6 +129,57 @@ async function start(server: string, email: string, password: string): Promise<v
     stage("colony lost — respawn to place again");
   }
 
+  // The drag handles change the flex layout; the observer follows the
+  // room cell and keeps the canvas fitted to it.
+  new ResizeObserver(() => {
+    view.setSize(Math.min(container.clientWidth, container.clientHeight));
+  }).observe(container);
+
+  const vsplit = el<HTMLElement>("vsplit");
+  const mainRow = el<HTMLElement>("main");
+  const roomWrap = el<HTMLElement>("room-wrap");
+  vsplit.addEventListener("pointerdown", (ev) => {
+    ev.preventDefault();
+    vsplit.setPointerCapture(ev.pointerId);
+    const onMove = (mv: PointerEvent): void => {
+      const rect = mainRow.getBoundingClientRect();
+      const pct = Math.min(85, Math.max(30, ((mv.clientX - rect.left) / rect.width) * 100));
+      roomWrap.style.flexBasis = `${pct}%`;
+    };
+    const onUp = (): void => {
+      vsplit.removeEventListener("pointermove", onMove);
+      vsplit.removeEventListener("pointerup", onUp);
+    };
+    vsplit.addEventListener("pointermove", onMove);
+    vsplit.addEventListener("pointerup", onUp);
+  });
+
+  const hsplit = el<HTMLElement>("hsplit");
+  const consoleLog = el<HTMLElement>("console-log");
+  const consoleLive = el<HTMLElement>("console-live");
+  const consoleCode = el<HTMLElement>("console-code");
+  hsplit.addEventListener("pointerdown", (ev) => {
+    ev.preventDefault();
+    hsplit.setPointerCapture(ev.pointerId);
+    const startY = ev.clientY;
+    const startH = consoleLog.getBoundingClientRect().height;
+    const onMove = (mv: PointerEvent): void => {
+      const h = Math.min(
+        window.innerHeight * 0.6,
+        Math.max(60, startH + (startY - mv.clientY)),
+      );
+      consoleLog.style.height = `${h}px`;
+      consoleLive.style.height = `${h}px`;
+      consoleCode.style.height = `${h}px`;
+    };
+    const onUp = (): void => {
+      hsplit.removeEventListener("pointermove", onMove);
+      hsplit.removeEventListener("pointerup", onUp);
+    };
+    hsplit.addEventListener("pointermove", onMove);
+    hsplit.addEventListener("pointerup", onUp);
+  });
+
   view.applyState(state.toRenderState(), 0);
 
   let lastTickAt = 0;

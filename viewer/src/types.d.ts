@@ -23,9 +23,15 @@ interface RendererInstance {
   init(container: HTMLElement): Promise<void>;
   setTerrain(terrain: Array<Record<string, unknown>>): Promise<void> | void;
   applyState(state: Record<string, unknown>, tickDuration: number): void;
-  resize(): void;
+  resize(newSize?: { width: number; height: number }): void;
   release(): void;
   zoomLevel: number;
-  cameraPosition: { x: number; y: number };
   pan(x: number, y: number): void;
+  zoomTo(value: number, x: number, y: number): void;
+  app: {
+    stage: {
+      position: { x: number; y: number };
+      scale: { x: number; y: number };
+    };
+  };
 }
