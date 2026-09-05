@@ -69,6 +69,13 @@ nodes are what the path length varies over. A node never silently
 drops the reader into the next stage — only EXIT does that, and it
 does it out loud.
 
+- TRENCHES slot — every stage carries one. Hand-work on code the
+  agent wrote for this stage: the student reshapes real lines by hand,
+  then runs the stage's checks and witnesses that behavior held. The
+  craft beat of the throughline — the code becomes yours by working
+  it — so it sits on every path, in its own file linked from the
+  stage's exercises.
+
 ## Edges carry intent
 
 A bare link makes a maze; a labeled link makes a path. Every edge

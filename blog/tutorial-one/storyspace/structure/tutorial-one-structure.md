@@ -50,10 +50,17 @@ EXIT — blog/tutorial-one/postscript.md
 ## Paths
 
 - fast:            ROOT → EXIT   (skips the port node)
-- accessibility:   ROOT → arrival → build → EXIT
 - full:            ROOT → port → arrival → build → EXIT
 
 The gui-bot challenge is a link off the build node, not a path step.
+
+## Trenches slot (integral, every stage has one)
+
+Tutorial-one's trenches work: regroup the repeated attribute prefixes
+in vm/module.nix into nested attribute sets
+and witness the VM still boots. The draft lives in
+fast-path/exercises.md ("In the trenches") and moves to its own file,
+fast-path/trenches.md, linked from the exercises. Wax on, wax off.
 
 ## Exercise index (always on screen)
 
@@ -80,6 +87,10 @@ From build:
   → down to the protocol contract                   → docs/viewer-contract.md (dig)
   → down to the viewer code                         → viewer/src/ (dig)
   → on to the exercises                             → EXIT        (meander)
+
+## Backlog
+
+Candidate future nodes and edge ideas: nodes-backlog.md.
 
 ## Open
 
