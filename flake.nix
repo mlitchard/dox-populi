@@ -76,8 +76,9 @@
       main = pkgs.stdenv.mkDerivation {
         name = "dox-populi-main";
         src = tsSrc;
-        nativeBuildInputs = [ pkgs.esbuild ];
+        nativeBuildInputs = [ pkgs.esbuild pkgs.typescript ];
         buildPhase = ''
+          tsc --noEmit -p tsconfig.json
           esbuild harness/main.ts --bundle --format=cjs --platform=node \
             --outfile=main.js
         '';
