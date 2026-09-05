@@ -86,6 +86,23 @@
           cp main.js $out/
         '';
       };
+      # JSON payloads for the server's /api/user/code endpoint, built ahead
+      # of time so deploy-local only signs in and posts one file.
+      mainPayload = pkgs.runCommand "main-js-payload.json" { } ''
+        ${pkgs.jq}/bin/jq -n --rawfile code ${main}/main.js \
+          '{branch: "default", modules: {main: $code}}' > $out
+      '';
+      tutorialPayload = pkgs.writeText "tutorial-js-payload.json" (builtins.toJSON {
+        branch = "default";
+        modules = pkgs.lib.mapAttrs'
+          (name: _: {
+            name = pkgs.lib.removeSuffix ".js" name;
+            value = builtins.readFile (./tutorial-js/section1 + "/${name}");
+          })
+          (pkgs.lib.filterAttrs
+            (name: type: type == "regular" && pkgs.lib.hasSuffix ".js" name)
+            (builtins.readDir ./tutorial-js/section1));
+      });
       # secrix CLI as a devShell command (llm-core pattern: tool packages
       # included in devShell packages, not reached via `nix run`).
       secrixApp = secrix.secrix self;
@@ -501,7 +518,7 @@
           echo "  secrix create|edit|rekey ...  — manage encrypted secrets"
           echo "  nix run .#generate            — write ./generated + ./vendor for editors"
           echo "  nix run .#server              — run the private Screeps server (nix-vendored — no purchase needed)"
-          echo "  nix run .#deploy-local        — push main.js to the private server (self-provisioning)"
+          echo "  nix run .#deploy-local        — push main.js (or -- tutorial-js) to the private server"
           echo "  nix run .#client              — browser viewer on :8080 (open-source renderer, no purchase)"
           echo "  nix run .#cli                 — connect to the private server CLI (21026)"
           echo "  nix run .#stop                — stop the server (world kept)"
@@ -763,8 +780,10 @@
           '');
         };
 
-        # Push main.js to the private server (default http://127.0.0.1:21025),
-        # self-provisioning: if signin fails it registers the account via
+        # Push game code to the private server (default http://127.0.0.1:21025):
+        # the built main.js, or with argument "tutorial-js" every .js file in
+        # tutorial-js/section1 as its own module. Self-provisioning: if signin
+        # fails it registers the account via
         # screepsmod-auth and retries. Spawn placement is the player's
         # act, in the viewer. Credentials come from env vars, or from
         # age-encrypted secrets/SCREEPS_LOCAL_CREDS containing one line
@@ -774,6 +793,13 @@
           type = "app";
           program = toString (pkgs.writeShellScript "deploy-local" ''
             set -euo pipefail
+            SRC="''${1:-main.js}"
+            case "$SRC" in
+              main.js)     PAYLOAD=${mainPayload} ;;
+              tutorial-js) PAYLOAD=${tutorialPayload} ;;
+              *) echo "usage: nix run .#deploy-local -- [main.js|tutorial-js]" >&2
+                 exit 1 ;;
+            esac
             URL="''${SCREEPS_LOCAL_URL:-http://127.0.0.1:21025}"
             # Identity for secrix decryption: SCREEPS_IDENTITY override,
             # else the conventional location of the USER-PROVIDED key.
@@ -829,12 +855,11 @@
               exit 1
             fi
 
-            $JQ -n --arg code "$(cat ${main}/main.js)" \
-              '{branch: "default", modules: {main: $code}}' \
-            | $CURL --fail-with-body -sS -X POST "$URL/api/user/code" \
-                -H "X-Token: $TOKEN" -H "Content-Type: application/json" --data @-
+            $CURL --fail-with-body -sS -X POST "$URL/api/user/code" \
+                -H "X-Token: $TOKEN" -H "Content-Type: application/json" \
+                --data @"$PAYLOAD"
             echo
-            echo "deployed main.js to $URL (branch 'default')"
+            echo "deployed $SRC to $URL (branch 'default')"
           '');
         };
 
