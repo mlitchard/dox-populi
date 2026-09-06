@@ -89,6 +89,12 @@
           cp main.js $out/
         '';
       };
+      # JSON payload for the server's /api/user/code endpoint, built ahead
+      # of time so deploy-local only signs in and posts one file.
+      mainPayload = pkgs.runCommand "main-js-payload.json" { } ''
+        ${pkgs.jq}/bin/jq -n --rawfile code ${main}/main.js \
+          '{branch: "default", modules: {main: $code}}' > $out
+      '';
 
       # Raider brain (dox/invader spec + harness/invader.ts); apps.server
       # seeds it as the "raiders" NPC user's users.code.
@@ -1112,10 +1118,9 @@
               exit 1
             fi
 
-            $JQ -n --arg code "$(cat ${main}/main.js)" \
-              '{branch: "default", modules: {main: $code}}' \
-            | $CURL --fail-with-body -sS -X POST "$URL/api/user/code" \
-                -H "X-Token: $TOKEN" -H "Content-Type: application/json" --data @-
+            $CURL --fail-with-body -sS -X POST "$URL/api/user/code" \
+                -H "X-Token: $TOKEN" -H "Content-Type: application/json" \
+                --data @${mainPayload}
             echo
             echo "deployed main.js to $URL (branch 'default')"
 

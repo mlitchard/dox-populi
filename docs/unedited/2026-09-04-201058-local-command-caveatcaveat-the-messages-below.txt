@@ -1,0 +1,1402 @@
+ ▐▛███▜▌   Claude Code v2.1.223
+▝▜█████▛▘  Fable 5 · Claude Max
+  ▘▘ ▝▝    ~/gitlab/dox-populi
+
+
+❯ /clear                                                                        
+
+❯ I'm on branch tutorial-one of the dox-populi Screeps project. Get oriented    
+  from your loaded memory and the repo, then wait for my task — no tool calls   
+  or work until I state it.                                                     
+                                                                                
+  Framing: the blog is a storyspace (hypertext), not a numbered series. Each    
+  tutorial-x branch builds out its own fast path blog. We are working the fast  
+  path only. Memory's blog-storyspace.md is the current model; anywhere older   
+  memory mentions a numbered series, a post slate, or "off-series," that        
+  framing is dead.                                                              
+                                                                                
+  State on this branch:                                                         
+                                                                                
+  - The accessibility build is done and was witnessed working: a nix-vendored   
+  open-source Screeps server plus a browser viewer built on the open-sourced    
+  @screeps/renderer — the whole loop (run, deploy, place spawn, watch) runs     
+  from the VM with no purchase of the game. Code in viewer/ and flake.nix.      
+  - README.md carries the corrected Quickstart. docs/SECRIX.md covers secret    
+  create/edit. docs/viewer-contract.md holds the renderer + protocol contract.  
+  - The fast-path blog is drafted in blog/tutorial-one/storyspace/fast-path/:   
+  promise.md, narrative.md (a thin layer over README.md — README is the         
+  canonical ru is commentary over it), exercises.md. Thestoryspace model is in  
+  blog/tutorial-one/storyspace/blog-series-structure.md; this stage's map is    
+  storyspace/structure/tutorial-one-structure                                   
+                                                                                
+  Everything drafted is a candidate for my pe, I rule. Wait for my task.        
+
+● Understood. On tutorial-one, fast path only, storyspace model. Waiting for
+  your task.
+
+✻ Crunched for 2s
+
+❯ /home/mlitchard/gitlab/dox-populi/blog/tutorial-one/storyspace/fast-path/prom 
+  ise.md is condescending and trite. We've captured curiosity, now we're trying 
+  to build enthusiasm and turn it into action. these are young adults, not      
+  children.                                                                     
+
+  Read 1 file, recalled 1 memory (ctrl+o to expand)
+
+● Write(blog/tutorial-one/storyspace/fast-path/promise.md)
+  ⎿  Added 29 lines, removed 32 lines
+       1  # Promise (fast path)
+       2  
+       3 -Draft for his pen. Scope: what it takes to get the project runn
+         -ing so                                                         
+       4 -you can engage it through the browser client. Audience: someone
+         - just                                                          
+       5 -learning software engineering. Assumes you've read the manifest
+         -o                                                              
+       6 -(post zero — <!-- TODO: link -->); the link is there if you hav
+         -en't.                                                          
+       3 +Draft for his pen. Scope: get the project running and engage it
+       4 +through the browser viewer. Audience: aspirant, post-manifesto,
+       5 +ready to act. Manifesto: <!-- TODO: link -->.                  
+       6  
+       8 -## The shape of the project                                    
+       7 +## What you get                                                
+       8  
+      10 -You boot one VM. Inside it:                                    
+       9 +A Screeps colony you own end to end. The server runs in a VM on
+         + your                                                          
+      10 +machine. The viewer runs in your browser. The program driving t
+         +he                                                             
+      11 +colony is two readable files, and the checkers give you a verdi
+         +ct on                                                          
+      12 +every change you make to them.                                 
+      13  
+      12 -- a spec in Paradox (dox/creeps.dox), written with an llm, whic
+         -h the                                                          
+      13 -  checker verifies and from which Paradox generates the decisio
+         -n logic;                                                       
+      14 -- a harness in TypeScript (harness/main.ts) that makes the game
+         - calls,                                                        
+      15 -  using that generated logic;                                  
+      16 -- a private game server and a browser viewer, both built by nix
+         -. Dependencies:                                                
+      17 -  QEMU,tmux and a browser.                                     
+      14 +## The shape                                                   
+      15  
+      19 -You don't have to understand all of it to start. This path gets
+         - it                                                            
+      20 -running and lets you watch and poke at it; the deeper stories a
+         -re                                                             
+      21 -linked from the exercises for when you want them.              
+      16 +One VM. Inside it:                                             
+      17  
+      23 -## What you'll learn (skills)                                  
+      18 +- dox/creeps.dox — the spec, written with an LLM. The Paradox c
+         +hecker                                                         
+      19 +  verifies its named properties, and Paradox generates the deci
+         +sion                                                           
+      20 +  logic from it.                                               
+      21 +- harness/main.ts — the TypeScript harness that makes the game 
+         +calls,                                                         
+      22 +  using that generated logic.                                  
+      23 +- a private game server and a browser viewer, both built by nix
+         +.                                                              
+      24  
+      25 -1. How to boot the stage VM and open the dev environment.      
+      26 -2. How to run the private server and push your code to it.     
+      27 -3. How to open the browser viewer, place your spawn, and watch 
+         -the                                                            
+      28 -   harvester work.                                             
+      29 -4. How to read the two files that hold the program (the spec an
+         -d the                                                          
+      30 -   harness) well enough to change one thing and see what the ch
+         -eckers                                                         
+      31 -   say.                                                        
+      25 +Your machine needs QEMU, tmux, and a browser. Everything else i
+         +s in                                                           
+      26 +the ISO.                                                       
+      27  
+      33 -## Equipment                                                   
+      28 +## By the end                                                  
+      29  
+      35 -- A machine with QEMU and tmux.                                
+      36 -- The stage ISO: <!-- TODO: Hetzner link --> boot it; the dev  
+      37 -  environment is already inside.                               
+      30 +- The server and viewer are up, running from your VM.          
+      31 +- Your code is deployed; you've placed the spawn and watched th
+         +e                                                              
+      32 +  harvester work.                                              
+      33 +- You've changed a line of the spec and read the checkers' verd
+         +ict.                                                           
+      34  
+      39 -## Where to go                                                 
+      35 +## Start                                                       
+      36  
+      41 -- Run it: the narrative walks the steps (narrative.md).        
+      42 -- Do it yourself: the exercises (exercises.md).                
+      43 -- Want the story behind any of it: each exercise links to the s
+         -ection                                                         
+      44 -  that tells it.                                               
+      37 +- The stage ISO: <!-- TODO: Hetzner link -->. Boot it; the dev 
+      38 +  environment is inside.                                       
+      39 +- narrative.md walks the whole run.                            
+      40 +- exercises.md is the same run, done by you. Each exercise link
+         +s to                                                           
+      41 +  the section of the storyspace that tells the story behind it.
+
+● Rewritten. The draft now opens with what they own — server in their VM, viewer
+  in their browser, the program in two readable files — then moves straight to
+  action: shape, end state, start. Cut "You don't have to understand all of it
+  to start," the "What you'll learn (skills)" list (now "By the end," stated as
+  things done), and the hand-holding asides. Equipment folded into the shape
+  section; the ISO moved into Start since booting it is the first action.
+
+✻ Baked for 47s
+
+※ recap: Rewriting the fast-path blog draft promise.md on tutorial-one to respect the aspirant audience and drive action. The rewrite is done in the file, awaiting your review and pen.
+
+❯ I have a stretch goal challenge for this section, does mention of it go in    
+  the promis.md                                                                 
+
+● Yes — one line. The promise is where the reader decides the path is worth
+  their time, and a stretch goal raises the ceiling of what's on offer. Mention
+  it at the end of "By the end" or "Start" as a single sentence pointing at it;
+  the challenge itself lives in exercises.md.
+
+✻ Sautéed for 4s
+
+❯ narrative.md is trite does not add anything the readme doesn't have           
+
+● Reading narrative.md and README.md side by side, then redrafting narrative so
+  it carries only what the README can't say.
+
+  Read 2 files (ctrl+o to expand)
+
+● Write(blog/tutorial-one/storyspace/fast-path/narrative.md)
+  ⎿  Added 35 lines, removed 34 lines
+       1  # Getting it running (fast path)
+       2  
+       3 -Read README.md in it's entirety. The intent is that you get    
+       4 -to a running state quickly                                     
+       5 -Draft for his pen. The steps live in the [README](../../../../R
+         -EADME.md);                                                     
+       6 -this is the narrative over them — what each step means and why 
+         -it's                                                           
+       7 -worth your attention. Read the README's Quickstart for the exac
+         -t                                                              
+       8 -commands; read here for what you're looking at. Scope: running 
+         -the                                                            
+       9 -project and engaging it through the client. The debugging and t
+         -he                                                             
+      10 -corrections behind all of it live in the meander build node; ve
+         -rbatim                                                         
+      11 -quotes wait until the transcript is in docs/unedited and verifi
+         -ed.                                                            
+       3 +Draft for his pen. Read the README in its entirety — it is the 
+         +run:                                                           
+       4 +exact commands, a checkmark after every step. This file is the 
+       5 +commentary over it: what each command sets in motion, and what 
+         +you're                                                         
+       6 +looking at when it lands. The goal is a running state quickly. 
+         +The                                                            
+       7 +debugging and corrections behind all of it live in the meander 
+         +build                                                          
+       8 +node; verbatim quotes wait until the transcript is in docs/uned
+         +ited                                                           
+       9 +and verified.                                                  
+      10  
+      13 -## Boot into the environment                                   
+      11 +The README has two quickstarts — pick by host. Both end at the 
+         +same                                                           
+      12 +dev shell, and from there the run is three commands.           
+      13  
+      15 -The README's Quickstart is one VM and a couple of commands. The
+         - thing                                                         
+      16 -to notice: your host needs only QEMU, and everything else — the
+         - whole                                                         
+      17 -dev environment, the checkers, the server, the viewer — arrives
+         - inside                                                        
+      18 -the VM, already built. You land in a shell where the whole tool
+         -chain is                                                       
+      19 -already on the path.                                           
+      14 +## What `nix run .#server` starts                              
+      15  
+      21 -## The server is real, and yours                               
+      16 +The open-source Screeps server, built from source by nix, holdi
+         +ng a                                                           
+      17 +world of its own on your machine. Once it's up, ticks pass, sou
+         +rces                                                           
+      18 +sit ready, and the world waits for a player. State lives in    
+      19 +`.server-data/`, which is why `stop` keeps your world and      
+      20 +`reset-local` gives you a fresh one.                           
+      21  
+      23 -`nix run .#server` It is the open-source Screeps server,       
+      24 -built from source on your machine, running your own world. The 
+         -game you                                                       
+      25 -are about to watch is one you host.                            
+      22 +## What `nix run .#deploy-local` builds                        
+      23  
+      27 -## Your spec becomes the colony's operator                     
+      24 +This is where the architecture shows up. The pipeline reads    
+      25 +`dox/creeps.dox`, Paradox verifies the spec's named properties 
+         +and                                                            
+      26 +generates the decision logic, tsc typechecks `harness/main.ts` 
+         +against                                                        
+      27 +that generated code, and the bundle lands on the server as `mai
+         +n.js`.                                                         
+      28 +From then on the server calls that bundle every tick. Two files
+         + you                                                           
+      29 +can read — the spec and the harness — are now the only player i
+         +n the                                                          
+      30 +world.                                                         
+      31  
+      29 -`nix run .#deploy-local` bundles the spec and harness into the 
+         -code the                                                       
+      30 -server runs every tick. From here the colony does what the spec
+         - says —                                                        
+      31 -you wrote the orders, and now they run.                        
+      32 +## What you're watching in the viewer                          
+      33  
+      33 -## Place the spawn and watch                                   
+      34 +The viewer reads your server's socket and draws its world with 
+         +the                                                            
+      35 +open-sourced renderer. Placing the spawn is your one manual act
+         + — the                                                         
+      36 +game has always asked the player to choose that tile. Everythin
+         +g after                                                        
+      37 +the click is the spec executing: the spawn builds a harvester, 
+         +the                                                            
+      38 +harvester walks to the source, fills, walks back, delivers, and
+         + starts                                                        
+      39 +again. That loop on screen is this stage's deliverable — a     
+      40 +specification, run through the checkers, driving a live creep o
+         +n a                                                            
+      41 +server you host.                                               
+      42  
+      35 -`nix run .#client` opens the viewer. You place the spawn yourse
+         -lf, with                                                       
+      36 -a click, the way the game has always asked you to — then the ha
+         -rvester                                                        
+      37 -appears and starts its cycle: to the source, fill up, back to t
+         -he spawn,                                                      
+      38 -deliver. That loop is the whole point of this stage: a specific
+         -ation you                                                      
+      39 -wrote, running as a live creep, on hardware you own, rendered b
+         -y open                                                         
+      40 -software you built.                                            
+      41 -                                                               
+      43  ## Next
+      44  
+      44 -- Change something and see what the checkers say: the          
+      45 +- Change something and read the checkers' verdict: the         
+      46    [exercises](exercises.md).
+      46 -- How the viewer came to exist at all — the search that came up
+         - empty,                                                        
+      47 -  and the build: the meander build node.                       
+      47 +- How the viewer came to exist — the search and the build: the 
+         +meander                                                        
+      48 +  build node.                                                  
+
+● Redrafted. The step-by-step restatement is gone; each section now answers a
+  question the README leaves open: what the server is doing before any code
+  arrives (and why stop and reset-local differ), what the deploy pipeline
+  actually runs — spec read, Paradox verifies the named properties and generates
+  the decision logic, tsc typechecks the harness, bundle lands as main.js,
+  server calls it every tick — and what the viewer is showing: after the one
+  manual spawn click, everything on screen is the spec executing. Your "read the
+  README in its entirety" instruction leads the file.
+
+✻ Crunched for 58s
+
+※ recap: We're revising the tutorial-one fast-path blog drafts. I rewrote promise.md and then narrative.md so it only adds commentary the README lacks. Next: you review the narrative.md redraft and rule on it.
+
+❯ given blooms taxonomy I want to offer different level of challenges. in this  
+  tutorial section, the obvious point of variance is how the spawn gets placed. 
+  So I want you to use approriate agents to research different methods that     
+  one might use to place a spawn. this is the stuff to learn beyond basic bloom 
+  level one. we will then discuss what would be a good lvl 2 or 3 task and      
+  what would be more challenging. These all align with the throughline,         
+  students be amazed at what you can accomplish, but at the same time I do not  
+  want to frustrate                                                             
+
+● Two agents in parallel: one reads this repo to establish what spawn placement
+  touches today (the viewer's manual placement path, the server API it calls,
+  what terrain and room data are reachable from the harness and spec); one
+  researches how Screeps players and open-source bots choose a spawn location
+  (the algorithms and the signals they weigh). Then I report back and we discuss
+  the levels.
+
+● 2 background agents launched (↓ to manage)
+   ├ Explore (Map spawn placement in repo)
+   └ Agent (Research spawn placement methods)
+
+● Both agents are running — one mapping the placement path in this repo, one
+  researching community placement methods. I'll report their findings when they
+  finish.
+
+✻ Worked for 33s
+
+● Agent "Map spawn placement in repo" finished · 14m 5s
+● The repo map is in; the community-methods agent is still running. I'll give
+  the combined report when it lands.
+
+✻ Crunched for 3s
+
+● Agent "Research spawn placement methods" finished · 15m 0s
+
+● Both reports are in. Here's the combined picture.
+
+  One fact shapes every challenge: the first spawn and every later spawn live on
+  different layers. The first spawn is an HTTP action — POST 
+  /api/game/place-spawn — made before any game code runs. In this repo that call
+  already exists as Api.placeSpawn in viewer/src/protocol.ts; the click handler
+  in viewer/src/main.ts is the only caller. The harness can't reach it, because
+  loop() doesn't run until a spawn exists. Spawns two and up are placed from
+  game code with room.createConstructionSite(x, y, STRUCTURE_SPAWN). So a "place
+  the first spawn in code" challenge lives in the viewer or a flake app, while
+  a "plan a spawn position" challenge framed as the second spawn lives in the
+  harness and spec — the layer where the rest of the tutorial already works.
+
+  The ladder of methods, simplest to hardest (each rung has a real open-source
+  reference):
+
+  1. Rule checklist / simple heuristics — a tile near a source with N free
+  neighbors, or the midpoint of sources + controller snapped to buildable
+  terrain. A few lines over the terrain grid. The midpoint version fails when
+  the midpoint lands in a wall pocket — a teachable failure.
+  2. Scoring candidate tiles — score every buildable tile by summed distance to
+  sources and controller, take the minimum. Two rungs inside it: straight-line
+  range (cheap, lies about walls) and real path length via PathFinder (costlier,
+  honest).
+  3. Flood fill — BFS from each source and the controller, producing per-tile
+  distance maps; sum and take the minimum. The same scoring done right, and the
+  canonical BFS teaching moment. A queue and a 50×50 array.
+  4. Distance transform — score every tile by distance to the nearest wall;
+  answers "where does a base fit". Two-pass dynamic programming, terrain grid
+  only.
+  5. Compose 4 + 2 — Overmind's BasePlanner: distance-transform candidates,
+  filter out footprints crowding the controller or sources, score survivors by
+  total real path length. Notably Overmind's default flow is still semi-manual —
+  the human clicks, the bot checks — which is good evidence for the students
+  that judgment plus checking is a respectable design.
+  6. Whole-base planning (stamps, TooAngel's path-based layout) and min-cut 
+  perimeters (max-flow) — capstone territory.
+
+  The community's recurring caveat: the "closest to everything" tile is usually
+  cramped or blocks the source's harvest tiles. Rungs 4–5 exist to counter that.
+  That's a ready-made "why the naive answer fails" beat.
+
+  What the repo already holds:
+
+  - A working end-to-end programmatic placer existed in deploy-local and was
+  deliberately removed (flake.nix now says placement is the player's act). It
+  spiraled out from the room center over the terrain digit string and took the
+  first buildable tile — rung 0.5, with the whole auth/world-status/retry loop
+  already solved. The deleted code is preserved in the docs/unedited transcript.
+  - Terrain is available over REST before placement. Source and controller
+  positions arrive only over the socket, in the first room snapshot — a placer
+  in the viewer has to wait for that snapshot before scoring.
+  - Legal rooms come from the proxy's /placeable-rooms (reads db.json);
+  world-start-room returns a controller-less room here, so the naive room choice
+  fails with "invalid room".
+
+  Frustration hazards to design around: the server explains refusals only as
+  terse error strings; the empty/lost/respawn state machine is confusing when
+  hit blind; and multi-room scoring needs per-room socket subscriptions. Any
+  first-spawn challenge should hand students the auth + world-status scaffolding
+  so the work is the placement logic itself.
+
+  Ready to discuss the level 2/3 cut whenever you are.
+
+✻ Cogitated for 16m 7s
+
+※ recap: We're building tiered spawn-placement challenges for the tutorial-one fast-path blog; promise.md and narrative.md are redrafted, and the research on placement methods is reported above. Next: discuss which methods fit Bloom levels 2/3 versus harder.
+
+❯ assume the room has already been chosen, the task is to find a good location  
+  for a spawn placement when starting                                           
+
+● With the room fixed, the task is pure tile selection: inputs are the 50×50
+  terrain grid, the source positions, and the controller position — all
+  available in the viewer before the click. Here's my proposed cut:
+
+  Level 2 (understand). The student compares candidate tiles using stated
+  criteria. Concrete task: we mark three candidate tiles in the room; the
+  student computes each tile's summed range to the sources and controller, ranks
+  them, clicks the winner, and watches how far the harvester walks. Small
+  numbers, done by hand or with a few lines in the console. The payoff is the
+  connection between the number and the walking they then watch.
+
+  Level 3 (apply). The student writes the scorer: loop over all buildable tiles,
+  score each by summed range to sources and controller, print the best tile,
+  click it. Straight-line range only — a nested loop and an arithmetic function,
+  with terrain and positions handed to them. This keeps pathfinding out of it:
+  PathFinder only exists inside the game loop, and straight-line range needs
+  nothing.
+
+  The step up (analyze — the built-in trap makes it honest). Straight-line range
+  lies about walls, and the best-scoring tile is often cramped or sits on a
+  source's harvest tiles. The harder challenge: find where the naive answer goes
+  wrong in this room, then fix it — a BFS flood fill from each landmark for
+  true walking distance, plus a free-neighbor count so the winner has room to
+  build. Both are implementable in plain JS over the terrain grid. This is where
+  the community actually landed (Overmind filters for exactly these two
+  failures), so the student ends the challenge having rediscovered a real bot's
+  design.
+
+  The stretch already in promise.md. Wire the recommendation into the placement
+  itself — Api.placeSpawn is one call in viewer/src/protocol.ts, so "get the
+  agent to auto-place with a useful strategy" means the student's scorer output
+  feeds the call the click handler already makes. All the auth and world-status
+  plumbing exists; the student's work stays the strategy.
+
+  The frustration guard running through all four: the student's code recommends,
+  and until the stretch the human still clicks. Every failure is visible on
+  screen as a long walk or a cramped spawn, and the fix is a better number.
+
+  One decision that shapes the exercise text: where the student's code runs — in
+  the browser console against the viewer's loaded state, or as a small script
+  that fetches terrain itself. Console is less setup; script is more portable.
+  Your call.
+
+✻ Worked for 34s
+
+❯ we don't have a console available, the point is to generate that with         
+  paradox. let's explore level 2 tasks. have then dfo the manual calculation    
+  and then engae the llm agent to make paradox that implments                   
+
+● That reshapes it well — the level 2 task then teaches the project's own
+  workflow: the student understands the rule by hand, the LLM writes the spec,
+  Paradox verifies and generates, and the student checks the generated logic
+  against their own arithmetic.
+
+  Proposed shape:
+
+  Part one — by hand. The exercise gives the room facts: source positions,
+  controller position, three marked candidate tiles. The metric is the game's
+  range (diagonal steps count as one — one sentence to teach). The student
+  computes each candidate's summed range to the landmarks, ranks the three,
+  clicks the winner, and watches the harvester's walk. That's a handful of small
+  subtractions — right-sized for paper.
+
+  Part two — through the agent. The student tells the LLM agent what they just
+  did: "write a spec for scoring a tile by summed range to the sources and
+  controller." The agent writes the Paradox, the checker verifies it, Paradox
+  generates the scorer. The student runs it against the same three candidates.
+
+  The payoff. The generated logic's ranking matches the page in front of them.
+  They understood the rule first, and the pipeline's output witnessed their own
+  arithmetic. That's the workflow the whole project pitches — human directs and
+  inspects, LLM writes the spec, checkers gate — experienced on a problem small
+  enough to hold in their head. And it sets up level 3 cleanly: same scorer, all
+  2,500 tiles, a scale where hand calculation stops being an option.
+
+  Two facts I need from you before drafting exercise text:
+
+  1. Can Paradox express this today — arithmetic over coordinates, a scoring
+  function, comparison? Everything in dox/creeps.dox so far is enums and a body
+  list, so I can't tell what the language supports from the repo.
+  2. What runs the generated scorer against the room? The harness loop only runs
+  after a spawn exists, so the exercise needs a runner that feeds terrain and
+  landmark positions to the generated function and prints the result — does
+  something like that exist, or is building it part of the work on this branch?
+
+✻ Brewed for 28s
+
+❯ why is controller position important, what about terrain ?                    
+
+● Controller. Upgrading the controller is how the room levels up, and every
+  level unlocks more of the game (extensions, towers, more spawns). Upgrading
+  means creeps carrying energy to the controller and standing next to it, tick
+  after tick — over a colony's life, the spawn-to-controller path is walked as
+  much as the spawn-to-source paths. That's why every community scorer weighs
+  it. But at this stage of the tutorial the loop on screen never touches the
+  controller — the harvester goes source to spawn. So for the level 2 exercise
+  the controller is a claim about the colony's future, and the honest option is
+  to score by range to sources only and bring the controller in when an upgrader
+  exists to walk that path.
+
+  Terrain. It matters twice. First, legality: a spawn goes on plain or swamp,
+  and the server rejects a wall tile. In the level 2 exercise we pick the three
+  candidates, so legality is handled for the student. Second, truth:
+  straight-line range assumes the creep walks straight, and walls make that a
+  lie — a candidate that scores best on paper can sit across a wall from the
+  source, and swamp tiles slow every crossing. At level 2 that lie is dormant
+  because we choose candidates where it's small. At the analyze step it becomes
+  the whole lesson: the student finds a room where the paper winner loses on
+  foot, and terrain — the full grid — is the data that fixes the score.
+
+  So the design consequence: sources-only, terrain-safe candidates at level 2
+  keeps the hand arithmetic matched to what the student actually watches;
+  controller and terrain each arrive later as the thing that breaks the simpler
+  score.
+
+✻ Cooked for 23s
+
+❯ is there a level two approach that acknowledges terrain and controller as     
+  important? It doesn't have to be an optimal solution, just a working one      
+
+● Yes — a checklist plus a sum, which is exactly what the simplest real placers
+  do (ScreepsAutoSpawner is a rule checklist at heart). Both factors enter, each
+  in its hand-computable form:
+
+  Terrain enters as rules, applied by eye on a printed map of the room:
+  - the tile must be plain — one of the given candidates sits on swamp or
+  against a wall pocket, so the student actually exercises the rule and rejects
+  it;
+  - the tile must have at least, say, five open neighbors — counted by looking
+  at the eight surrounding squares on the map.
+
+  Controller enters as a third landmark in the sum: score = range to source one
+  + range to source two + range to the controller. Still a handful of
+  subtractions per candidate.
+
+  The procedure: cross out candidates that fail the terrain rules, score the
+  survivors, click the best. That's a complete working strategy — it
+  acknowledges that a spawn needs buildable ground with room around it and that
+  the colony will walk to the sources and the controller — and it's suboptimal
+  in a way the student can later discover rather than be warned about
+  (straight-line range still ignores walls between the tile and the landmarks).
+
+  It also translates cleanly into part two: "the tile is plain, the tile has at
+  least five open neighbors, the score is the summed range to sources and
+  controller, the best legal tile wins" is a rule the student can state to the
+  LLM agent in one breath, and the spec implements the same checklist and sum
+  they just ran on paper. The terrain rules only need the tile and its eight
+  neighbors, so the generated logic reads nine grid cells per candidate — no
+  pathfinding anywhere.
+
+  The two open questions from before still gate the exercise text: whether
+  Paradox expresses this arithmetic today, and what runs the generated scorer.
+
+✻ Worked for 22s
+
+❯ you tell me /home/mlitchard/gitlab/paradox                                    
+
+● Sending an agent into the Paradox source to answer the expressiveness question
+  from the language itself.
+
+● Explore(Assess Paradox language expressiveness)
+  ⎿  Done (60 tool uses · 94.1k tokens · 6m 58s)
+  (ctrl+o to expand)
+
+● Answer from the Paradox source: yes to the whole level-2 rule, with the 
+  terrain grid staying on the TypeScript side.
+
+  What the spec can express. The golden test corpus already contains almost the
+  exact functions this exercise needs, at lib/test/golden/ in the paradox repo:
+  absolute and maxVal written with if/then/else (there are no built-in abs/max —
+  the student's agent writes them, which is a feature for the exercise), and a
+  four-argument distance(x1, y1, x2, y2). Chebyshev range is maxVal (absolute 
+  (x1-x2)) (absolute (y1-y2)), and the score is a plain sum of three of those.
+  Predicates (>=, &&), a Point product type, lists of points, and stdlib
+  sum/reduce all exist. Picking the minimum-scoring candidate has no builtin — a
+  short recursion over the list, and the corpus shows that pattern working
+  through codegen.
+
+  Where the grid lives. The language has no array indexing and no way to take
+  runtime grid input; spec functions compute over values handed to them. So the
+  runner reads terrain and passes in what the rule needs — for the checklist
+  that's nine cells per candidate, or just the precomputed open-neighbor count.
+  The spec holds the rule, TypeScript holds the lookup. That split matches how
+  the project already divides spec and harness.
+
+  The checker makes this better than I'd hoped. Paradox has lemma blocks: named
+  properties over scalar arithmetic that Z3 verifies — given/then/via, with
+  verified lemmas feeding later ones as axioms. absolute x >= 0 is verified in
+  the test corpus today. So the level-2 spec can carry real named properties
+  about the very arithmetic the student did on paper: the range is symmetric in
+  its two points, the score is never negative, a tile at a landmark scores zero
+  for that term. The student hand-computes, the agent writes the spec, Z3
+  verifies the named properties, the generated ranking matches the page. Limits:
+  lemmas verify over scalars; anything touching lists or records comes back
+  inconclusive and must be marked assume, and lemmas generate no runtime code.
+
+  Two hazards found while reading: the shipped stdlib's take and any recurse on
+  the wrong variable — the generated versions in this repo's generated/std.ts
+  loop forever on most inputs (filter, find, all, drop, reduce are correct); and
+  Paradox does no termination checking, so a recursion mistake in the student's
+  argmin runs away silently rather than being rejected.
+
+  So question 1 is settled: the language expresses the checklist, the sum, and
+  the argmin, and the checker verifies named properties of the scoring
+  arithmetic. Question 2 — what runs the generated scorer against the room — is
+  still open on your side.
+
+✻ Brewed for 5m 17s
+
+❯ what do you mean who? what are you confused about                             
+
+● The generated scorer is just an exported TypeScript function. For the student
+  to see its output, something has to call it: fetch the room's terrain and the
+  source and controller positions, hand it the candidate tiles, and show the
+  resulting scores. The harness can't be that caller — its loop only runs after
+  a spawn exists. So the missing piece is a runner: the viewer could do it (it
+  already has terrain, the room snapshot, and the API token), or a small flake
+  app could. My question is whether that runner already exists somewhere I
+  haven't seen, or whether building it is part of the work on this branch.
+
+✻ Worked for 7s
+
+❯ the generated scorer should be run by the harness, what other option is       
+  there?                                                                        
+
+● The other options were the viewer and a standalone flake app — I reached for
+  them because of a timing constraint, and it's the constraint itself we should
+  settle, because if it doesn't hold on this server the harness is the clean
+  answer.
+
+  The reported constraint, from the repo scan: the server doesn't execute a
+  user's script until the user owns something, and the first spawn is what makes
+  them an owner. On top of that, game code only sees rooms where the user has
+  objects — pre-spawn, Game.rooms is empty, so the harness would have no way to
+  read the source and controller positions even if its loop ran. If both facts
+  hold here, the harness literally can't compute the score before the first
+  placement.
+
+  That still leaves a harness-run design that I think fits level 2 well, and
+  maybe better: the student places by hand first, using their paper calculation
+  — that click is the act being examined. Then the harness, now running with
+  full room vision, runs the generated scorer over the room and writes its
+  verdict — best tile, and the score of the tile the student actually chose —
+  into Memory.trace, where the viewer's inspector can show it. The student
+  compares the spec's answer to their own. For the stretch, that same
+  harness-computed recommendation is what feeds an automated placement on
+  respawn.
+
+  The one thing to verify before writing exercise text is whether this server
+  really withholds execution pre-spawn — that's in the vendored engine's
+  behavior, and I'd want it witnessed rather than assumed. Want me to check?
+
+✻ Cooked for 33s
+
+❯ are you saying people are not automating spawn placement?                     
+● No — they automate it, and the research showed exactly where: outside the game
+  loop. ScreepsAutoSpawner is a standalone tool that polls the HTTP API,
+  notices the account is spawnless, picks a tile, and calls the same place-spawn
+  endpoint the client's click calls. This repo did it too — the removed
+  deploy-local block was a working HTTP auto-placer against this very server.
+  And the famous bots automate everything from the second spawn onward in-game;
+  players asked years ago for the first spawn to be placeable from game code,
+  and the game never added it.
+
+  So the split is layers: the first spawn gets automated over HTTP by an
+  external program holding the auth token; every later spawn gets automated
+  in-game. Nobody's first spawn is placed by their loop code, because the loop
+  hasn't run yet.
+
+  For the exercise that means the harness runs the scorer — the decision logic —
+  and the automation of the first placement itself is HTTP plumbing that
+  already exists in two forms in this repo's history (the viewer's placeSpawn
+  call and the removed deploy-local placer). The open design question is just
+  how the scorer's verdict, computed in the harness, reaches that HTTP call for
+  the stretch challenge.
+
+✻ Cooked for 11s
+
+❯ focus on what I asking you to do stop creating problem. focus on what I am    
+  asking you to do                                                              
+
+● Understood. The design stands: the student does the calculation by hand —
+  terrain checklist, summed range to sources and controller, three candidates —
+  then engages the LLM agent to write the Paradox that implements that rule; the
+  checkers verify it, and the harness runs the generated scorer. Ready to draft
+  the exercise text on your word.
+
+✻ Churned for 4s
+
+❯ are we using a pre-made checklist?                                            
+
+● My recommendation: yes, pre-made at level 2. The exercise states the rule —
+  plain tile, at least five open neighbors, lowest summed range to the sources
+  and controller — and the student's work is applying it by hand, then getting
+  the agent to implement the same rule in Paradox and comparing outcomes.
+  Understanding a given rule well enough to execute it and recognize its answer
+  in the generated logic is the level 2 skill. Writing their own criteria is
+  where the harder tiers start: the analyze step is discovering where the given
+  rule fails, and improving the checklist is then the student's own act.
+
+✻ Cooked for 6s
+
+❯ five open neighbors suggests you are choosing the room. I need you to focus   
+  on what I am asking you to do, stop making extra work                         
+
+● Dropped. The room is given, the candidates are given. The checklist is: the
+  tile is buildable, the score is the summed range to the sources and the
+  controller, lowest score wins. The student runs that on paper over the given
+  candidates, clicks the winner, then engages the agent to write the Paradox
+  that implements the same rule. That's the level 2 exercise.
+
+✻ Baked for 5s
+
+❯ why can this not be in the game loop? the check is 'does a spawn1' exist? it  
+  does not so run the strategy and place one. this covers the re-spawn case as  
+  well.                                                                         
+
+● Because the game gives loop code no instrument that creates a first spawn. The
+  check is right — "no Spawn1, run the strategy, place one" — but at the
+  placement step the loop has only createConstructionSite, and a construction
+  site becomes a building through a creep with a WORK part spending energy on
+  it. With no spawn there are no creeps, so the site would sit unbuilt forever.
+  The first spawn is the one structure the game creates instantly, and the only
+  door to that instant creation is the HTTP endpoint. Players asked for exactly
+  what you're describing — first-spawn placement from game code — in a Screeps
+  forum request years ago, and it was never added. Respawn lands in the same
+  state: everything released, no creeps, same closed door.
+
+  The shape you want survives intact one layer out: a runner that asks the API
+  "does a spawn exist?" and, when the answer is no, runs the generated strategy
+  and calls place-spawn. Same check, same Paradox-generated decision logic, and
+  it covers respawn the same way. The removed deploy-local placer was exactly
+  that loop minus the strategy.
+
+✻ Brewed for 27s
+
+❯ the harness is game code, I think we have to do this with a nix app nix run   
+  .#spawn-placement. we're going to punt on this project and make it for after  
+  the student has worked through until they get to main                         
+
+● Agreed — the harness is game code, so the placer lives outside it as nix run 
+  .#spawn-placement, and the whole challenge moves to after the student has
+  worked through to main. Saving the design so it's not lost between sessions.
+
+  Wrote 2 memories (ctrl+o to expand)
+
+● Recorded: the challenge is deferred until the student reaches main, the runner
+  will be nix run .#spawn-placement, and the settled level-2 design plus the
+  Paradox expressiveness findings are saved so we can pick this up without
+  redoing the research.
+
+✻ Cogitated for 27s
+
+❯ we need to come up with interesting assignments that stay within current      
+  scope                                                                         
+
+● Within-scope means assignments over what's already on the branch: the spec,
+  the harness, the checkers, deploy, and the viewer. Reading the three files
+  that define that surface so the assignments are grounded in what's actually
+  there.
+
+  Read 3 files (ctrl+o to expand)
+
+● The surface is small and clean: two unions and a body list in the spec, a
+  harness that spawns one harvester and runs its two-state life, two checkers,
+  deploy, and the viewer. Here are four assignment candidates that stay inside
+  it, each with the same rhythm — predict on paper, make one change, let the
+  checkers speak, watch the result:
+
+  1. The silent failure. Remove move from harvesterBody — a legal edit, so
+  paradox check and tsc both pass. Predict what happens before deploying. Then
+  watch: the creep spawns and stands there; a body needs a MOVE part to walk.
+  The written question afterward: which instrument told you this was wrong? None
+  — the checkers verify the named properties of the spec, and this property has
+  no name there. You caught it by watching. That's the trust doctrine as a
+  lived thirty-second experience, and it motivates every later question about
+  what should be in the spec.
+
+  2. The body under budget. Part prices: WORK 100, CARRY 50, MOVE 50. The
+  current body costs 200, and the spawn holds 300. On paper: WORK harvests 2
+  energy per tick, CARRY holds 50 — compute how many ticks the current creep
+  takes to fill up, then design the best body 300 can buy and predict how it
+  changes the loop you watch. Edit harvesterBody, deploy, time it on screen
+  against your prediction. Hand arithmetic first, one spec edit, visible payoff
+  — same shape as the placement exercise, fully in scope.
+
+  3. Two harvesters, one number in the spec. The harness caps the colony at one
+  creep with a bare < 1. The assignment: engage the agent to move that number
+  into the spec — a harvesterCount constant — and have the harness import it,
+  then set it to 2 and watch two creeps negotiate one source. Smallest possible
+  taste of the real workflow: the student directs, the agent edits the spec, the
+  checkers gate, and a game-visible behavior changes because a spec value did.
+
+  4. The undeclared role. Ask the agent to add a builder to CreepRole in the
+  spec, and nothing else. Run the checkers, read what each one says about a role
+  that exists in the spec and appears nowhere in the harness. Then reverse it:
+  give a creep memory a role the spec never declared and read tsc's rejection.
+  This extends the existing exercise 3 from reading rejections into predicting
+  which layer catches which mistake.
+
+  The ladder across them: 1 is watching and reasoning, 2 adds hand calculation
+  and a solo edit, 3 and 4 bring in the agent-writes-spec workflow. Your pen
+  from here — say the word and I'll draft any of these into exercises.md.
+
+✻ Crunched for 58s
+
+❯ these are all handled in subsequent tutorials                                 
+
+● Then tutorial-one's assignments stay in its own territory: running the system,
+  placing the spawn by hand, and reading what's on screen — touching nothing
+  the later tutorials teach. Three candidates in that lane:
+
+  1. Near and far. Place the spawn beside the source, count ticks per delivery
+  from the viewer. Then nix run .#reset-local, place across the room, count
+  again. The student's own numbers witness that placement is a strategy question
+  — which is exactly the seed for the post-main placement project, planted with
+  the controls this tutorial already teaches.
+
+  2. The paper scorer. The level-2 hand exercise stands on its own without the
+  punted runner: three marked candidate tiles, summed range to sources and
+  controller, lowest wins, click it. The map is the data, the arithmetic is the
+  work, the harvester's walk is the witness. When they reach main, this rule is
+  the one they'll hand to the agent.
+
+  3. Whose world is it. Predict, then check: stop the server and restart — is
+  the colony still there? Reset, and it's fresh. Both answers live in
+  .server-data/, and the student witnesses that the world is a directory on
+  their disk. This is the ownership beat of the whole accessibility story, made
+  into a two-minute experiment.
+
+  All three use only what this tutorial hands the student: the run commands, the
+  viewer, the click, and their own arithmetic.
+
+✻ Cooked for 34s
+
+❯ i do not understand 2                                                         
+
+● Assignment 2 is the paper half of the level-2 design we settled earlier, kept
+  here because it needs nothing but the viewer and a pencil.
+
+  The exercise text shows a picture of the room with three tiles marked A, B, C,
+  and gives the positions of the two sources and the controller. The student
+  computes, for each marked tile, three numbers: how many squares to source one,
+  to source two, to the controller (diagonal steps count as one — that's the
+  game's range). Add each tile's three numbers. Say A totals 41, B totals 28, C
+  totals 35 — B wins. The student clicks B as their spawn placement and watches
+  the harvester run its trips from there.
+
+  So the student places their spawn using a stated rule and their own arithmetic
+  instead of eyeballing. The other half of that design — engaging the agent to
+  write the rule in Paradox and running it through the pipeline — is the part
+  that waits for post-main. This half is just: here is a rule, apply it by hand,
+  act on your answer.
+
+✻ Brewed for 9s
+※ recap: We're designing tutorial-one fast-path exercises that stay in run-and-engage scope. Three candidates are on the table: near-vs-far spawn placement, the hand-computed tile scorer, and server-state persistence. Next: your ruling on which go into exercises.md.
+
+❯ I'm wondering what we can expect from this tutorial, I think subsequent       
+  tutorials have better oppotunity for engagement. I think this tutorial might  
+  be about engaging the llm agent to ask about the nix infrastructure the       
+  harness and the paradox                                                       
+
+● I think that's the right call, and it makes a virtue of this tutorial's
+  constraint. The student just stood up a whole stack they don't understand yet
+  — VM, nix, server, pipeline, viewer — and the one thing this stage uniquely
+  owns is that everything they ran is sitting there, inspectable, with an agent
+  in the shell to interrogate. Later tutorials teach changing the system; this
+  one can teach questioning it, which is the workflow the whole project models:
+  the agent is the channel, the student inspects and decides.
+
+  The assignment pattern that makes it engagement rather than reading homework:
+  every question comes with a verification act. Ask the agent, then check its
+  answer against the source or the running system. Examples in this shape:
+
+  - Ask where the game world lives on disk; verify by stopping the server,
+  looking in the directory it named, and restarting.
+  - Ask what `nix run .#deploy-local` actually does between the spec and the
+  server; have the agent walk the pipeline, then go find the generated file it
+  named and match one line back to dox/creeps.dox.
+  - Ask why the harvester turns around when it's full; have the agent point to
+  the lines in harness/main.ts, and read them with it.
+  - Ask what the checker would say to a spec mistake before making it — then
+  make it, run the check, and compare the agent's prediction to the actual
+  rejection.
+
+  That last beat matters for expectations: the agent's answers are claims, and
+  this tutorial can make checking claims feel fast and natural — a habit set
+  here that every later tutorial then uses. What we can honestly expect from
+  tutorial-one: orientation, the question-then-verify habit, and the amazement
+  staying where it already is — they ran the whole thing, and nothing in it is
+  off limits to ask about.
+
+✻ Baked for 22s
+
+❯ update exercises.md with the question-then-verify assignments                 
+
+  Read 1 file (ctrl+o to expand)
+
+● Update(blog/tutorial-one/storyspace/fast-path/exercises.md)
+  ⎿  Added 24 lines
+      20     declare, run `nix flake check`, and read the compile error f
+          rom
+      21     tsc.
+      22  
+      23 +## Ask, then verify                                            
+      24 +                                                               
+      25 +Everything you just ran is on your disk, and the agent in your 
+         +dev                                                            
+      26 +shell has read it all. Each assignment here is one question and
+         + one                                                           
+      27 +check: ask the agent, then hold its answer against the source o
+         +r the                                                          
+      28 +running system. The answer is a claim; the file or the game is 
+         +the                                                            
+      29 +evidence; you decide.                                          
+      30 +                                                               
+      31 +4. Ask the agent where the game world lives on disk. Then stop 
+         +the                                                            
+      32 +   server (`nix run .#stop`), look inside the directory it name
+         +d,                                                             
+      33 +   start the server again, and confirm your colony is still the
+         +re.                                                            
+      34 +5. Ask the agent what happens between `dox/creeps.dox` and the 
+         +server                                                         
+      35 +   when you run `nix run .#deploy-local`. Have it walk the pipe
+         +line                                                           
+      36 +   step by step. Then open the generated file it named and matc
+         +h one                                                          
+      37 +   line in it back to the line of the spec it came from.       
+      38 +6. Ask the agent why the harvester turns around when it's full.
+         + Have                                                          
+      39 +   it point to the exact lines in `harness/main.ts`, then read 
+         +them                                                           
+      40 +   yourself and watch one full trip in the viewer with those li
+         +nes in                                                         
+      41 +   front of you.                                               
+      42 +7. Ask the agent what `paradox check` will say if `harvesterBod
+         +y`                                                             
+      43 +   uses a part the `BodyPart` union lacks. Write down its predi
+         +ction,                                                         
+      44 +   make the edit, run the check, and compare the actual rejecti
+         +on to                                                          
+      45 +   the prediction. Restore the spec afterward.                 
+      46 +                                                               
+      47  ## Out of scope for the fast path (linked to their story)
+      48  
+      49  - Build GUI-driven placement and then automate it — the gui-bot
+
+● Done. exercises.md now has an "Ask, then verify" group after the
+  run-and-engage exercises: four assignments, each one question to the agent and
+  one check against the source or the running system — where the world lives
+  (witnessed by a stop and restart), the deploy pipeline (verified by matching a
+  generated line to its spec line), the harvester's turnaround (the lines in
+  main.ts read against a watched trip), and a predicted checker rejection
+  compared to the real one. The group opener states the rule of the game: the
+  answer is a claim, the file or the game is the evidence, the student decides.
+
+✻ Brewed for 22s
+
+※ recap: We're building tutorial-one's fast-path blog. Promise and narrative are redrafted, spawn-placement automation is punted to post-main, and exercises.md now carries the ask-then-verify assignments. Next: your review of those drafts.
+
+❯ why is the vm's fsType 9p. what requirement does it fulfill                   
+
+● Looking up where the 9p mount is declared in the repo before answering.
+
+  Searched for 1 pattern, read 1 file (ctrl+o to expand)
+
+● fsType = "9p" appears twice in vm/module.nix:34-44, and the requirement it
+  fulfills is live sharing of host directories into the guest using nothing but
+  QEMU. 9p over virtio is QEMU's built-in directory export: the host passes a
+  directory (workdir, repodir) as a virtual device, and the guest mounts it as a
+  filesystem. There's no disk image to copy in, no network filesystem to
+  configure, and both sides see the same files at the same moment — which keeps
+  the onboarding constraint intact that the host needs only QEMU.
+
+  Each mount carries a specific requirement:
+
+  - ~/dev/work (workdir, the host's ~/vm-keys) exists so the student's SSH
+  identity key is readable inside the VM at ~/work/identity — where
+  SCREEPS_IDENTITY points (vm/module.nix:48) and where secrix finds the key to
+  decrypt secrets. The key stays on the host; it's never baked into the VM image
+  or copied onto its disk.
+  - ~/dev/dox-populi (repodir) live-mounts the host's repo checkout, and
+  tests/vm.nix:27 asserts exactly that. Edits made on the host are immediately
+  what the VM builds and deploys — the VM never works from a stale clone.
+
+  The mount options follow from that purpose: trans=virtio is the QEMU
+  transport, 9p2000.L is the Linux dialect with proper permissions and
+  ownership, msize raises the transfer chunk size, and nofail lets the VM boot
+  even when a share is absent — matching run-vm.sh skipping WORKDIR when the
+  directory doesn't exist.
+
+✻ Crunched for 23s
+
+※ recap: We're shaping the tutorial-one fast-path blog: promise.md and narrative.md are rewritten, and exercises.md now has the ask-then-verify assignments; the spawn-placement challenge is punted to post-main. Next action: your review of the exercises draft.
+
+❯ take a look at my notes in exercises.md. I think 'in the trenches' , 'get     
+  your hands dirty' or something similar might be a seperate file linked to     
+  exercises.md. that way if you want to move along you can. on the other hand   
+  if I require this section I am enforcing the message of 'don't assume you     
+  don't have to get your hands dirty just because the klankers klanks.' but     
+  reframed in a positive frame, not the ngative one I stated. let's explore     
+  this, it's either an extra challenge or an integral part of the throughline.  
+  in which case each section will have to have this added as part of it's       
+  structure                                                                     
+
+  Read 1 file (ctrl+o to expand)
+
+● Read your notes. My read: this is integral to the throughline, and here's the
+  reasoning.
+
+  The project's own record is that the agent wrote every line and you directed
+  and ruled on fit. Ruling on fit is a hands-in-the-file act — it's where
+  authority actually comes from in this workflow. If the tutorials teach "run
+  the agent, verify its claims" but hands-on shaping is optional, the student
+  graduates into exactly the operator the blog warns about: someone who runs the
+  pipeline and never develops the eye that inspection requires. The trenches
+  work is where the eye gets built. That makes it a load-bearing beat of the
+  message, and load-bearing beats recur — one per section, part of the
+  structure.
+
+  The positive frame is already in your exercise: craft. The agent's output is
+  raw material; finishing it is your work, and working it by hand is how the
+  code becomes yours. Wax on, wax off is the right shape — repetitive, small,
+  real — because fluency comes from reps, and the student who has regrouped
+  twenty attribute sets can read nix in a way the student who moved along
+  cannot. Framed that way it's an apprenticeship beat, an invitation to mastery
+  rather than a warning.
+
+  The module.nix exercise is a strong first instance, and it fits the tutorial's
+  verify rhythm for free: after regrouping, nix flake check still boots the VM
+  — the student witnesses that they changed the shape and kept the behavior.
+  That's the craftsman's loop in miniature: improve, then check you broke
+  nothing.
+
+  On the file question: both things are true at once. It lives in its own file —
+  trenches.md or whatever name you rule — because the storyspace links
+  everything anyway, and a separate node lets later sections link their own
+  trenches work in parallel. But exercises.md presents it as part of the path,
+  phrased as expected work with its own heading and link, so the structure says
+  "this is the discipline" while the hypertext still lets a reader defer it. The
+  choice between extra-challenge and integral isn't made by the file layout;
+  it's made by how the fast path talks about it, and I'd have it talk about it
+  as the discipline.
+
+  If you rule integral, the structural consequence you named follows: each
+  fast-path section's template gets a trenches slot, and tutorial-one's is the
+  module.nix regroup.
+
+✻ Churned for 42s
+
+❯ integral it is, add the trenches slot to the structure                        
+
+  Read 2 files, listed 1 directory (ctrl+o to expand)
+
+● The slot goes in both structure files: the series shape (so every stage builds
+  it) and tutorial-one's map (its concrete instance).
+
+● Update(blog/tutorial-one/storyspace/blog-series-structure.md)
+  ⎿  Added 7 lines
+      69  drops the reader into the next stage — only EXIT does that, and
+           it
+      70  does it out loud.
+      71  
+      72 +- TRENCHES slot — every stage carries one. Hand-work on code th
+         +e                                                              
+      73 +  agent wrote for this stage: the student reshapes real lines b
+         +y hand,                                                        
+      74 +  then runs the stage's checks and witnesses that behavior held
+         +. The                                                          
+      75 +  craft beat of the throughline — the code becomes yours by wor
+         +king                                                           
+      76 +  it — so it sits on every path, in its own file linked from th
+         +e                                                              
+      77 +  stage's exercises.                                           
+      78 +                                                               
+      79  ## Edges carry intent
+      80  
+      81  A bare link makes a maze; a labeled link makes a path. Every ed
+          ge
+
+● Update(blog/tutorial-one/storyspace/structure/tutorial-one-structure.md)
+  ⎿  Added 8 lines
+      55  
+      56  The gui-bot challenge is a link off the build node, not a path 
+          step.
+      57  
+      58 +## Trenches slot (integral, every stage has one)               
+      59 +                                                               
+      60 +Tutorial-one's trenches work: regroup the repeated attribute pr
+         +efixes                                                         
+      61 +in vm/module.nix into nested attribute sets, then run `nix flak
+         +e                                                              
+      62 +check` and witness the VM still boots. The draft lives in      
+      63 +fast-path/exercises.md ("In the trenches") and moves to its own
+         + file,                                                         
+      64 +fast-path/trenches.md, linked from the exercises. Wax on, wax o
+         +ff.                                                            
+      65 +                                                               
+      66  ## Exercise index (always on screen)
+      67  
+      68  storyspace/structure/exercise-index.md — the persistent panel o
+          f every
+
+● Both structure files carry the slot now. blog-series-structure.md adds
+  TRENCHES to the fixed per-stage shape: hand-work on code the agent wrote,
+  checks run afterward to witness behavior held, on every path, own file linked
+  from the stage's exercises. tutorial-one-structure.md records this stage's
+  instance: the vm/module.nix regroup with nix flake check as the witness,
+  noting the draft sits in exercises.md until it moves to fast-path/trenches.md.
+
+✻ Worked for 42s
+
+※ recap: Building tutorial-one's fast-path blog: promise, narrative, and exercises are redrafted, question-then-verify assignments added, spawn-placement challenge punted to post-main, and the trenches slot is now integral in both structure files. Next: move your trenches draft into fast-path/trenches.md on your word.
+
+❯ when I install the vm now it's installing nixos buth then freezes instead of  
+  completing, it gets as far as opening a shell, but it should quite out but    
+  doesn't                                                                       
+● Reading the installer definition to see how the install is supposed to run and
+  power off.
+
+  Searched for 1 pattern (ctrl+o to expand)
+
+● The session temp filesystem is full — the earlier agent transcripts filled it.
+  Clearing them so commands can run again.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+✻ Churned for 1h 50m 24s
+
+❯ you dont need to use df                                                       
+
+  Searched for 1 pattern, read 1 file, ran 1 shell command (ctrl+o to expand)
+
+● The installer definition shows one built-in way to land in exactly this state,
+  and a couple of failure paths — checking what changed on this branch before
+  giving a verdict.
+
+  Ran 1 shell command (ctrl+o to expand)
+  ⎿  Interrupted · What should Claude do instead?
+
+❯ stop wasting time                                                             
+
+● Verdict from the script itself: two paths leave the installer sitting at a
+  shell with no poweroff, and only the last console lines distinguish them.
+
+  1. The skip path — vm/installer.nix:49-52: if /dev/vda1 already exists the
+  service prints "already partitioned — skipping auto-install" and exits 0.
+  There is no poweroff on that path, so the installer just sits at the shell.
+  This happens whenever the qcow2 kept partitions from an earlier attempt.
+  2. Any mid-script failure — set -euo pipefail ends the service before line
+  109's poweroff, same sitting shell.
+
+  In the installer shell: journalctl -u dox-populi-auto-install --no-pager | 
+  tail says which one. If it's the skip message, the fix is rm dox-populi.qcow2
+  and rerun. If it's an error, the tail shows the failing step.
+
+✻ Churned for 9s
+
+❯ did you break the script?                                                     
+
+● No. This session's edits are blog markdown, structure docs, and my memory
+  files — vm/installer.nix, run-vm.sh, and flake.nix are untouched, and your
+  working tree carries no changes to them either; the script on disk is exactly
+  what the branch's commits left there. The journalctl tail will say what
+  actually stopped it.
+
+✻ Baked for 12s
+
+❯ you are confused                                                              
+
+● Tell me what I have wrong — which script are you asking about, and what did I
+  misstate?
+
+✻ Churned for 11s
+
+❯ you are making assumptions about what is happening, stop doing that           
+
+● Understood — no more theories. The next step needs evidence from the machine:
+  what are the last lines on the installer console?
+
+✻ Brewed for 4s
+
+❯ there is no problem happening '[   34.823286] reboot: Power down              
+  compacting /home/mlitchard/gitlab/dox-populi/dox-populi.qcow2 into            
+  /home/mlitchard/gitlab/dox-populi/dox-populi-compact.qcow2...                 
+  '                                                                             
+
+● Good — the installer finished and powered down; what follows is the qcow2
+  compaction step running on the host, which takes a while with no progress
+  output. Nothing is stuck.
+
+✻ Cogitated for 3s
+
+※ recap: We're building tutorial-one's fast-path blog: promise, narrative, and exercises are redrafted, the spawn-placement challenge is punted to post-main, and the trenches slot is in the structure files. Your VM install completed fine; next is your call on the drafts.
+
+❯ i did nix run .#arges -L --builders '' and it is still downloading from a     
+  builder                                                                       
+
+● --builders '' turns off remote build machines, and that's all it governs. The
+  "downloading" lines come from substituters — binary caches — which are a
+  separate mechanism: nix checks the caches before building anything locally,
+  builders or no builders. To make this run without cache downloads, add
+  --option substituters "" (or --offline to cut all network use). With
+  substituters silenced, everything missing gets built locally.
+
+✻ Baked for 14s
+
+❯ I use substituters and still get a hang 'building                             
+  '/nix/store/ij9n7avbgpmq1f2ww46l4kzdi8cmzsdp-wai-app-static-3.1.9.drv' on     
+  'ssh-ng://build@100.107.101.14'...                                            
+  building '/nix/store/17ckjsgng2rvm3lng161xzsq1s4kq2ma-test-framework-quickche 
+  ck2-0.3.0.6.drv' on 'ssh-ng://build@100.107.101.14'...                        
+  building                                                                      
+  '/nix/store/fd6xizmgdhrmnbp89c67gwwilb9h0vl1-autodocodec-yaml-0.4.0.2.drv' on 
+  'ssh-ng://build@100.107.101.14'...                                            
+  copying 2 paths...                                                            
+  copying path                                                                  
+  '/nix/store/byi5dxdvclc9qc1p7v0kcj0r0xwmirkg-wai-app-static-3.1.9' from       
+  'ssh-ng://build@100.107.101.14'...                                            
+  copying path                                                                  
+  '/nix/store/dh97vlpzy5g6aw6gazz2iz0kzgdqllj8-wai-app-static-3.1.9-doc' from   
+  'ssh-ng://build@100.107.101.14'...                                            
+  building                                                                      
+  '/nix/store/wd2wppdz70zrldhxlk41rdix6rjjylw6-servant-server-0.20.3.0.drv' on  
+  'ssh-ng://build@100.107.101.14'...                                            
+  building '/nix/store/g3949ihrd8860fshhp7pcjfjqa                               
+  '                                                                             
+● The log answers why: the builds are still being dispatched to
+  ssh-ng://build@100.107.101.14, so the --builders '' you passed never took
+  effect. That's documented daemon behavior — builders is a restricted setting,
+  and the daemon honors a client's override only from users listed in
+  trusted-users. For anyone else it silently keeps using the system-configured
+  builder list. So the flag was ignored, the Haskell derivations went to the
+  remote builder, and the hang you're seeing is on that ssh connection — the
+  output stops mid-line, which is where the stall is.
+
+  Two things to check, both on your side: whether your user is in trusted-users
+  (nix config show trusted-users, or the setting in your NixOS config), and
+  whether the builder is actually working — ssh to build@100.107.101.14 and look
+  for a running ghc. If the builder is dead or unreachable mid-build, that's
+  the hang; disabling it for real means either running the command with sudo,
+  being added to trusted-users, or removing the machine from the system builder
+  config.
+
+✻ Churned for 24s
+
+❯ it was working but is stuuck at the moment                                    
+
+● Two states look identical from your terminal, and one check on the builder
+  separates them: ssh build@100.107.101.14 top (or ps aux | grep ghc).
+  servant-server is one of the big Haskell packages, and ssh-ng streams almost
+  nothing while ghc grinds — a busy ghc there means it's a long compile, leave
+  it. An idle builder means the build or the connection died; Ctrl-C the local
+  command and rerun it — nix picks up from the store paths already built and
+  copied.
+
+✻ Crunched for 10s
+
+❯ [mlitchard@polymetis:~/gitlab/dox-populi]$ sudo tailscale up                  
+  [sudo] password for mlitchard:                                                
+  Some peers are advertising routes but --accept-routes is false                
+                                                                                
+  [mlitchard@polymetis:~/gitlab/dox-populi]$ ssh to build@100.107.101.14        
+  ssh: Could not resolve hostname to: Name or service not known                 
+                                                                                
+
+● The to went in as a hostname — the command is ssh build@100.107.101.14 top.
+
+✻ Sautéed for 3s
+
+❯ [mlitchard@polymetis:~/gitlab/dox-populi]$ ssh build@100.107.101.14           
+  build@100.107.101.14: Permission denied (publickey,keyboard-interactive)      
+
+● Your daemon does the remote builds as root, so the build account trusts root's
+  key rather than yours. Try sudo ssh build@100.107.101.14 top — and if the
+  machine entry names a specific key (sshKey in your nix.buildMachines /
+  /etc/nix/machines), pass it with -i.
+
+✻ Crunched for 5s
+
+❯ [mlitchard@polymetis:~/gitlab/dox-populi]$ sudo ssh build@100.107.101.14      
+  build@100.107.101.14: Permission denied (publickey,keyboard-interactive).     
+
+● The daemon must be using a dedicated key file rather than root's default. sudo
+  cat /etc/nix/machines — the entry for 100.107.101.14 names the key path as
+  one of its fields. Then sudo ssh -i <that-path> build@100.107.101.14 top.
+
+✻ Sautéed for 4s
+
+❯ [mlitchard@polymetis:~/gitlab/dox-populi]$ sudo cat /etc/nix/machines         
+  ssh-ng://build@100.107.101.14 x86_64-linux /run/nix-daemon-keys/hyperhyper 10 
+  10 big-parallel,kvm - -                                                       
+
+● The key is /run/nix-daemon-keys/hyperhyper. So: sudo ssh -i 
+  /run/nix-daemon-keys/hyperhyper build@100.107.101.14 top
+
+✻ Cogitated for 3s
+
+❯ [mlitchard@polymetis:~/gitlab/dox-populi]$ sudo ssh -i                        
+  /run/nix-daemon-keys/hyperhyper build@100.107.101.14                          
+  PTY allocation request failed on channel 0                                    
+                                                                                
+  ┎                                                                             
+  ┃    UNAUTHORIZED ACCESS TO THIS DEVICE IS PROHIBITED                         
+  ┃                                                                             
+  ┃    You must have explicit, authorized permission to access or configure     
+  this                                                                          
+  ┃    device. Unauthorized attempts and actions to access or use this system   
+  may                                                                           
+  ┃    result in civil and/or criminal penalties. All activities performed on   
+  this                                                                          
+  ┃    device are logged and monitored.                                         
+  ┃                                                                             
+  ┃    Platonic.Systems                                                         
+                                                                                
+
+● The key works — you're connected — but that account only speaks the nix-daemon
+  protocol: no PTY, no shell, so top through it is off the table. Unless you
+  have a personal login on that machine (it's a Platonic.Systems box), you can't
+  inspect the builder directly.
+
+  The local route: Ctrl-C the stuck run, then sudo nix build .#arges -L 
+  --builders '' — under sudo you're a trusted user, so the flag actually takes
+  effect and the remaining derivations build locally. After that nix run .#arges
+  starts from the finished store path.
+
+✻ Sautéed for 15s
+
+❯ bad advice '[nix-shell:~/gitlab/deploys]$ sudo nix run .#arges -L --builders  
+  '' --substituters ''                                                          
+  [sudo] password for mlitchard:                                                
+  warning: Git tree '/home/mlitchard/gitlab/deploys' has uncommitted changes    
+  evaluation warning: 'system' has been renamed to/replaced by                  
+  'stdenv.hostPlatform.system'                                                  
+  tee: /tmp/deploy-arges.log: Permission denied                                 
+  '                                                                             
+
+● Split the build from the run — root builds, you run:
+
+  sudo nix build .#arges -L --builders ''
+  nix run .#arges
+
+  The first command only builds (no deploy script executes under root). Once the
+  store paths exist, the second runs as you and finds everything already built
+  — the tee to /tmp then happens as your user again.
+
+✻ Baked for 10s
+
+❯ i need you to stop guessing and wasting time '[nix-shell:~/gitlab/deploys]$   
+  sudo nix build .#arges -L --builders ''                                       
+  warning: Git tree '/home/mlitchard/gitlab/deploys' has uncommitted changes    
+  error: flake 'git+file:///home/mlitchard/gitlab/deploys' does not provide     
+  attribute 'packages.x86_64-linux.arges', 'defaultPackage.x86_64-linux.arges', 
+  'legacyPackages.x86_64-linux.arges' or 'arges'                                
+  '                                                                             
+
+● Reading the deploys flake to get the real attribute instead of guessing it.
+
+  Searched for 1 pattern, read 1 file (ctrl+o to expand)
+
+● arges is a nixinate deploy app, and the thing it builds is exposed as a check
+  — arges-build (flake.nix:82). So:
+
+  sudo nix build .#checks.x86_64-linux.arges-build -L --builders ''
+  nix run .#arges
+
+  The first builds the whole arges system locally with the builder disabled; the
+  second, run as you, finds the toplevel already in the store and goes straight
+  to the deploy.
+
+✻ Cogitated for 13s
+
+※ recap: Blog work on tutorial-one is done for now (exercises, trenches slot, structure). We're unsticking your arges deploy, whose remote builder hung. Next: run sudo nix build .#checks.x86_64-linux.arges-build -L --builders '' then nix run .#arges.
+
+❯ tell me how to find my installs via the browser                               
+  Searched for 1 pattern, read 1 file (ctrl+o to expand)
+
+● The installs are served at https://dokyard.dev/installs/ — a browsable file
+  listing (file_server browse) over /var/lib/dokyard/installs on arges, defined
+  in services/dokyard.nix.
+
+✻ Sautéed for 13s
+
+※ recap: Tutorial-one fast-path blog work is drafted (promise, narrative, exercises, trenches slot); we then debugged your arges deploy around the stuck remote builder. Your installs browse at https://dokyard.dev/installs/. Next: run sudo nix build .#checks.x86_64-linux.arges-build -L --builders '' then nix run .#arges.
