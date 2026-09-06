@@ -425,23 +425,9 @@
         '';
       };
 
-      # Browser client bridge: screeps-steamless-client serves the official
-      # client assets (from a Steam install of the GAME — proprietary, not
-      # shipped) to a web browser, proxied to any private server. Pure-JS
-      # deps, so plain vendoring.
-      screepsClient = pkgs.buildNpmPackage {
-        pname = "dox-populi-screeps-client";
-        version = "1.2.1";
-        src = ./client/npm;
-        nodejs = serverNode;
-        # Pinned by `nix run .#lock-client`.
-        npmDepsHash = pkgs.lib.trim (builtins.readFile ./client/npm/npm-deps-hash);
-        dontNpmBuild = true;
-        installPhase = ''
-          mkdir -p $out
-          cp -r node_modules $out/
-        '';
-      };
+      # Browser viewer (open-source renderer, no purchased game files);
+      # provides apps.client, lock-viewer, and checks.viewer-typecheck.
+      viewer = pkgs.callPackage ./viewer.nix { inherit serverNode; };
 
       # Private-server mods, nix-vendored: deps declared in
       # server/mods/package.json, resolved by the committed package-lock.json,
@@ -497,7 +483,7 @@
             system.extraDependencies = flakeInputSources ++ [
               self.devShells.${system}.default
               self.packages.${system}.screeps-server
-              self.packages.${system}.screeps-client
+              self.packages.${system}.screeps-viewer
             ];
           }
         ];
@@ -514,7 +500,7 @@
         invader-main = invaderMain;
         raid-mod = raidMod;
         screeps-server = screepsServer;
-        screeps-client = screepsClient;
+        screeps-viewer = viewer.screepsViewer;
         secrix = secrixCli;
         default = main;
         # Raw disk image of the dev VM (disko image builder). Output:
@@ -560,7 +546,7 @@
           echo "  nix run .#lock-mods           — re-pin server/mods (after editing its package.json)"
           echo "  nix run .#cli                 — connect to the private server CLI (21026)"
           echo "  nix run .#deploy-local        — push main.js to the private server (self-provisioning)"
-          echo "  nix run .#client              — browser client on :8080 (needs Steam game files)"
+          echo "  nix run .#client              — browser viewer on :8080 (open-source renderer, no purchase)"
           echo "  nix run .#stop                — stop server + client (world kept)"
           echo "  nix run .#reset-local         — stop server + wipe the private world"
           echo "  nix run .#itest               — VM integration test: deploy + spawn + harvest"
@@ -571,7 +557,7 @@
         '';
       };
 
-      checks.${system} = {
+      checks.${system} = viewer.checks // {
         # End-to-end VM test: server + deploy + harvest.
         itest = pkgs.callPackage ./tests/integration.nix {
           serverProgram = self.apps.${system}.server.program;
@@ -654,7 +640,7 @@
 
       gitlab = import ./ci.nix;
 
-      apps.${system} = {
+      apps.${system} = viewer.apps // {
         # Regenerate ./generated and ./vendor in the working tree for editor use.
         generate = {
           type = "app";
@@ -882,65 +868,9 @@
           '');
         };
 
-        # Same pinning flow for the browser-client bridge. Rerun after
-        # editing client/npm/package.json.
-        lock-client = {
-          type = "app";
-          program = toString (pkgs.writeShellScript "lock-client" ''
-            set -euo pipefail
-            cd "$(${pkgs.git}/bin/git rev-parse --show-toplevel)/client/npm"
-            ${serverNode}/bin/npm install --package-lock-only --ignore-scripts --no-audit --no-fund
-            ${pkgs.prefetch-npm-deps}/bin/prefetch-npm-deps package-lock.json > npm-deps-hash
-            ${pkgs.git}/bin/git add package.json package-lock.json npm-deps-hash
-            echo "pinned: client/npm/package-lock.json + npm-deps-hash (staged; commit when ready)"
-          '');
-        };
-
-        # Browser client: serve the official client assets from the local
-        # Steam install of the game (package.nw — you must own Screeps) and
-        # proxy to the private server. Open
-        #   http://127.0.0.1:8080/(http://127.0.0.1:21025)/
-        # and sign in with your deploy-local credentials (screepsmod-auth).
-        client = {
-          type = "app";
-          program = toString (pkgs.writeShellScript "screeps-client" ''
-            set -euo pipefail
-            # Asset search order: explicit override, then the shared work
-            # dir (VM users copy package.nw there from the host's Steam
-            # install — same convention as the identity key), then the
-            # local Steam install.
-            NW="''${SCREEPS_CLIENT_NW:-}"
-            if [ -z "$NW" ]; then
-              for CAND in "''${WORKDIR:-''${HOME:-/root}/work}/package.nw" \
-                          "$HOME/.local/share/Steam/steamapps/common/Screeps/package.nw"; do
-                if [ -f "$CAND" ]; then NW="$CAND"; break; fi
-              done
-            fi
-            if [ -z "$NW" ] || [ ! -f "$NW" ]; then
-              echo "error: client assets (package.nw) not found; looked at:" >&2
-              echo "  \$SCREEPS_CLIENT_NW (unset or missing)" >&2
-              echo "  ''${WORKDIR:-''${HOME:-/root}/work}/package.nw (the shared work dir)" >&2
-              echo "  $HOME/.local/share/Steam/steamapps/common/Screeps/package.nw" >&2
-              echo "install the Screeps game via Steam, copy its package.nw into the shared work dir, or set SCREEPS_CLIENT_NW=/path/to/package.nw" >&2
-              exit 1
-            fi
-            # Bind address: explicit override, else follow the server's
-            # knob (the VM sets SCREEPS_HOST=0.0.0.0 so qemu's port
-            # forwards reach it), else explicit IPv4 loopback — bare
-            # "localhost" resolves to ::1 only, which browsers hitting
-            # 127.0.0.1 can't reach.
-            CLIENT_HOST="''${SCREEPS_CLIENT_HOST:-''${SCREEPS_HOST:-127.0.0.1}}"
-            echo "client assets: $NW"
-            echo "browser client: http://127.0.0.1:8080/(http://127.0.0.1:21025)/"
-            exec ${serverNode}/bin/node \
-              "${screepsClient}/node_modules/screeps-steamless-client/dist/index.js" \
-              --package "$NW" --host "$CLIENT_HOST" "$@"
-          '');
-        };
-
         # Stop the private server (the launcher and its children all
-        # carry the vendored server's store path in argv) and the
-        # browser client. World data is left intact.
+        # carry the vendored server's store path in argv). World data is
+        # left intact.
         stop = {
           type = "app";
           program = toString (pkgs.writeShellScript "screeps-stop" ''
@@ -952,11 +882,6 @@
               echo "server stopped"
             else
               echo "no server running"
-            fi
-            if $PKILL -f screeps-steamless-client; then
-              echo "client stopped"
-            else
-              echo "no client running"
             fi
           '');
         };

@@ -67,29 +67,27 @@
       1. cd ~/dox-populi
       2. nix develop                 — the dev shell (pre-baked into
                                        the VM image — ready immediately)
-      3. nix run .#server            — private server on host port 21025
-                                       (nix-vendored — no Steam needed)
-      4. nix run .#deploy-local      — provision account, push main.js,
+      3. nix flake check             — Paradox checks the spec, tsc
+                                       typechecks the harness, the
+                                       build bundles main.js
+      4. nix run .#server            — private server on host port 21025
+                                       (nix-vendored — no purchase needed)
+      5. nix run .#deploy-local      — provision account, push main.js,
                                        place Spawn1
-      5. nix run .#client            — (optional) browser client on host
-                                       port 8080. Uses ~/work/package.nw,
-                                       which run-vm.sh links there
-                                       automatically from the host's
-                                       Steam install of the game
+      6. nix run .#client            — browser viewer on host port 8080
+                                       (open-source renderer, offline)
 
-    Secrets (secrix, same workflow as native nix):
-      Apps decrypt secrets with YOUR key. Place it in the host dir
-      run-vm.sh shares (~/vm-keys by default; WORKDIR= to override)
-      named "identity" — it appears here as ~/work/identity, which
-      SCREEPS_IDENTITY already points to.
-      (Or export SCREEPS_IDENTITY=/path/to/your/key yourself.)
-      deploy-local reads secrets/SCREEPS_LOCAL_CREDS ("username:password"),
-      or set SCREEPS_LOCAL_EMAIL / SCREEPS_LOCAL_PASSWORD instead.
-      Encrypt your own secrets to it (from the dev shell), e.g.:
+    Watch: open http://localhost:8080 in the HOST browser and sign in
+    with your deploy-local credentials.
+
+    Credentials: deploy-local reads SCREEPS_LOCAL_EMAIL /
+      SCREEPS_LOCAL_PASSWORD, or age-encrypted
+      secrets/SCREEPS_LOCAL_CREDS ("username:password"). Your key goes
+      in the host dir run-vm.sh shares (~/vm-keys by default; WORKDIR=
+      to override) named "identity" — it appears here as
+      ~/work/identity, which SCREEPS_IDENTITY already points to.
+      Encrypt your own creds to it (from the dev shell):
         secrix create secrets/SCREEPS_LOCAL_CREDS -i "$SCREEPS_IDENTITY" -r "$(cat $SCREEPS_IDENTITY.pub)"
-
-    Play: point the Steam client ON THE HOST at localhost:21025
-    (Private server — ports 21025/21026 are forwarded by run-vm.sh).
 
     ~/work is your host directory (if shared via run-vm.sh).
     SSH from the host: ssh -p 2222 dev@localhost  (password: dox-populi)
