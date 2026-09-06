@@ -762,9 +762,12 @@
             # mods.json is regenerated every launch: the versioned
             # template plus nix-vendored mod paths. raidmod replaces the
             # native genInvaders cron with the spec-driven raid policy.
+            # The cors mod lets the browser viewer on :8080 reach this
+            # server's API across origins.
             ${pkgs.jq}/bin/jq --arg auth "${serverMods}/node_modules/screepsmod-auth/index.js" \
+              --arg cors "${serverMods}/node_modules/screepsmod-cors/index.js" \
               --arg raid "${raidMod}/raidmod.js" \
-              '.mods += [$auth, $raid]' ${./server/mods.json} > "$DATA/mods.json.tmp"
+              '.mods += [$auth, $cors, $raid]' ${./server/mods.json} > "$DATA/mods.json.tmp"
             mv -f "$DATA/mods.json.tmp" "$DATA/mods.json"
             # Seed the world database on first run (screeps init's job).
             # -s: also replace a 0-byte stub left by a failed GUI launch.
