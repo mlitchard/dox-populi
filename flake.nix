@@ -767,9 +767,12 @@
               STEAM_API_KEY=$(${secrixCli}/bin/secrix decrypt secrets/STEAM_TOKEN -i "$IDENTITY")
             fi
             if [ -z "$STEAM_API_KEY" ]; then
-              echo "note: no Steam Web API key; starting without Steam auth" >&2
-              echo "      create it with:" >&2
-              echo "      echo -n 'KEY' | nix run .#secrix encrypt ./secrets/STEAM_TOKEN -- --all-users" >&2
+              # The backend demands a key: empty means it hunts for the
+              # Steam client's greenworks library and crash-loops. Any
+              # non-empty value disables that path; password signin via
+              # screepsmod-auth is what actually authenticates users.
+              STEAM_API_KEY="dox-populi-no-steam"
+              echo "note: no Steam Web API key; using a dummy (password signin via screepsmod-auth)" >&2
             fi
 
             mkdir -p "$DATA/logs"
