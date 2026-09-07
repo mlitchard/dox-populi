@@ -57,7 +57,7 @@ let
   };
 in
 {
-  inherit serverNode screepsServer serverMods;
+  inherit tickMs serverNode screepsServer serverMods;
 
   apps = {
     # Run the private Screeps server headless from the nix-vendored

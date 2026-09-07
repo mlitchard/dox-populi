@@ -233,6 +233,8 @@ let
   '';
 in
 {
+  inherit hardware;
+
   nixosConfigurations = {
     # Dev VM. Built into a raw disk image (packages.vm-image →
     # vm-image-zst) that the installer ISO dd's onto /dev/vda.

@@ -112,6 +112,7 @@
           echo "  nix run .#reset-local         — stop server + wipe the private world"
           echo "  nix run .#lock-mods           — re-pin server/mods (after editing its package.json)"
           echo "  nix run .#deploy              — bundle and push main.js to screeps.com (optional)"
+          echo "  nix run .#itest               — VM integration test: deploy + spawn + harvest"
           echo "  nix run .#gitlab-ci > .gitlab-ci.yml — regenerate the CI config"
           echo "  nix run .#installer           — provision the dev VM disk (one-time dd install)"
           echo "  nix run .#gen-run-vm          — regenerate run-vm.sh after hardware changes"
@@ -121,12 +122,33 @@
       };
 
       checks.${system} = build.checks // viewer.checks // vm.checks // {
+        # End-to-end VM test: server + deploy + spawn + harvest.
+        itest = pkgs.callPackage ./tests/integration.nix {
+          serverProgram = self.apps.${system}.server.program;
+          deployProgram = self.apps.${system}.deploy-local.program;
+          inherit (server) tickMs;
+          # The dev VM's declared sizing — the test runs on the same
+          # hardware contract.
+          memorySize = vm.hardware.runMemMiB;
+          cores = vm.hardware.runCpus;
+        };
+
         build = build.main;
       };
 
       gitlab = import ./ci.nix;
 
       apps.${system} = build.apps // server.apps // viewer.apps // vm.apps // {
+        # Build checks.itest with streamed logs.
+        itest = {
+          type = "app";
+          program = toString (pkgs.writeShellScript "itest" ''
+            set -euo pipefail
+            exec nix build -L --no-link \
+              "$(${pkgs.git}/bin/git rev-parse --show-toplevel)#checks.${system}.itest" "$@"
+          '');
+        };
+
         # Regenerate CI config: nix run .#gitlab-ci > .gitlab-ci.yml
         gitlab-ci = gitlab-ci.apps.${system}.gitlab-ci;
 

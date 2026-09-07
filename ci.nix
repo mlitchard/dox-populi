@@ -8,6 +8,8 @@
 #   packages:default.
 # - flake:check rebuilds every check the test stage already ran.
 # - flake:show: gitlab-ci:check runs `nix flake show --json` itself.
+# - apps:server / apps:deploy-local are baked into checks:itest
+#   (serverProgram/deployProgram).
 # removeAttrs, not `= null` (nulls survive into the YAML), plus a
 # needs scrub (GitLab rejects undefined needs).
 prev:
@@ -22,6 +24,8 @@ let
     "packages:main"
     "flake:check"
     "flake:show"
+    "apps:server"
+    "apps:deploy-local"
   ];
   scrubNeeds = _: job:
     if builtins.isAttrs job && job ? needs
