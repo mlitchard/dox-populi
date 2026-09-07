@@ -190,10 +190,10 @@ in
     # the built main.js, or with argument "tutorial-js" every .js file in
     # tutorial-js/section1 as its own module. Self-provisioning: if signin
     # fails it registers the account via
-    # screepsmod-auth and retries. Spawn placement is the player's
-    # act, in the viewer. Credentials come from env vars, or from
-    # age-encrypted secrets/SCREEPS_LOCAL_CREDS containing one line
-    # "username:password":
+    # screepsmod-auth and retries; after deploy it auto-places Spawn1
+    # if the account owns nothing. Credentials come from env vars, or
+    # from age-encrypted secrets/SCREEPS_LOCAL_CREDS containing one
+    # line "username:password":
     #   secrix create secrets/SCREEPS_LOCAL_CREDS -i <your-key> -r "$(cat <your-key>.pub)"
     deploy-local = {
       type = "app";
@@ -266,6 +266,79 @@ in
             --data @"$PAYLOAD"
         echo
         echo "deployed $SRC to $URL (branch 'default')"
+
+        # Auto-spawn: if the account owns nothing yet, place Spawn1.
+        # place-spawn demands a room that exists in db.rooms AND has
+        # an unowned controller (the server's world-start-room falls
+        # back to W5N5, a controller-less center room). No HTTP
+        # endpoint exposes controller ownership, so read candidates
+        # from the world db and try them in order.
+        STATUS=$($CURL -sS -H "X-Token: $TOKEN" "$URL/api/user/world-status" \
+          | $JQ -r '.status // empty')
+        echo "world-status: $STATUS"
+        if [ "$STATUS" = "lost" ]; then
+          # Owns objects but no spawn+controller pair (spawn destroyed,
+          # or leftovers from an earlier session). Respawn releases the
+          # old objects and resets the account to "empty".
+          $CURL -sS -X POST -H "X-Token: $TOKEN" "$URL/api/user/respawn" >/dev/null
+          STATUS=$($CURL -sS -H "X-Token: $TOKEN" "$URL/api/user/world-status" \
+            | $JQ -r '.status // empty')
+          echo "respawned — world-status now: $STATUS"
+        fi
+        if [ "$STATUS" = "empty" ]; then
+          if [ -n "''${SCREEPS_LOCAL_ROOM:-}" ]; then
+            CANDIDATES="$SCREEPS_LOCAL_ROOM"
+          else
+            DATA="''${SCREEPS_DATA_DIR:-$(${pkgs.git}/bin/git rev-parse --show-toplevel)/.server-data}"
+            CANDIDATES=$($JQ -r '.collections[] | select(.name == "rooms.objects")
+              | .data[]
+              | select(.type == "controller"
+                       and ((.user // "") == "")
+                       and ((.reservation // null) == null))
+              | .room' "$DATA/db.json")
+          fi
+          PLACED=
+          for ROOM in $CANDIDATES; do
+            TERRAIN=$($CURL -sS "$URL/api/game/room-terrain?room=$ROOM&encoded=true" \
+              | $JQ -r '.terrain[0].terrain')
+            IDX=$(${pkgs.gawk}/bin/awk -v s="$TERRAIN" 'BEGIN {
+              for (d = 0; d <= 1250; d++) for (k = 1; k >= -1; k -= 2) {
+                i = 1275 + d * k
+                if (i < 0 || i >= 2500) continue
+                ch = substr(s, i + 1, 1); x = i % 50; y = int(i / 50)
+                # 0 = plain, 2 = swamp (buildable); keep off the room edges
+                if ((ch == "0" || ch == "2") && x > 2 && x < 47 && y > 2 && y < 47) {
+                  print i; exit
+                }
+              }
+            }')
+            [ -z "$IDX" ] && continue
+            X=$((IDX % 50)); Y=$((IDX / 50))
+            RESULT=$($CURL -sS -X POST "$URL/api/game/place-spawn" \
+              -H "X-Token: $TOKEN" -H "Content-Type: application/json" \
+              --data "$($JQ -n --arg r "$ROOM" --argjson x "$X" --argjson y "$Y" \
+                '{room: $r, x: $x, y: $y, name: "Spawn1"}')")
+            if [ "$(printf '%s' "$RESULT" | $JQ -r '.ok // empty')" = "1" ]; then
+              echo "auto-placed Spawn1 in $ROOM at ($X,$Y)"
+              # place-spawn welds newbie protection onto the room:
+              # safeMode (kept) and invaderGoal: 1000000. The raid
+              # mod honors per-room invaderGoal overrides, so clear
+              # it; raidWave: 0 resets the escalation counter.
+              # Best-effort: worst case is late raids, never a
+              # failed deploy.
+              $JQ -rn --arg r "$ROOM" \
+                '"storage.db.rooms.update({_id: \($r|@json)}, {$set: {invaderGoal: null, raidWave: 0}})"' \
+                | ${pkgs.netcat-openbsd}/bin/nc -q 2 "$CLI_HOST" "$CLI_PORT" >/dev/null 2>&1 || true
+              PLACED=1
+              break
+            fi
+            echo "place-spawn in $ROOM refused: $RESULT — trying next room" >&2
+          done
+          if [ -z "$PLACED" ]; then
+            echo "error: auto-spawn failed — no candidate room accepted a spawn" >&2
+            exit 1
+          fi
+        fi
       '');
     };
 
