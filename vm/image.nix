@@ -22,10 +22,9 @@ let
     bootTestMemMiB = 16384; # vm-boot check: first-boot contract only
     diskSize = "40G"; # qcow2 virtual size; the 16G image grows into it
     ports = { ssh = 2222; http = 21025; cli = 21026; client = 8080; };
-    # Download source for the released VM image (Hetzner). Empty
-    # until a main image is published; set it, rerun gen-run-vm,
-    # and run-vm.sh self-serves the download.
-    imageUrl = "";
+    # Download source for the released VM image (Hetzner).
+    # run-vm.sh self-serves the download from here on first run.
+    imageUrl = "https://dokyard.dev/installs/dox-populi-compact.qcow2";
   };
   memG = mib: "${toString (mib / 1024)}G";
 
