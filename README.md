@@ -103,7 +103,7 @@ for watching, step 4.)
    nix run .#cli           # server CLI (port 21026)
    nix run .#stop          # stop server + client, world kept
    nix run .#reset-local   # stop + wipe the world (fresh on next start)
-   nix flake check         # spec-check, typecheck, build, itest, vm-boot
+   nix flake check         # all checks (itest and vm-boot each boot a VM)
    ```
 
 ---
@@ -151,7 +151,7 @@ itself. Host prerequisites: `qemu`, `tmux`, `curl`.
 
    > **Note — `REMOTE HOST IDENTIFICATION HAS CHANGED!`**: every VM
    > (re)install generates fresh SSH host keys, so after a factory reset
-   > or `INSTALL=1` your `known_hosts` still pins the old VM's key and
+   > your `known_hosts` still pins the old VM's key and
    > ssh refuses to connect. Not an attack — evict the stale entry and
    > retry:
    >
