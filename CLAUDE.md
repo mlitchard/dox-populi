@@ -32,8 +32,8 @@ events to the generated brain, and makes Screeps API calls — nothing else.
 - Secrets are age files under `secrets/` managed with secrix, decrypted with
   the USER'S identity key. Never decrypt, print, or commit secret material.
 - After editing `server/npm/package.json`, `server/mods/package.json`, or
-  `client/npm/package.json`, rerun the matching `nix run .#lock-server` /
-  `.#lock-mods` / `.#lock-client` to re-pin `package-lock.json` +
+  `viewer/package.json`, rerun the matching `nix run .#lock-server` /
+  `.#lock-mods` / `.#lock-viewer` to re-pin `package-lock.json` +
   `npm-deps-hash`. Nothing else may run npm's resolver.
 - The `nixosConfigurations` in this flake are a secrix key stub
   (`dox-populi`) and the dev VM (`vm`/`installer`). CI here is build/check
@@ -55,7 +55,7 @@ events to the generated brain, and makes Screeps API calls — nothing else.
 | `flake.nix` | Owns the whole pipeline (see below) |
 | `server/npm/` | nix-vendored open-source Screeps server (npm pkg) |
 | `server/mods/` | nix-vendored server mods (screepsmod-auth) |
-| `client/npm/` | screeps-steamless-client (browser client bridge) |
+| `viewer/` | browser viewer: open-source @screeps/renderer + one-origin proxy |
 | `tests/integration.nix` | itest: server + deploy + harvest, pure |
 | `tests/vm.nix` | vm-boot: first-boot contract of the dev VM |
 | `vm/` | installer ISO + installed-system module for non-nix users |
