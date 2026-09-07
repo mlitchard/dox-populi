@@ -280,13 +280,12 @@ in
       '');
     };
 
-    # Push main.js to the private server (default http://127.0.0.1:21025),
-    # self-provisioning: if signin fails it sets the account password via
-    # the server CLI and retries; after deploy it auto-places Spawn1 if
-    # the account owns nothing. Only account creation itself is manual
-    # (once per world, in the Steam client — binds your Steam identity).
-    # Credentials come from env vars, or from age-encrypted
-    # secrets/SCREEPS_LOCAL_CREDS containing one line "username:password":
+    # Push main.js to the private server (default http://127.0.0.1:21025).
+    # Self-provisioning: if signin fails it registers the account via
+    # screepsmod-auth and retries. Spawn placement is the player's
+    # act, in the viewer. Credentials come from env vars, or from
+    # age-encrypted secrets/SCREEPS_LOCAL_CREDS containing one line
+    # "username:password":
     #   secrix create secrets/SCREEPS_LOCAL_CREDS -i <your-key> -r "$(cat <your-key>.pub)"
     deploy-local = {
       type = "app";
@@ -343,7 +342,7 @@ in
         if [ -z "$TOKEN" ]; then
           echo "error: signin failed at $URL/api/auth/signin" >&2
           echo "server response: $BODY" >&2
-          echo "(server running? screepsmod-auth loaded? account created in the client?)" >&2
+          echo "(server running? screepsmod-auth loaded?)" >&2
           exit 1
         fi
 

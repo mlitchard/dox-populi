@@ -90,12 +90,11 @@ for watching, step 4.)
    ✅ Output ends with `deployed main.js ...` and either `world-status:
    normal` or `auto-placed Spawn1 in <room>`.
 
-4. **Watch it play** (optional — needs your Steam copy of the game)
+4. **Watch it play**
 
-   - Browser: `nix run .#client`, then open
-     `http://127.0.0.1:8080/(http://127.0.0.1:21025)/` and sign in with
-     your deploy-local credentials. Reads the client assets from your Steam
-     install (`SCREEPS_CLIENT_NW` to override the path).
+   - Browser: `nix run .#client`, then open `http://127.0.0.1:8080/` and
+     sign in with your deploy-local credentials. Open-source renderer —
+     no purchased game files needed.
    - Or Steam client → Screeps → *Private server* → `127.0.0.1:21025`.
 
 5. **Useful knobs**
@@ -114,11 +113,11 @@ for watching, step 4.)
 Nothing is built on your machine: nix lives **inside** a dev VM that installs
 itself. Host prerequisites: `qemu`, `tmux`, `curl`.
 
-1. **Get the installer ISO**
+1. **Get the VM image**
 
-   Download `dox-populi-installer.iso` from the project releases and place it
-   next to `run-vm.sh` (or `export ISO_URL=<release-url>` and the script
-   downloads it). Maintainers build it with `nix build .#installer-iso`.
+   Download `dox-populi-compact.qcow2` from the project releases and place it
+   next to `run-vm.sh` (or `export IMAGE_URL=<release-url>` and the script
+   downloads it). Maintainers build it with `nix run .#installer-iso`.
 
 2. **Put your key in the shared directory**
 
@@ -131,20 +130,17 @@ itself. Host prerequisites: `qemu`, `tmux`, `curl`.
    `~/work`, so your key is found at its conventional path
    `~/work/identity` automatically.
 
-3. **Install the VM (fully automatic)**
+3. **Boot the VM**
 
    ```sh
    ./run-vm.sh
    ./run-vm.sh console        # watch; Ctrl-b d detaches
    ```
 
-   The installer partitions the virtual disk, builds the whole dev
-   environment inside the VM, and powers off.
+   The image is a ready-to-boot dev environment; the first boot grows
+   its filesystem into the virtual disk.
 
-   ✅ Console ends with `install complete — powering off`, then
-   `[qemu exited: 0]`.
-
-4. **Boot and log in**
+4. **Log in**
 
    ```sh
    ./run-vm.sh
@@ -180,14 +176,11 @@ itself. Host prerequisites: `qemu`, `tmux`, `curl`.
 
 6. **Watch it play**
 
-   - Steam client on the **host** → Screeps → *Private server* →
+   - In the VM run `nix run .#client`, then on the host open
+     `http://localhost:8080/` and sign in with your deploy-local
+     credentials. Open-source renderer — no purchased game files needed.
+   - Or the Steam client on the **host** → Screeps → *Private server* →
      `localhost:21025`.
-   - Or the browser client: if the game is in the host's default Steam
-     library (or `SCREEPS_CLIENT_NW` points at its `package.nw`),
-     run-vm.sh automatically links it into your `WORKDIR` share. In the
-     VM run `nix run .#client`, then on the host open
-     `http://localhost:8080/(http://127.0.0.1:21025)/` and sign in with
-     your deploy-local credentials.
 
 ### VM management
 
@@ -199,7 +192,7 @@ itself. Host prerequisites: `qemu`, `tmux`, `curl`.
 ./run-vm.sh kill       # stop
 ```
 
-Knobs: `MEM`, `CPUS`, `DISK`, `DISK_SIZE`, `WORKDIR`, `ISO`, `ISO_URL`,
-`INSTALL=1` (force reinstall boot). `WORKDIR` defaults to `~/vm-keys`
-(skipped if it doesn't exist). Factory reset: `rm dox-populi.qcow2`.
+Knobs: `MEM`, `CPUS`, `DISK`, `WORKDIR`, `IMAGE_URL`. `WORKDIR`
+defaults to `~/vm-keys` (skipped if it doesn't exist). Factory reset:
+`rm dox-populi-compact.qcow2`.
 Fresh game world: in the VM, `nix run .#reset-local`.

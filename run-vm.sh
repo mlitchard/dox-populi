@@ -11,13 +11,11 @@
 # the VM. Supported host: Linux x86_64; KVM recommended
 # (unaccelerated works, slowly).
 #
-# First run: obtains dox-populi-installer.iso (from beside this
-# script, from a maintainer build in ./result/iso/, or downloaded
-# from ISO_URL), creates the VM disk, and boots the ISO once — its
-# boot service dd's the prebuilt system image onto the disk and
-# powers off. Every run after that boots the installed system.
+# First run: obtains dox-populi-compact.qcow2 (place it beside
+# this script, set IMAGE_URL to download it, or build it with
+# `nix run .#installer-iso`). Every run boots that disk.
 #
-# Delete dox-populi.qcow2 for a factory reset (then rerun).
+# Delete dox-populi-compact.qcow2 for a factory reset (then rerun).
 #
 # Commands:
 #   ./run-vm.sh [start]      start the VM (first run installs first)
@@ -37,22 +35,18 @@
 #
 # Env knobs (all optional): MEM, CPUS (default: half the host's
 # memory and cores, capped at 32G/8), DISK
-# (default ./dox-populi.qcow2), DISK_SIZE (default 40G, first run
-# only), ISO (default ./dox-populi-installer.iso), ISO_URL (where to
-# download the ISO; empty until a release is published), WORKDIR
+# (default ./dox-populi-compact.qcow2), IMAGE_URL (where to
+# download the image; empty until a release is published), WORKDIR
 # (host dir shared into the guest at ~/work; default: ~/vm-keys,
 # skipped if it doesn't exist).
 set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")" && pwd)"
-DISK="${DISK:-dox-populi.qcow2}"
-DISK_SIZE="${DISK_SIZE:-40G}"
-ISO="${ISO:-$REPO/dox-populi-installer.iso}"
-ISO_URL="${ISO_URL:-}"
+DISK="${DISK:-dox-populi-compact.qcow2}"
+IMAGE_URL="${IMAGE_URL:-}"
 WORKDIR="${WORKDIR:-$HOME/vm-keys}"
 # Auto-size from the host: half its memory and cores, capped at
-# the declared hardware contract. MEM=, CPUS=, INSTALL_MEM=,
-# INSTALL_CPUS= override.
+# the declared hardware contract. MEM=, CPUS= override.
 HOST_MEM_MIB=1024
 while read -r key val _; do
   if [ "$key" = "MemTotal:" ]; then HOST_MEM_MIB=$((val / 1024)); break; fi
@@ -65,8 +59,6 @@ AUTO_CPUS=$((HOST_CPUS / 2))
 [ "$AUTO_CPUS" -gt 8 ] && AUTO_CPUS=8
 MEM="${MEM:-${AUTO_MEM}M}"
 CPUS="${CPUS:-$AUTO_CPUS}"
-INSTALL_MEM="${INSTALL_MEM:-4G}"
-INSTALL_CPUS="${INSTALL_CPUS:-4}"
 SESSION="${SESSION:-dox-populi-vm}"
 
 # KVM where writable, TCG emulation otherwise (works, slowly).
@@ -128,41 +120,22 @@ case "$CMD" in
     fi
 
     if [ ! -f "$DISK" ]; then
-      # First run: obtain the ISO, create the disk, boot the
-      # installer in the foreground (it powers itself off).
-      if [ ! -f "$ISO" ]; then
-        MAINT_ISO=$(set -- "$REPO"/result/iso/*.iso; echo "$1")
-        if [ -f "$MAINT_ISO" ]; then
-          ISO="$MAINT_ISO"
-        elif [ -n "$ISO_URL" ]; then
-          if ! command -v curl >/dev/null 2>&1; then
-            echo "error: curl is required (it downloads the installer ISO)" >&2
-            exit 1
-          fi
-          echo "downloading the dox-populi installer ISO (one-time)..."
-          curl -fL -o "$ISO" "$ISO_URL"
-        else
-          echo "error: installer ISO not found: $ISO" >&2
-          echo "" >&2
-          echo "Download dox-populi-installer.iso from the project's releases and" >&2
-          echo "place it next to this script, or set ISO_URL= to fetch it" >&2
-          echo "automatically. Maintainers build it with: nix build .#installer-iso" >&2
+      # First run: obtain the VM image.
+      if [ -n "$IMAGE_URL" ]; then
+        if ! command -v curl >/dev/null 2>&1; then
+          echo "error: curl is required (it downloads the VM image)" >&2
           exit 1
         fi
+        echo "downloading the dox-populi VM image (one-time)..."
+        curl -fL -o "$DISK" "$IMAGE_URL"
+      else
+        echo "error: VM image not found: $DISK" >&2
+        echo "" >&2
+        echo "Download dox-populi-compact.qcow2 from the project's releases and" >&2
+        echo "place it next to this script, or set IMAGE_URL= to fetch it" >&2
+        echo "automatically. Maintainers build it with: nix run .#installer-iso" >&2
+        exit 1
       fi
-      detect_accel
-      qemu-img create -f qcow2 "$DISK" "$DISK_SIZE"
-      echo "created $DISK ($DISK_SIZE) — installing (dd, grow, poweroff)..."
-      # No -netdev: the installer needs no network.
-      "$QEMU" \
-        "${ACCEL[@]}" \
-        -m "$INSTALL_MEM" -smp "$INSTALL_CPUS" \
-        -drive "file=$DISK,if=virtio,format=qcow2" \
-        -cdrom "$ISO" -boot d \
-        -display none \
-        -serial mon:stdio \
-        || { echo "error: installer qemu exited abnormally — delete $DISK and retry" >&2; exit 1; }
-      echo "install complete — booting the installed system"
     fi
 
     tmux new-session -d -s "$SESSION" \
