@@ -116,7 +116,13 @@ Nothing is built on your machine: nix lives **inside** a dev VM that installs
 itself. Host prerequisites: `qemu`, `tmux`, `curl`.
 
 
-1. **Put your key in the shared directory**
+1. **Get the VM image**
+
+   Download `dox-populi-compact.qcow2` from the project releases and place it
+   next to `run-vm.sh` (or `export IMAGE_URL=<release-url>` and the script
+   downloads it). Maintainers build it with `nix run .#installer`.
+
+2. **Put your key in the shared directory**
 
    ```sh
    mkdir -p ~/vm-keys
@@ -127,34 +133,28 @@ itself. Host prerequisites: `qemu`, `tmux`, `curl`.
    `~/work`, so your key is found at its conventional path
    `~/work/identity` automatically.
 
-2. **Install the VM (fully automatic)**
+3. **Boot the VM**
 
    ```sh
    ./run-vm.sh
    ./run-vm.sh console        # watch; Ctrl-b d detaches
    ```
 
-   The installer partitions the virtual disk, builds the whole dev
-   environment inside the VM, and powers off.
+   The image is a ready-to-boot dev environment; the first boot grows
+   its filesystem into the virtual disk.
 
-   ✅ Console ends with `install complete — powering off`, then
-   `[qemu exited: 0]`.
+4. **Log in**
 
-4. **Boot and log in**
-
-   ```sh
-   ./run-vm.sh
-   ```
    start three ssh clients. One for the server, one for the client, and one for deploy.
    ```sh
    ssh -p 2222 dev@localhost             # password: dox-populi
    ```
-   
+
    ✅ `ls ~/work/identity` shows your key.
 
    > **Note — `REMOTE HOST IDENTIFICATION HAS CHANGED!`**: every VM
    > (re)install generates fresh SSH host keys, so after a factory reset
-   > or `INSTALL=1` your `known_hosts` still pins the old VM's key and
+   > your `known_hosts` still pins the old VM's key and
    > ssh refuses to connect. Evict the stale entry and retry
    >
    > ```sh
@@ -194,7 +194,7 @@ itself. Host prerequisites: `qemu`, `tmux`, `curl`.
 ./run-vm.sh kill       # stop
 ```
 
-Knobs: `MEM`, `CPUS`, `DISK`, `DISK_SIZE`, `WORKDIR`, `ISO`, `ISO_URL`,
-`INSTALL=1` (force reinstall boot). `WORKDIR` defaults to `~/vm-keys`
-(skipped if it doesn't exist). Factory reset: `rm dox-populi.qcow2`.
+Knobs: `MEM`, `CPUS`, `DISK`, `WORKDIR`, `IMAGE_URL`. `WORKDIR`
+defaults to `~/vm-keys` (skipped if it doesn't exist). Factory reset:
+`rm dox-populi-compact.qcow2`.
 Fresh game world: in the VM, `nix run .#reset-local`.
