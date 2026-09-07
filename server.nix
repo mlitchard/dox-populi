@@ -1,10 +1,10 @@
 { pkgs, secrixCli, mainPayload, tutorialPayload }:
 
 let
-  # ms per tick (engine default 1000, kept: the reader watches this
-  # world). setTickDuration persists in world storage, so apps.server
-  # re-asserts this every launch; SCREEPS_TICK_MS overrides per shell.
-  tickMs = 1000;
+  # ms per tick (engine default 1000). setTickDuration persists in
+  # world storage, so apps.server re-asserts this every launch;
+  # SCREEPS_TICK_MS overrides per shell.
+  tickMs = 50;
 
   # The open-source Screeps server, nix-vendored from npm. isolated-vm
   # and friends are native modules: node-gyp needs python + the
