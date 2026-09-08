@@ -83,12 +83,9 @@ Prerequisites: nix with flakes enabled.
    nix run .#deploy-local
    ```
 
-   Self-provisioning: creates the account (from `SCREEPS_LOCAL_CREDS` or
-   `SCREEPS_LOCAL_EMAIL`/`SCREEPS_LOCAL_PASSWORD`), pushes `main.js`, and
-   auto-places `Spawn1` if the account owns nothing.
+   Self-provisioning: creates the account, pushes `main.js`, and auto-places `Spawn1`.
 
-   ✅ Output ends with `deployed main.js ...` and either `world-status:
-   normal` or `auto-placed Spawn1 in <room>`.
+   ✅ Output ends with `auto-placed Spawn1 in <room>`.
 
 4. **Watch it play**
 
@@ -108,7 +105,7 @@ Prerequisites: nix with flakes enabled.
 
 ---
 
-## Quickstart — other Linux (no nix required)
+## Quickstart — other Linux
 
 Nothing is built on your machine: nix lives **inside** a dev VM that installs
 itself. Host prerequisites: `qemu`, `tmux`, `curl`.
