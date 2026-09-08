@@ -2,14 +2,15 @@
 
 A Screeps client whose creep population is governed by a [Paradox](https://gitlab.com/paradox_labs/paradox)
 `.dox` specification: Paradox generates the typed decision logic, nix owns the
-generate → typecheck → bundle pipeline, and a private Screeps server runs the
+generate → typecheck → bundle pipeline, and a Screeps server runs the
 result.
 
-The server is the **open-source Screeps server, nix-vendored** — no Steam
-install is needed to build or run it. You only need your own Steam copy of
-the game to *watch* the world, through either the Steam client or the
-browser client bridge (which serves the official client assets from your
-Steam install).
+The server is the **open-source Screeps server, nix-vendored**, and the
+viewer is an **open-source browser renderer** built from public npm
+packages (`@screeps/renderer`). Building, running, and watching the world
+all work without a Steam account or a purchased copy of the game. If you
+do own the game, the Steam client works as an alternative viewer against
+the private server.
 
 The server runs headless on `localhost:21025`, either natively (NixOS/nix
 users) or inside a self-installing dev VM (everyone else).
@@ -51,8 +52,7 @@ secrix create secrets/SCREEPS_LOCAL_CREDS -i /path/to/your/key -r "$(cat /path/t
 
 ## Quickstart — NixOS (or any Linux with nix + flakes)
 
-Prerequisites: nix with flakes enabled. (Steam + the game are only needed
-for watching, step 4.)
+Prerequisites: nix with flakes enabled.
 
 1. **Clone and enter the dev shell**
 
