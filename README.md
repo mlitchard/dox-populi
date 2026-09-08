@@ -193,3 +193,38 @@ Knobs: `MEM`, `CPUS`, `DISK`, `WORKDIR`, `IMAGE_URL`. `WORKDIR`
 defaults to `~/vm-keys` (skipped if it doesn't exist). Factory reset:
 `rm dox-populi-compact.qcow2`.
 Fresh game world: in the VM, `nix run .#reset-local`.
+
+
+### Development
+Useful context to give your agent.
+
+# Klanker Kontext
+
+I cloned several repos and fed them to the agent during the process of building this project.
+You should do the same.
+
+The screeps [server](https://github.com/screeps/screeps.git)
+
+[backend-local](https://github.com/screeps/backend-local.git)
+Contains an HTTP server accessed by clients and a CLI
+server for administration.
+
+[driver](https://github.com/screeps/driver.git)
+a link between the environment-independent engine (that is shared for the
+official server, standalone server, and in-browser simulation) and the
+immediate environment that hosts the game engine.
+
+[render](https://github.com/screeps/renderer.git)
+This library is based on [PixiJS](https://pixijs.com/) and contains the renderer engine used in the Screeps game.
+
+[tutorial scripts](https://github.com/screeps/tutorial-scripts.git)
+The original tutorial scripts.
+
+[typed-screeps](https://github.com/screepers/typed-screeps.git)
+Strong TypeScript declarations for the game Screeps: World.
+
+[paradox](https://gitlab.com/paradox_labs/paradox.git)
+A language for domain specification.
+
+# Install and Run
+Clone the [repo](https://gitlab.com/dox-populi/screeps) and follow the instructions in README.md.
