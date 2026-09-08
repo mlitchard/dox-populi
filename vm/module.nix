@@ -2,7 +2,7 @@
 # configuration is baked into a raw disk image (packages.vm-image,
 # disk layout in vm/disko.nix), and the installer ISO
 # (vm/installer.nix) just dd's that image onto the virtual disk —
-# provisioned one-time via `nix run .#installer-iso`, then run with
+# provisioned one-time via `nix run .#installer`, then run with
 # ./run-vm.sh.
 { pkgs, modulesPath, ... }:
 {

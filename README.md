@@ -114,7 +114,7 @@ itself. Host prerequisites: `qemu`, `tmux`, `curl`.
 
    Download `dox-populi-compact.qcow2` from the project releases and place it
    next to `run-vm.sh` (or `export IMAGE_URL=<release-url>` and the script
-   downloads it). Maintainers build it with `nix run .#installer-iso`.
+   downloads it). Maintainers build it with `nix run .#installer`.
 
 2. **Put your key in the shared directory**
 

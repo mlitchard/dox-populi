@@ -13,7 +13,7 @@
 #
 # First run: obtains dox-populi-compact.qcow2 (place it beside
 # this script, set IMAGE_URL to download it, or build it with
-# `nix run .#installer-iso`). Every run boots that disk.
+# `nix run .#installer`). Every run boots that disk.
 #
 # Delete dox-populi-compact.qcow2 for a factory reset (then rerun).
 #
@@ -133,7 +133,7 @@ case "$CMD" in
         echo "" >&2
         echo "Download dox-populi-compact.qcow2 from the project's releases and" >&2
         echo "place it next to this script, or set IMAGE_URL= to fetch it" >&2
-        echo "automatically. Maintainers build it with: nix run .#installer-iso" >&2
+        echo "automatically. Maintainers build it with: nix run .#installer" >&2
         exit 1
       fi
     fi

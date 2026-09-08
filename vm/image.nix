@@ -48,7 +48,7 @@ let
     #
     # First run: obtains dox-populi-compact.qcow2 (place it beside
     # this script, set IMAGE_URL to download it, or build it with
-    # `nix run .#installer-iso`). Every run boots that disk.
+    # `nix run .#installer`). Every run boots that disk.
     #
     # Delete dox-populi-compact.qcow2 for a factory reset (then rerun).
     #
@@ -168,7 +168,7 @@ let
             echo "" >&2
             echo "Download dox-populi-compact.qcow2 from the project's releases and" >&2
             echo "place it next to this script, or set IMAGE_URL= to fetch it" >&2
-            echo "automatically. Maintainers build it with: nix run .#installer-iso" >&2
+            echo "automatically. Maintainers build it with: nix run .#installer" >&2
             exit 1
           fi
         fi
@@ -299,9 +299,9 @@ in
     # then compact it into dox-populi-compact.qcow2 with
     # `qemu-img convert -c` and delete the uncompacted disk.
     # No -netdev: the installer needs no network. ./run-vm.sh runs
-    # the installed VM. `nix run .#installer-iso` resolves to this
+    # the installed VM. `nix run .#installer` resolves to this
     # app; `nix build .#installer-iso` builds the bare ISO package.
-    installer-iso = {
+    installer = {
       type = "app";
       program = toString (pkgs.writeShellScript "install-vm" ''
         set -euo pipefail

@@ -142,7 +142,7 @@
           echo "  nix run .#stop                — stop server + client (world kept)"
           echo "  nix run .#reset-local         — stop server + wipe the private world"
           echo "  nix run .#itest               — VM integration test: deploy + spawn + harvest"
-          echo "  nix run .#installer-iso       — provision the dev VM disk (one-time dd install)"
+          echo "  nix run .#installer           — provision the dev VM disk (one-time dd install)"
           echo "  nix run .#gen-run-vm          — regenerate run-vm.sh after hardware changes"
           echo "  ./run-vm.sh                   — run the installed dev VM"
           echo "  nix flake check               — run all checks"

@@ -2,7 +2,7 @@
 # or null`, applied to the generated config). The generator maps
 # every flake output to a job; one job building the deepest
 # artifact proves the whole chain. Dropped:
-# - VM chain: apps:installer-iso embeds vm-image-zst <- vm-image
+# - VM chain: apps:installer embeds vm-image-zst <- vm-image
 #   <- the vm system, so those upstream jobs are redundant.
 # - checks:build and packages:main are the same derivation as
 #   packages:default.
