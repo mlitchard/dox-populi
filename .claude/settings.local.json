@@ -1,0 +1,38 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//home/mlitchard/gitlab/dox-main/screeps/vm/**)",
+      "Read(//home/mlitchard/gitlab/dox-main/screeps/**)",
+      "Bash(mkdir -p vm tests)",
+      "Bash(cp /home/mlitchard/gitlab/dox-main/screeps/vm/disko.nix vm/disko.nix)",
+      "Bash(cp /home/mlitchard/gitlab/dox-main/screeps/vm/installer.nix vm/installer.nix)",
+      "Bash(cp -p /home/mlitchard/gitlab/dox-main/screeps/run-vm.sh run-vm.sh)",
+      "Bash(/usr/bin/head *)",
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:api.github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:docs.screeps.com)",
+      "WebFetch(domain:www.npmjs.com)",
+      "WebFetch(domain:f-droid.org)",
+      "WebFetch(domain:blog.screeps.com)",
+      "Bash(cp -r /home/mlitchard/gitlab/dox-main/screeps/server /home/mlitchard/gitlab/dox-populi/server)",
+      "Bash(cp -r /home/mlitchard/gitlab/dox-main/screeps/client /home/mlitchard/gitlab/dox-populi/client)",
+      "WebFetch(domain:unpkg.com)",
+      "Bash(curl -sS -m 5 -X POST http://127.0.0.1:21025/api/auth/signin -H 'Content-Type: application/json' --data '{\"email\":\"lambdafan\",\"password\":\"!3y414yntw41!\"}')",
+      "WebFetch(domain:sy-harabi.github.io)",
+      "WebFetch(domain:www.jonwinsley.com)",
+      "WebFetch(domain:wiki.screepspl.us)",
+      "WebFetch(domain:medium.com)",
+      "WebFetch(domain:bencbartlett.com)",
+      "WebFetch(domain:screeps.com)",
+      "Bash(git *)",
+      "WebFetch(domain:opensource.googleblog.com)",
+      "Bash(nix flake *)",
+      "Read(//home/mlitchard/github/screeps/common/lib/**)",
+      "Read(//home/mlitchard/github/screeps/common/**)",
+      "Bash(jq '[.collections[] | select\\(.name==\"env\"\\) | .data[0].values | {gameTime}]' /home/mlitchard/gitlab/dox-populi/.server-data/db.json)",
+      "Bash(jq '.collections[] | select\\(.name==\"env\"\\) | .data' /home/mlitchard/gitlab/dox-populi/.server-data/db.json)"
+    ]
+  }
+}
