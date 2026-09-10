@@ -16,14 +16,12 @@ rejects changes that fail to align with the spec.
 
 One VM. Inside it:
 
-- dox/creeps.dox — the spec, written with an LLM. The Paradox checker
-  verifies its named properties, and Paradox generates the decision
+- dox/creeps.dox — the spec, written with an LLM. Paradox 
+ validates its named properties, and generates the decision
   logic from it.
 - harness/main.ts — the TypeScript harness that makes the game calls,
   using that generated logic.
 - a private game server and a browser viewer, both built by nix.
-
-Your machine needs QEMU, tmux, curl and a browser.
 
 ## By the end
 
@@ -35,6 +33,6 @@ Your machine needs QEMU, tmux, curl and a browser.
 
 ## Start
 
-- download the vm [image](https://dokyard.dev/installs/) for tutorial one.
+- If you have not installed dox-populi yet, follow the [README](https://gitlab.com/dox-populi/screeps/-/blob/main/README.md).
 - We'll walk through the [README](narrative.md)
 - And then we'll go through the [exercises](exercises.md).
