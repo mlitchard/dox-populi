@@ -65,10 +65,27 @@ async function start(server: string, email: string, password: string): Promise<v
   const inspector = new Inspector(
     container,
     el<HTMLElement>("highlight"),
-    el<HTMLElement>("panel"),
+    el<HTMLElement>("inspect"),
     view,
     state,
+    api,
   );
+
+  // GCL level from raw points: floor((points / GCL_MULTIPLY) ^ (1 /
+  // GCL_POW)) + 1, constants from @screeps/common lib/constants.js.
+  const gclPoints = me.gcl ?? 0;
+  const gclLevel = Math.floor(Math.pow(gclPoints / 1_000_000, 1 / 2.4)) + 1;
+  const account = el<HTMLElement>("account");
+  let cpuUsed = "–";
+  let memoryBytes = "–";
+  const renderAccount = (): void => {
+    account.innerHTML =
+      `<h2>${me.username}</h2><ul>` +
+      `<li>gcl: level ${gclLevel} (${gclPoints} points)</li>` +
+      `<li>cpu: ${cpuUsed} / ${me.cpu ?? "?"}</li>` +
+      `<li>memory: ${memoryBytes}</li></ul>`;
+  };
+  renderAccount();
   const gameConsole = new GameConsole(
     {
       live: el<HTMLElement>("console-live"),
@@ -191,6 +208,13 @@ async function start(server: string, email: string, password: string): Promise<v
         gameConsole.receive(payload as Parameters<GameConsole["receive"]>[0]);
         return;
       }
+      if (channel === `user:${me._id}/cpu`) {
+        const usage = payload as { cpu?: number | string; memory?: number };
+        cpuUsed = usage.cpu === undefined ? "–" : String(usage.cpu);
+        memoryBytes = typeof usage.memory === "number" ? `${usage.memory} bytes` : "–";
+        renderAccount();
+        return;
+      }
       if (channel !== `room:${room}`) return;
       if (!placing) stage(first ? "snapshot received" : "live");
       state.apply(payload as Parameters<RoomState["apply"]>[0], first);
@@ -213,6 +237,7 @@ async function start(server: string, email: string, password: string): Promise<v
   await feed.connect(api.currentToken);
   feed.subscribe(`room:${room}`);
   feed.subscribe(`user:${me._id}/console`);
+  feed.subscribe(`user:${me._id}/cpu`);
   if (!placing) stage("subscribed, waiting for first snapshot…");
 }
 

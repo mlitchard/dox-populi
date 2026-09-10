@@ -7,6 +7,8 @@ export interface UserInfo {
   _id: string;
   username: string;
   badge?: unknown;
+  cpu?: number;
+  gcl?: number;
 }
 
 export interface RoomObject {
@@ -154,6 +156,18 @@ export class Api {
       "/api/user/code",
     );
     return res.modules ?? {};
+  }
+
+  // The memory endpoint answers {data: "gz:" + base64(gzip(JSON))}.
+  async memory(path: string): Promise<unknown> {
+    const res = await this.req<{ data?: unknown }>(
+      `/api/user/memory?path=${encodeURIComponent(path)}`,
+    );
+    const data = res.data;
+    if (typeof data !== "string" || !data.startsWith("gz:")) return data;
+    const bytes = Uint8Array.from(atob(data.slice(3)), (c) => c.charCodeAt(0));
+    const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"));
+    return JSON.parse(await new Response(stream).text()) as unknown;
   }
 
   async console(expression: string): Promise<void> {

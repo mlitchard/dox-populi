@@ -1,8 +1,8 @@
 # Integration test. Boots a VM, runs the nix-vendored Screeps server,
 # deploys with the production deploy-local script, then watches the
 # section-1 loop: the harvester spawns, harvests, and delivers energy
-# back to the spawn. All probes go through the server CLI's db view;
-# the section-1 harness keeps no Memory.stats telemetry.
+# back to the spawn. Probes go through the server CLI: the db view,
+# plus the per-creep Memory.trace logs the harness keeps.
 { testers
 , writeShellScript
 , curl
@@ -58,6 +58,18 @@ let
     fi
     printf '%s\n' "$E" > "$STATE"
     exit 1
+  '';
+
+  # Succeeds once a successful transfer is on record in Memory.trace:
+  # the harvester delivered, witnessed by the same log the console
+  # probes read.
+  pollDeliveryTrace = writeShellScript "poll-delivery-trace" ''
+    set -euo pipefail
+    CMD='storage.db.users.findOne({usernameLower: "${email}"}).then(u => storage.env.get(storage.env.keys.MEMORY + u._id)).then(m => { var trace = JSON.parse(m || "{}").trace || {}; var n = 0; Object.keys(trace).forEach(k => trace[k].forEach(e => { if (e.action === "transfer" && e.rc === 0) n += 1; })); return "DELIVERIES:" + n + ":"; }).catch(e => "ERR:" + (e && e.message || e))'
+    OUT=$( (printf '%s\n' "$CMD"; sleep 3) | ${netcat-openbsd}/bin/nc -N -w 6 127.0.0.1 21026 || true)
+    N=$(printf '%s' "$OUT" | grep -o 'DELIVERIES:[0-9]*' | grep -o '[0-9]*' || echo "")
+    echo "transfers on record: ''${N:-unknown} ($OUT)"
+    [ -n "$N" ] && [ "$N" -ge 1 ]
   '';
 
   setTickDuration = writeShellScript "set-tick-duration" ''
@@ -154,6 +166,20 @@ testers.runNixOSTest {
                 print(">>> TIMEOUT — server log tail for diagnosis:")
                 print(machine.succeed("journalctl -u screeps --no-pager | tail -n 100"))
                 raise Exception("timed out waiting for the spawn to acquire energy")
+            time.sleep(2)
+
+    with subtest("delivery lands in Memory.trace"):
+        deadline = time.time() + 60
+        while True:
+            status, out = machine.execute("${pollDeliveryTrace} 2>&1")
+            print(f">>> poll: {out.strip()}")
+            if status == 0:
+                print(">>> SUCCESS: transfer recorded in Memory.trace")
+                break
+            if time.time() > deadline:
+                print(">>> TIMEOUT — server log tail for diagnosis:")
+                print(machine.succeed("journalctl -u screeps --no-pager | tail -n 100"))
+                raise Exception("timed out waiting for a transfer in Memory.trace")
             time.sleep(2)
   '';
 }
