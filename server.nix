@@ -4,7 +4,7 @@ let
   # ms per tick (engine default 1000). setTickDuration persists in
   # world storage, so apps.server re-asserts this every launch;
   # SCREEPS_TICK_MS overrides per shell.
-  tickMs = 50;
+  tickMs = 1000;
 
   # The open-source Screeps server, nix-vendored from npm. isolated-vm
   # and friends are native modules: node-gyp needs python + the
