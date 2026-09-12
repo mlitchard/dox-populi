@@ -32,7 +32,8 @@
       "Read(//home/mlitchard/github/screeps/common/lib/**)",
       "Read(//home/mlitchard/github/screeps/common/**)",
       "Bash(jq '[.collections[] | select\\(.name==\"env\"\\) | .data[0].values | {gameTime}]' /home/mlitchard/gitlab/dox-populi/.server-data/db.json)",
-      "Bash(jq '.collections[] | select\\(.name==\"env\"\\) | .data' /home/mlitchard/gitlab/dox-populi/.server-data/db.json)"
+      "Bash(jq '.collections[] | select\\(.name==\"env\"\\) | .data' /home/mlitchard/gitlab/dox-populi/.server-data/db.json)",
+      "Bash(grep -n \"^function\\\\|^const\\\\|^export\\\\|=> {$\\\\|case \\\\|if \\(role\")"
     ]
   }
 }
