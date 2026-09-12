@@ -93,6 +93,7 @@
           pkgs.age
           pkgs.jq
           pkgs.curl
+          pkgs.websocat
           pkgs.nixpkgs-fmt
           self.packages.${system}.secrix
         ];
@@ -146,6 +147,16 @@
             set -euo pipefail
             exec nix build -L --no-link \
               "$(${pkgs.git}/bin/git rev-parse --show-toplevel)#checks.${system}.itest" "$@"
+          '');
+        };
+
+        # Print the room, spawn, and source list from the server's
+        # socket feed: nix run .#room-feed -- <user> <pass>
+        room-feed = {
+          type = "app";
+          program = toString (pkgs.writeShellScript "room-feed" ''
+            export PATH=${pkgs.lib.makeBinPath [ pkgs.curl pkgs.jq pkgs.websocat pkgs.gnused pkgs.coreutils ]}:$PATH
+            exec ${pkgs.bash}/bin/bash ${./room-feed.sh} "$@"
           '');
         };
 
