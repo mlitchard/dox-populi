@@ -7,7 +7,15 @@
     "noEmit": true,
     "esModuleInterop": true,
     "skipLibCheck": false,
-    "types": []
+    "types": [],
+    "baseUrl": ".",
+    "paths": {
+      "machine": ["harness/machine"],
+      "role.harvester": ["harness/role.harvester"],
+      "role.upgrader": ["harness/role.upgrader"],
+      "role.builder": ["harness/role.builder"],
+      "role.defender": ["harness/role.defender"]
+    }
   },
   "include": [
     "harness/**/*.ts",

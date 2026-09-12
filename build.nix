@@ -33,18 +33,32 @@ let
     buildPhase = ''
       tsc --noEmit -p tsconfig.json
       esbuild harness/main.ts --bundle --format=cjs --platform=node \
-        --outfile=main.js
+        --external:machine --external:role.harvester --external:role.upgrader \
+        --external:role.builder --external:role.defender --outfile=main.js
+      esbuild harness/machine.ts --bundle --format=cjs --platform=node \
+        --outfile=machine.js
+      for role in harvester upgrader builder defender; do
+        esbuild harness/role.$role.ts --bundle --format=cjs --platform=node \
+          --external:machine --outfile=role.$role.js
+      done
     '';
     installPhase = ''
       mkdir -p $out
-      cp main.js $out/
+      cp main.js machine.js role.*.js $out/
     '';
   };
   # JSON payload for the server's /api/user/code endpoint, built ahead
   # of time so deploy-local only signs in and posts one file.
   mainPayload = pkgs.runCommand "main-js-payload.json" { } ''
-    ${pkgs.jq}/bin/jq -n --rawfile code ${main}/main.js \
-      '{branch: "default", modules: {main: $code}}' > $out
+    ${pkgs.jq}/bin/jq -n --rawfile main ${main}/main.js \
+      --rawfile machine ${main}/machine.js \
+      --rawfile harvester ${main}/role.harvester.js \
+      --rawfile upgrader ${main}/role.upgrader.js \
+      --rawfile builder ${main}/role.builder.js \
+      --rawfile defender ${main}/role.defender.js \
+      '{branch: "default", modules: {main: $main, machine: $machine,
+        "role.harvester": $harvester, "role.upgrader": $upgrader,
+        "role.builder": $builder, "role.defender": $defender}}' > $out
   '';
 
   # Raider brain (dox/invader spec + harness/invader.ts); apps.server
@@ -110,8 +124,15 @@ in
           exit 1
         fi
         TOKEN=$(${secrixCli}/bin/secrix decrypt secrets/SCREEPS_TOKEN -i "$IDENTITY")
-        ${pkgs.jq}/bin/jq -n --arg code "$(cat ${main}/main.js)" \
-          '{branch: "default", modules: {main: $code}}' \
+        ${pkgs.jq}/bin/jq -n --rawfile main ${main}/main.js \
+          --rawfile machine ${main}/machine.js \
+          --rawfile harvester ${main}/role.harvester.js \
+          --rawfile upgrader ${main}/role.upgrader.js \
+          --rawfile builder ${main}/role.builder.js \
+          --rawfile defender ${main}/role.defender.js \
+          '{branch: "default", modules: {main: $main, machine: $machine,
+            "role.harvester": $harvester, "role.upgrader": $upgrader,
+            "role.builder": $builder, "role.defender": $defender}}' \
         | ${pkgs.curl}/bin/curl --fail-with-body -X POST \
             "https://screeps.com/api/user/code" \
             -H "X-Token: $TOKEN" \

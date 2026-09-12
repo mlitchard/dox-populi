@@ -83,7 +83,7 @@ Prerequisites: nix with flakes enabled.
    nix run .#deploy-local
    ```
 
-   Self-provisioning: creates the account, pushes `main.js`, and auto-places `Spawn1`.
+   Self-provisioning: creates the account, pushes `main.js` with its role modules, and auto-places `Spawn1`.
 
    ✅ Output ends with `auto-placed Spawn1 in <room>`.
 
