@@ -13,19 +13,7 @@ import {
   towerOffsets,
   towerContext,
   towerBehaviors,
-  harvesterContext,
-  upgraderContext,
-  builderContext,
-  defenderContext,
-  harvesterTransition,
-  upgraderTransition,
-  builderTransition,
-  defenderTransition,
   towerTransition,
-  validHarvesterState,
-  validUpgraderState,
-  validBuilderState,
-  validDefenderState,
   validTowerState,
   validCreepState,
 } from "../generated/index";
@@ -33,73 +21,31 @@ import {
 import type {
   Behavior,
   BodyPart,
-  CreepEvent,
   CreepState,
-  HarvesterState,
-  UpgraderState,
-  BuilderState,
-  DefenderState,
   TowerState,
   TowerEvent,
-  ThreatLevel,
   TargetKind,
 } from "../generated/index";
 
-// The worker machines emit CreepEvent; the defender emits ThreatLevel.
-interface StepResult {
-  event: string;
-  next: CreepState;
-}
-
-// One machine's try at a creep tick; null means the state is outside
-// this machine's union.
-type Step = (state: CreepState, creep: Creep, obs: RoomObs) => StepResult | null;
+// The payload carries each role machine and the shared machine module
+// as its own module, matching the tutorial layout; esbuild leaves
+// these requires for the server to resolve.
+import * as roleHarvester from "role.harvester";
+import * as roleUpgrader from "role.upgrader";
+import * as roleBuilder from "role.builder";
+import * as roleDefender from "role.defender";
+import { threatLevel } from "machine";
+import type { EnergySink, RoomObs, Step, StepResult } from "machine";
 
 // One entry per role machine. A machine claims a creep by validating
 // its FSM state: the validator throws on states outside its union, so
 // the creep passes to the next machine. This works because no state
 // name appears in two machines' unions; the spec keeps them disjoint.
 const machines: Step[] = [
-  (state, creep, obs) => {
-    let s: HarvesterState;
-    try {
-      s = validHarvesterState(state);
-    } catch {
-      return null;
-    }
-    const event = emitEvent(creep, obs);
-    return { event, next: harvesterTransition(s, event, harvesterContext).target };
-  },
-  (state, creep, obs) => {
-    let s: UpgraderState;
-    try {
-      s = validUpgraderState(state);
-    } catch {
-      return null;
-    }
-    const event = emitEvent(creep, obs);
-    return { event, next: upgraderTransition(s, event, upgraderContext).target };
-  },
-  (state, creep, obs) => {
-    let s: BuilderState;
-    try {
-      s = validBuilderState(state);
-    } catch {
-      return null;
-    }
-    const event = emitEvent(creep, obs);
-    return { event, next: builderTransition(s, event, builderContext).target };
-  },
-  (state, _creep, obs) => {
-    let s: DefenderState;
-    try {
-      s = validDefenderState(state);
-    } catch {
-      return null;
-    }
-    const event = threatLevel(obs);
-    return { event, next: defenderTransition(s, event, defenderContext).target };
-  },
+  roleHarvester.machine,
+  roleUpgrader.machine,
+  roleBuilder.machine,
+  roleDefender.machine,
 ];
 
 // Runs one creep tick through whichever machine owns its state.
@@ -112,11 +58,6 @@ function step(state: CreepState, creep: Creep, obs: RoomObs): StepResult {
   }
   return { event: "unclaimed", next: state };
 }
-
-// The structures that receive creep energy deliveries. This set gives
-// the spec's SinksOpen/SinksFull facts and energySink target their
-// meaning.
-type EnergySink = StructureSpawn | StructureExtension | StructureTower;
 
 const isEnergySink = (s: AnyOwnedStructure): s is EnergySink =>
   s.structureType === STRUCTURE_SPAWN ||
@@ -147,16 +88,6 @@ const hasFreeEnergy = (s: EnergySink): boolean =>
 const isTower = (s: AnyOwnedStructure): s is StructureTower =>
   s.structureType === STRUCTURE_TOWER;
 
-// What the shell observed in a room this tick. Every creep and tower
-// in the room reads the same snapshot for events and targeting.
-interface RoomObs {
-  sinks: EnergySink[];
-  sinksAllFull: boolean;
-  hasSites: boolean;
-  hostiles: Creep[];
-  damaged: AnyStructure[];
-}
-
 // The cache is created each tick in loop, so a room is scanned once
 // per tick and every consumer sees the same snapshot.
 function observeRoom(room: Room, cache: Map<string, RoomObs>): RoomObs {
@@ -175,26 +106,6 @@ function observeRoom(room: Room, cache: Map<string, RoomObs>): RoomObs {
   };
   cache.set(room.name, obs);
   return obs;
-}
-
-// Builds the event name from three answers: the creep's store level
-// (empty, mid, full), whether every sink is full, and whether any
-// construction site exists. The return type makes any name outside
-// the generated CreepEvent union a compile error.
-function emitEvent(creep: Creep, obs: RoomObs): CreepEvent {
-  const used = creep.store.getUsedCapacity(RESOURCE_ENERGY);
-  const free = creep.store.getFreeCapacity(RESOURCE_ENERGY);
-  const store = used === 0 ? "empty" : free === 0 ? "full" : "mid";
-  const sinks = obs.sinksAllFull ? "SinksFull" : "SinksOpen";
-  const sites = obs.hasSites ? "Site" : "NoSite";
-  return `${store}${sinks}${sites}`;
-}
-
-// The single threat reading. Three consumers: the defender's event,
-// the first fact of the tower event, and the spawn policy's
-// desired-count key.
-function threatLevel(obs: RoomObs): ThreatLevel {
-  return obs.hostiles.length > 0 ? "hostile" : "calm";
 }
 
 // Builds the event name from three answers: the threat level, whether
