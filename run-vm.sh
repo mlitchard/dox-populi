@@ -43,7 +43,7 @@ set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")" && pwd)"
 DISK="${DISK:-dox-populi-compact.qcow2}"
-IMAGE_URL="${IMAGE_URL:-https://dokyard.dev/installs/dox-populi-tutorial-one.qcow2}"
+IMAGE_URL="${IMAGE_URL:-https://dokyard.dev/installs/dox-populi-compact.qcow2}"
 WORKDIR="${WORKDIR:-$HOME/vm-keys}"
 # Auto-size from the host: half its memory and cores, capped at
 # the declared hardware contract. MEM=, CPUS=, INSTALL_MEM=,

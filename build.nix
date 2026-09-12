@@ -34,19 +34,22 @@ let
     buildPhase = ''
       tsc --noEmit -p tsconfig.json
       esbuild harness/main.ts --bundle --format=cjs --platform=node \
-        --outfile=main.js
+        --external:role.harvester --outfile=main.js
+      esbuild harness/role.harvester.ts --bundle --format=cjs --platform=node \
+        --outfile=role.harvester.js
     '';
     installPhase = ''
       mkdir -p $out
-      cp main.js $out/
+      cp main.js role.harvester.js $out/
     '';
   };
 
   # JSON payloads for the server's /api/user/code endpoint, built ahead
   # of time so deploy-local only signs in and posts one file.
   mainPayload = pkgs.runCommand "main-js-payload.json" { } ''
-    ${pkgs.jq}/bin/jq -n --rawfile code ${main}/main.js \
-      '{branch: "default", modules: {main: $code}}' > $out
+    ${pkgs.jq}/bin/jq -n --rawfile main ${main}/main.js \
+      --rawfile harvester ${main}/role.harvester.js \
+      '{branch: "default", modules: {main: $main, "role.harvester": $harvester}}' > $out
   '';
   tutorialPayload = pkgs.writeText "tutorial-js-payload.json" (builtins.toJSON {
     branch = "default";
@@ -85,8 +88,9 @@ in
         set -euo pipefail
         IDENTITY="''${SCREEPS_IDENTITY:-$HOME/.ssh/gitlab}"
         TOKEN=$(${pkgs.age}/bin/age -d -i "$IDENTITY" secrets/SCREEPS_TOKEN)
-        ${pkgs.jq}/bin/jq -n --arg code "$(cat ${main}/main.js)" \
-          '{branch: "default", modules: {main: $code}}' \
+        ${pkgs.jq}/bin/jq -n --rawfile main ${main}/main.js \
+          --rawfile harvester ${main}/role.harvester.js \
+          '{branch: "default", modules: {main: $main, "role.harvester": $harvester}}' \
         | ${pkgs.curl}/bin/curl --fail-with-body -X POST \
             "https://screeps.com/api/user/code" \
             -H "X-Token: $TOKEN" \
