@@ -48,7 +48,7 @@ testers.runNixOSTest {
             "su - dev -c 'printenv SCREEPS_HOST' | grep -qx 0.0.0.0"
         )
         machine.succeed(
-            "su - dev -c 'printenv SCREEPS_IDENTITY' | grep -qx /home/dev/work/identity"
+            "su - dev -c 'printenv SCREEPS_IDENTITY' | grep -qx /home/dev/vm-keys/identity"
         )
 
     machine.shutdown()
