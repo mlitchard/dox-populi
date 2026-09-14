@@ -1,9 +1,14 @@
 # dox-populi
 
-A Screeps client whose creep population is governed by a [Paradox](https://gitlab.com/paradox_labs/paradox)
-`.dox` specification: Paradox generates the typed decision logic, nix owns the
-generate → typecheck → bundle pipeline, and a private Screeps server runs the
-result.
+dox-populi is a curriculum: an on-ramp into formal methods, which used
+to need a specialist. The confluence of a turnkey build and an LLM
+agent makes them accessible, and a game makes the material approachable.
+
+The material is a Screeps bot whose creep population is governed by a
+[Paradox](https://gitlab.com/paradox_labs/paradox) `.dox` specification:
+Paradox checks the spec and generates the typed decision logic, nix owns
+the generate → typecheck → bundle pipeline, and a private Screeps server
+runs the result.
 
 Both the screeps server and viewer are open source and nix-vendored:
 The whole stack builds from source and runs locally.
