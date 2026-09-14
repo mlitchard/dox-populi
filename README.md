@@ -1,8 +1,9 @@
 # dox-populi
 
-dox-populi is a curriculum: an on-ramp into formal methods, which used
-to need a specialist. The confluence of a turnkey build and an LLM
-agent makes them accessible, and a game makes the material approachable.
+dox-populi is an on-ramp into formal methods. Until recently, the tooling for formal methods
+were only avaiable to a small group for specialists. dox-populi uses
+[Paradox](https://gitlab.com/paradox_labs/paradox), [nix](https://docs.determinate.systems/), and an llm agent
+to explore accessability to a larger demographic.
 
 The material is a Screeps bot whose creep population is governed by a
 [Paradox](https://gitlab.com/paradox_labs/paradox) `.dox` specification:
