@@ -37,7 +37,7 @@
 # memory and cores, capped at 32G/8), DISK
 # (default ./dox-populi-compact.qcow2), IMAGE_URL (where to
 # download the image; empty until a release is published), WORKDIR
-# (host dir shared into the guest at ~/work; default: ~/vm-keys,
+# (host dir shared into the guest at ~/vm-keys; default: ~/vm-keys,
 # skipped if it doesn't exist).
 set -euo pipefail
 

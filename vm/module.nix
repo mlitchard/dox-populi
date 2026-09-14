@@ -31,7 +31,7 @@
   services.openssh.enable = true;
   services.openssh.settings.PasswordAuthentication = true;
 
-  fileSystems."/home/dev/work" = {
+  fileSystems."/home/dev/vm-keys" = {
     device = "workdir";
     fsType = "9p";
     options = [ "trans=virtio" "version=9p2000.L" "msize=524288" "rw" "nofail" ];
@@ -44,8 +44,8 @@
   };
 
   environment.variables.SCREEPS_HOST = "0.0.0.0";
-  environment.variables.WORKDIR = "/home/dev/work";
-  environment.variables.SCREEPS_IDENTITY = "/home/dev/work/identity";
+  environment.variables.WORKDIR = "/home/dev/vm-keys";
+  environment.variables.SCREEPS_IDENTITY = "/home/dev/vm-keys/identity";
 
   programs.direnv = {
     enable = true;
@@ -80,16 +80,15 @@
     Watch: open http://localhost:8080 in the HOST browser and sign in
     with your deploy-local credentials.
 
-    Credentials: deploy-local reads SCREEPS_LOCAL_EMAIL /
-      SCREEPS_LOCAL_PASSWORD, or age-encrypted
+    Credentials: deploy-local reads age-encrypted
       secrets/SCREEPS_LOCAL_CREDS ("username:password"). Your key goes
       in the host dir run-vm.sh shares (~/vm-keys by default; WORKDIR=
       to override) named "identity" — it appears here as
-      ~/work/identity, which SCREEPS_IDENTITY already points to.
-      Encrypt your own creds to it (from the dev shell):
-        secrix create secrets/SCREEPS_LOCAL_CREDS -i "$SCREEPS_IDENTITY" -r "$(cat $SCREEPS_IDENTITY.pub)"
+      ~/vm-keys/identity, which SCREEPS_IDENTITY already points to.
+      Encrypt your own creds (from the dev shell):
+        secrix create secrets/SCREEPS_LOCAL_CREDS -r "$(cat $SCREEPS_IDENTITY.pub)"
 
-    ~/work is your host directory (if shared via run-vm.sh).
+    ~/vm-keys is your host directory (if shared via run-vm.sh).
     SSH from the host: ssh -p 2222 dev@localhost  (password: dox-populi)
   '';
 }
