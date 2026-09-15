@@ -47,6 +47,10 @@
   environment.variables.WORKDIR = "/home/dev/vm-keys";
   environment.variables.SCREEPS_IDENTITY = "/home/dev/vm-keys/identity";
 
+  environment.loginShellInit = ''
+    if [ -d ~/dox-populi ]; then cd ~/dox-populi; fi
+  '';
+
   programs.direnv = {
     enable = true;
     nix-direnv.enable = true;
@@ -63,32 +67,11 @@
 
     dox-populi dev VM
     =================
-    Quickstart:
-      1. cd ~/dox-populi
-      2. nix develop                 — the dev shell (pre-baked into
-                                       the VM image — ready immediately)
-      3. nix flake check             — Paradox checks the spec, tsc
-                                       typechecks the harness, the
-                                       build bundles main.js
-      4. nix run .#server            — private server on host port 21025
-                                       (nix-vendored — no purchase needed)
-      5. nix run .#deploy-local      — provision account, push main.js,
-                                       place Spawn1
-      6. nix run .#client            — browser viewer on host port 8080
-                                       (open-source renderer, offline)
+      nix run .#server         — start the game server
+      nix run .#deploy-local   — deploy the bot
+      nix run .#client         — start the viewer, then open
+                                 http://localhost:8080 in the HOST browser
 
-    Watch: open http://localhost:8080 in the HOST browser and sign in
-    with your deploy-local credentials.
-
-    Credentials: deploy-local reads age-encrypted
-      secrets/SCREEPS_LOCAL_CREDS ("username:password"). Your key goes
-      in the host dir run-vm.sh shares (~/vm-keys by default; WORKDIR=
-      to override) named "identity" — it appears here as
-      ~/vm-keys/identity, which SCREEPS_IDENTITY already points to.
-      Encrypt your own creds (from the dev shell):
-        secrix create secrets/SCREEPS_LOCAL_CREDS -r "$(cat $SCREEPS_IDENTITY.pub)"
-
-    ~/vm-keys is your host directory (if shared via run-vm.sh).
-    SSH from the host: ssh -p 2222 dev@localhost  (password: dox-populi)
+    Credentials set up? docs/SECRIX.md has the walkthrough.
   '';
 }
