@@ -12,7 +12,9 @@ them.
 ssh-keygen -t ed25519          # private key + <name>.pub
 ```
 
-## Put it where apps look
+## Create a key and put it where apps look
+
+`ssh-keygen -t ed25519`          #  <name> + <name>.pub
 
 The search order:
 
