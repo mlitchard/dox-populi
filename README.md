@@ -1,49 +1,30 @@
 # dox-populi
 
-dox-populi is an on-ramp into formal methods. Until recently, the tooling for formal methods
-were only avaiable to a small group for specialists. dox-populi uses
-[Paradox](https://gitlab.com/paradox_labs/paradox), [nix](https://docs.determinate.systems/), and an llm agent
-to explore accessability to a larger demographic.
+dox-populi is an on-ramp into the benefits of formal methods, a study
+in what they offer with an LLM agent in the loop. Until recently, the
+tooling for formal methods was only available to a small group of
+specialists. dox-populi uses
+[Paradox](https://gitlab.com/paradox_labs/paradox),
+[nix](https://docs.determinate.systems/), and an LLM agent to explore
+the accessibility of this space: you prompt the agent, the agent
+writes the spec, and the checker verifies it before code is generated.
 
-The material is a Screeps bot whose creep population is governed by a
-[Paradox](https://gitlab.com/paradox_labs/paradox) `.dox` specification:
-Paradox checks the spec and generates the typed decision logic, nix owns
-the generate → typecheck → bundle pipeline, and a private Screeps server
-runs the result.
-
-Both the screeps server and viewer are open source and nix-vendored:
-The whole stack builds from source and runs locally.
+This exploration runs on a Screeps bot. Paradox provides a DSL whose
+specs are checked for internal consistency: the bot's decisions are
+written only as decision structure, a missed case comes back named,
+and the validated spec generates the typed decision logic. nix is the
+turnkey build: generate → typecheck → bundle. The LLM agent wrote the
+spec and most of the infrastructure. You direct it and inspect what it
+writes. Your Screeps server runs the result. Fire up the client and watch it go.
 
 ---
 
 ## Your encryption key
 
-Secrets in `secrets/` are age files managed with **secrix**. Apps decrypt
-them with **your** key.
-
-- `SCREEPS_TOKEN` — screeps.com auth token, only for `nix run .#deploy`
-  (the live MMO server).
-- `SCREEPS_LOCAL_CREDS` — one line `username:password` for the private
-  server; used by `nix run .#deploy-local`. Optional: env vars
-  `SCREEPS_LOCAL_EMAIL` / `SCREEPS_LOCAL_PASSWORD` work instead.
-- `STEAM_TOKEN` — a Steam Web API key, optional; only needed if you want to
-  log in to the private server through Steam's native auth. Password login
-  (screepsmod-auth) works without it.
-
-Key mechanics:
-
-- Any SSH private key works (e.g. generate one: `ssh-keygen -t ed25519`).
-- Apps look for the key at, in order:
-  1. `$SCREEPS_IDENTITY` 
-  2. `$WORKDIR/identity`
-  3. `~/work/identity` (the conventional location — in the VM this is the
-     shared host directory, see below)
-
-To (re-)encrypt a secret to your key, from the dev shell:
-
-```sh
-secrix create secrets/SCREEPS_LOCAL_CREDS -i /path/to/your/key -r "$(cat /path/to/your/key.pub)"
-```
+Secrets in `secrets/` are age files managed with **secrix** and
+decrypted with your own SSH key. Before deploying, create a key and
+encrypt the secrets so your key can open them —
+[docs/SECRIX.md](docs/SECRIX.md) is the complete walkthrough.
 
 ---
 
@@ -54,81 +35,64 @@ Prerequisites: nix with flakes enabled.
 1. **Clone and enter the dev shell**
 
    ```sh
-   git clone <this-repo> && cd dox-populi
-   nix develop        # or `direnv allow`
+   mkdir dox-populi && cd dox-populi
+   git clone https://gitlab.com/dox-populi/screeps.git && cd screeps
+   nix develop --builders ''
    ```
 
    ✅ A command menu prints.
 
-2. **Start the private server**
+2. **Start the server**
 
    ```sh
-   nix run .#server
+   nix run .#server --builders ''
    ```
 
-   Fully nix-built; first run downloads and builds the vendored server.
-   Binds loopback by default (`SCREEPS_HOST` to change), world state in
-   `.server-data/` (gitignored). Without a `STEAM_TOKEN` secret it starts
-   without Steam auth — password login still works.
+   Fully nix-built; first run downloads and builds the server.
+   Binds loopback by default; world state is in `.server-data/`.
 
+   Check that the server is running:
    ✅ `curl -s http://127.0.0.1:21025/api/version` returns JSON.
 
 3. **Deploy**
-
-   Quickest — pass the credentials as env vars (single-quote a password
-   with shell-special characters):
-
-   ```sh
-   SCREEPS_LOCAL_EMAIL=you SCREEPS_LOCAL_PASSWORD='your-password' \
-     nix run .#deploy-local
-   ```
-
-   Durable — store them encrypted with secrix once, then deploy with no
-   env vars:
 
    ```sh
    nix run .#deploy-local            # reads secrets/SCREEPS_LOCAL_CREDS
    ```
 
-   `SCREEPS_IDENTITY=/path/to/your/key` names the key that decrypts it.
+   The decrypting key is found at `~/vm-keys/identity`, or set
+   `SCREEPS_IDENTITY=/path/to/your/key`.
    See [docs/SECRIX.md](docs/SECRIX.md) for creating and editing that
    encrypted secret.
 
-   Self-provisioning: creates the account and pushes `main.js`.
+   Self-provisioning: creates the account, pushes `main.js` with its role modules,
+   and auto-places `Spawn1`.
 
-   ✅ Output ends with `deployed main.js ...`.
+   Verify the deploy succeeded:
+   ✅ Output ends with `auto-placed Spawn1 in <room>`.
 
 4. **Watch it play**
 
    `nix run .#client`, then open `http://127.0.0.1:8080/` and sign in
-   with your deploy-local credentials. The viewer renders the world with
-   the open-sourced renderer — no purchase. Place your spawn by clicking
-   a tile, then watch the harvester spawn, harvest, and deliver.
+   with your deploy-local credentials.
 
 5. **Useful knobs**
 
    ```sh
    nix run .#cli           # server CLI (port 21026)
-   nix run .#stop          # stop server, world kept
+   nix run .#stop          # stop server + client, world kept
    nix run .#reset-local   # stop + wipe the world (fresh on next start)
-   nix flake check         # paradox-check, typecheck, build, vm-boot, run-vm-fresh
+   nix flake check         # all checks (itest and vm-boot each boot a VM)
    ```
 
 ---
 
 ## Quickstart — other Linux
 
-Nothing is built on your machine: nix lives **inside** a dev VM that installs
-itself. Host prerequisites: `qemu`, `tmux`, `curl`.
+The dev environment ships as a ready-to-boot VM image. You boot it
+with [run-vm.sh](https://gitlab.com/dox-populi/screeps/-/raw/main/run-vm.sh) and work inside it. Host prerequisites: `qemu`, `tmux`.
 
-
-1. **Get the VM image**
-
-   Download `dox-populi-compact.qcow2` from the project releases and place it
-   next to `run-vm.sh` (or `export IMAGE_URL=<release-url>` and the script
-   downloads it). Maintainers build it with `nix run .#installer`.
-
-2. **Put your key in the shared directory**
+1. **Put your key in the shared directory**
 
    ```sh
    mkdir -p ~/vm-keys
@@ -136,42 +100,37 @@ itself. Host prerequisites: `qemu`, `tmux`, `curl`.
    ```
 
    `~/vm-keys` (override with `WORKDIR=`) appears inside the VM at
-   `~/work`, so your key is found at its conventional path
-   `~/work/identity` automatically.
+   `~/vm-keys`, so your key is found at its conventional path
+   `~/vm-keys/identity` automatically. Creating the key and encrypting
+   the secrets is covered in [docs/SECRIX.md](docs/SECRIX.md).
 
-3. **Boot the VM**
+2. **Boot the VM**
 
    ```sh
    ./run-vm.sh
    ./run-vm.sh console        # watch; Ctrl-b d detaches
    ```
 
-   The image is a ready-to-boot dev environment; the first boot grows
-   its filesystem into the virtual disk.
+3. **Log in**
 
-4. **Log in**
-
-   start three ssh clients. One for the server, one for the client, and one for deploy.
    ```sh
    ssh -p 2222 dev@localhost             # password: dox-populi
    ```
-
-   ✅ `ls ~/work/identity` shows your key.
+   ✅ `ls ~/vm-keys/identity` shows your key.
 
    > **Note — `REMOTE HOST IDENTIFICATION HAS CHANGED!`**: every VM
-   > (re)install generates fresh SSH host keys, so after a factory reset
+   > reinstall generates fresh SSH host keys, so after a reinstall
    > your `known_hosts` still pins the old VM's key and
-   > ssh refuses to connect. Evict the stale entry and retry
+   > ssh refuses to connect. Evict the stale entry and retry.
    >
    > ```sh
    > ssh-keygen -R '[localhost]:2222'
    > ```
 
-5. **Start the server and deploy** (inside the VM)
+4. **Start the server and deploy**
 
    ```sh
    cd ~/dox-populi
-   nix develop        # pre-built during install — ready immediately
    nix run .#server
    ```
 
@@ -182,13 +141,11 @@ itself. Host prerequisites: `qemu`, `tmux`, `curl`.
 
    Then, still in the VM: `nix run .#deploy-local`.
 
-6. **Watch it play**
+5. **Watch it play**
 
    In the VM run `nix run .#client`, then on the **host** open
    `http://localhost:8080/` and sign in with your deploy-local
-   credentials. The viewer renders the world with the open-sourced
-   renderer — no purchase, no Steam. Place your spawn by clicking a
-   tile, then watch the harvester work.
+   credentials.
 
 ### VM management
 
@@ -200,7 +157,35 @@ itself. Host prerequisites: `qemu`, `tmux`, `curl`.
 ./run-vm.sh kill       # stop
 ```
 
-Knobs: `MEM`, `CPUS`, `DISK`, `WORKDIR`, `IMAGE_URL`. `WORKDIR`
-defaults to `~/vm-keys` (skipped if it doesn't exist). Factory reset:
-`rm dox-populi-compact.qcow2`.
-Fresh game world: in the VM, `nix run .#reset-local`.
+### Development
+Useful context to give your agent.
+
+## Klanker Kontext
+
+I cloned several repos and fed them to the agent during the process of building this project.
+You should do the same.
+
+The Screeps [server](https://github.com/screeps/screeps.git)
+The standalone game server.
+
+[backend-local](https://github.com/screeps/backend-local.git)
+Contains an HTTP server accessed by clients and a CLI
+server for administration.
+
+[driver](https://github.com/screeps/driver.git)
+A link between the environment-independent engine (that is shared for the
+official server, standalone server, and in-browser simulation) and the
+immediate environment that hosts the game engine.
+
+[render](https://github.com/screeps/renderer.git)
+This library is based on [PixiJS](https://pixijs.com/) and contains the renderer engine used in the Screeps game.
+
+[tutorial scripts](https://github.com/screeps/tutorial-scripts.git)
+The original tutorial scripts.
+
+[typed-screeps](https://github.com/screepers/typed-screeps.git)
+Strong TypeScript declarations for the game Screeps: World.
+
+[paradox](https://gitlab.com/paradox_labs/paradox.git)
+A system that generates clients in several different languages based on a single
+specification.

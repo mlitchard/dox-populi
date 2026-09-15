@@ -1,27 +1,34 @@
-# Managing secrets with secrix
+# Your encryption key
 
-The files in `secrets/` are [age](https://age-encryption.org)-encrypted,
-managed with **secrix**. Each is encrypted to one or more recipients
-(public keys) and decrypted with the matching private key. The project's
-apps decrypt them with your key (see the "Your encryption key" section of
-the README for which secret each app reads and where the key is looked
-up).
+Secrets in `secrets/` are [age](https://age-encryption.org)-encrypted
+files managed with **secrix**. Each is encrypted to one or more
+recipients (public keys) and decrypted with the matching private key.
+The project's apps decrypt them with **your** key, so setup is two
+moves: create a key, then encrypt the secrets so your key can open
+them.
 
-This page covers creating and editing those files. Run the commands from
-the dev shell (`nix develop`), where `secrix` is on the path; the
-`nix run .#secrix` form shown here works anywhere.
+Run the commands from the dev shell (`nix develop`), where `secrix` is
+on the path; the `nix run .#secrix` form shown here works anywhere.
 
-You need an SSH keypair. Generate one if you don't have it:
-
+## Create a key
 ```sh
 ssh-keygen -t ed25519          # private key + <name>.pub
 ```
 
+## Put it where apps look
+
+The search order:
+
+1. `$SCREEPS_IDENTITY`
+2. `$WORKDIR/identity`
+3. `~/vm-keys/identity` (the conventional location — run-vm.sh shares
+   this host directory into the VM at the same path)
+
 ## Create a secret
 
 `create` opens your `$EDITOR`; type the secret, save, and exit, and it is
-encrypted to the recipients you name. Encrypt to your own public key so
-your private key can decrypt it later:
+encrypted for the recipients you name. Name your own public key as the
+recipient so your private key can decrypt the file later:
 
 ```sh
 nix run .#secrix create secrets/SCREEPS_LOCAL_CREDS -- \
@@ -29,14 +36,6 @@ nix run .#secrix create secrets/SCREEPS_LOCAL_CREDS -- \
 ```
 
 For `SCREEPS_LOCAL_CREDS` the content is one line, `username:password`.
-
-To create without an editor, pipe the value in with `encrypt`:
-
-```sh
-printf '%s' 'lambdafan:your-password' | \
-  nix run .#secrix encrypt secrets/SCREEPS_LOCAL_CREDS -- \
-    -r "$(cat ~/.ssh/id_ed25519.pub)"
-```
 
 ## Edit a secret
 
@@ -64,6 +63,13 @@ forgot:
 nix run .#secrix decrypt secrets/SCREEPS_LOCAL_CREDS -- \
   -i ~/.ssh/id_ed25519
 ```
+
+## The secrets
+
+- `SCREEPS_LOCAL_CREDS` — one line `username:password` for the private
+  server; used by `nix run .#deploy-local`.
+- `SCREEPS_TOKEN` — screeps.com auth token, only for `nix run .#deploy`
+  (the live MMO server).
 
 ## Notes
 

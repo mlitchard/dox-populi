@@ -1,5 +1,6 @@
 # Build artifacts — never committed (Option B: generated/ is a pure artifact)
 /generated/
+/secrets/
 /vendor/
 /dox/.dox/
 /main.js
