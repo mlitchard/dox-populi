@@ -1,5 +1,6 @@
 # Your encryption key
 
+** before proceeding 'rm secrets/*' **
 Secrets in `secrets/` are [age](https://age-encryption.org)-encrypted
 files managed with **secrix**. Each is encrypted to one or more
 recipients (public keys) and decrypted with the matching private key.
