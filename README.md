@@ -86,7 +86,15 @@ Prerequisites: nix with flakes enabled.
 The dev environment ships as a ready-to-boot VM image. You boot it
 with [run-vm.sh](https://gitlab.com/dox-populi/screeps/-/raw/main/run-vm.sh) and work inside it. Host prerequisites: `qemu`, `tmux`.
 
-1. **Put your key in the shared directory**
+1. **Clone the repo**
+
+   ```sh
+   mkdir dox-populi && cd dox-populi
+   git clone https://gitlab.com/dox-populi/screeps.git && cd screeps
+   git checkout tutorial-one
+   ```
+
+2. **Put your key in the shared directory**
 
    ```sh
    mkdir -p ~/vm-keys
@@ -98,14 +106,14 @@ with [run-vm.sh](https://gitlab.com/dox-populi/screeps/-/raw/main/run-vm.sh) and
    `~/vm-keys/identity` automatically. Creating the key and encrypting
    the secrets is covered in [docs/SECRIX.md](docs/SECRIX.md).
 
-2. **Boot the VM**
+3. **Boot the VM**
 
    ```sh
    ./run-vm.sh
    ./run-vm.sh console        # watch; Ctrl-b d detaches
    ```
 
-3. **Log in**
+4. **Log in**
 
    ```sh
    ssh -p 2222 dev@localhost             # password: dox-populi
@@ -121,7 +129,7 @@ with [run-vm.sh](https://gitlab.com/dox-populi/screeps/-/raw/main/run-vm.sh) and
    > ssh-keygen -R '[localhost]:2222'
    > ```
 
-4. **Start the server and deploy**
+5. **Start the server and deploy**
 
    ```sh
    cd ~/dox-populi
@@ -135,7 +143,7 @@ with [run-vm.sh](https://gitlab.com/dox-populi/screeps/-/raw/main/run-vm.sh) and
 
    Then, still in the VM: `nix run .#deploy-local`.
 
-5. **Watch it play**
+6. **Watch it play**
 
    In the VM run `nix run .#client`, then on the **host** open
    `http://localhost:8080/` and sign in with your deploy-local
