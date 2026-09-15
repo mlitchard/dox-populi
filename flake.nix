@@ -78,25 +78,7 @@
       };
     in
     {
-      # Secrix key stub: the secrix CLI reads config.secrix from this
-      # flake's nixosConfigurations.
-      nixosConfigurations = vm.nixosConfigurations // {
-        dox-populi = nixpkgs.lib.nixosSystem {
-          inherit system;
-          modules = [
-            secrix.nixosModules.default
-            {
-              secrix.defaultEncryptKeys.mlitchard = [
-                (builtins.readFile ./secrets/public_keys/mlitchard.pub)
-              ];
-              # Dummy fs/bootloader satisfy flake-check asserts.
-              fileSystems."/" = { device = "none"; fsType = "tmpfs"; };
-              boot.loader.grub.enable = false;
-              system.stateVersion = "26.05";
-            }
-          ];
-        };
-      };
+      nixosConfigurations = vm.nixosConfigurations;
 
       packages.${system} = {
         inherit (build) generated main;
