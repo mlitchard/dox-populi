@@ -7,15 +7,14 @@ The project's apps decrypt them with **your** key, so setup is two
 moves: create a key, then encrypt the secrets so your key can open
 them.
 
-Run the commands from the dev shell (`nix develop`), where `secrix` is
-on the path; the `nix run .#secrix` form shown here works anywhere.
-
 ## Create a key
 ```sh
 ssh-keygen -t ed25519          # private key + <name>.pub
 ```
 
-## Put it where apps look
+## Create a key and put it where apps look
+
+`ssh-keygen -t ed25519`          #  <name> + <name>.pub
 
 The search order:
 
