@@ -63,19 +63,3 @@ forgot:
 nix run .#secrix decrypt secrets/SCREEPS_LOCAL_CREDS -- \
   -i ~/.ssh/id_ed25519
 ```
-
-## The secrets
-
-- `SCREEPS_LOCAL_CREDS` — one line `username:password` for the private
-  server; used by `nix run .#deploy-local`.
-- `SCREEPS_TOKEN` — screeps.com auth token, only for `nix run .#deploy`
-  (the live MMO server).
-
-## Notes
-
-- All flags go after the `--` in the `nix run` form; positional arguments
-  (the file path) may go before it.
-- Recipients: `-r` adds an ad-hoc public key; `-u`/`-s` add users/systems
-  configured in the flake. `nix run .#secrix -- -l` lists them.
-- Quote a password with shell-special characters in single quotes so the
-  shell passes it through untouched.

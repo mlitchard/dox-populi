@@ -44,7 +44,7 @@
 
       # secrix CLI as a devShell command (llm-core pattern: tool packages
       # included in devShell packages, not reached via `nix run`).
-      secrixApp = secrix.secrix self;
+      secrixApp = secrix.secrix { nixosConfigurations = { }; };
       secrixCli = pkgs.writeShellApplication {
         name = "secrix";
         text = ''
@@ -163,7 +163,7 @@
         # Regenerate CI config: nix run .#gitlab-ci > .gitlab-ci.yml
         gitlab-ci = gitlab-ci.apps.${system}.gitlab-ci;
 
-        secrix = secrix.secrix self;
+        secrix = secrixApp;
       };
     };
 }
