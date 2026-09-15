@@ -7,15 +7,10 @@ The project's apps decrypt them with **your** key, so setup is two
 moves: create a key, then encrypt the secrets so your key can open
 them.
 
-## Create a key
-```sh
-ssh-keygen -t ed25519          # private key + <name>.pub
-```
-
 ## Create a key and put it where apps look
-
-`ssh-keygen -t ed25519`          #  <name> + <name>.pub
-
+```sh
+ssh-keygen -t ed25519          # <name> + <name>.pub
+```
 The search order:
 
 1. `$SCREEPS_IDENTITY`
