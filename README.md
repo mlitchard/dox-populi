@@ -39,6 +39,7 @@ Prerequisites: nix with flakes enabled.
    ```sh
    mkdir dox-populi && cd dox-populi
    git clone https://gitlab.com/dox-populi/screeps.git && cd screeps
+   git checkout tutorial-one
    nix develop --builders ''
    ```
 
