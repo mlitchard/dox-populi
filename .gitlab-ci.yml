@@ -147,11 +147,6 @@ gitlab-ci:check:
     - echo "wrote .gitlab-ci.yml.new"
     - 'diff -u .gitlab-ci.yml .gitlab-ci.yml.new || (echo ''ERROR: .gitlab-ci.yml is out of date. Run: nix run .#gitlab-ci > .gitlab-ci.yml'' && exit 1)'
   stage: validate
-nixosConfigurations:dox-populi:
-  needs: []
-  script:
-    - nixos-rebuild build --flake .#dox-populi -L
-  stage: build
 packages:default:
   needs:
     - packages:generated
