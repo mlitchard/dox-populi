@@ -1,15 +1,11 @@
 # Your encryption key
 
-** before proceeding 'rm secrets/*' **
 Secrets in `secrets/` are [age](https://age-encryption.org)-encrypted
 files managed with **secrix**. Each is encrypted to one or more
 recipients (public keys) and decrypted with the matching private key.
 The project's apps decrypt them with **your** key, so setup is two
 moves: create a key, then encrypt the secrets so your key can open
 them.
-
-Run the commands from the dev shell (`nix develop`), where `secrix` is
-on the path; the `nix run .#secrix` form shown here works anywhere.
 
 ## Create a key
 ```sh
@@ -24,6 +20,9 @@ The search order:
 2. `$WORKDIR/identity`
 3. `~/vm-keys/identity` (the conventional location — run-vm.sh shares
    this host directory into the VM at the same path)
+
+If a secret exists and no key file is found, the app stops and tells
+you where to put it.
 
 ## Create a secret
 
