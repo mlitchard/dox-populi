@@ -45,7 +45,7 @@
       # Atlas ships in the paradox flake source.
       atlas = "${paradox}/lib/dox";
 
-      secrixApp = secrix.secrix self;
+      secrixApp = secrix.secrix { nixosConfigurations = { }; };
       secrixCli = pkgs.writeShellApplication {
         name = "secrix";
         text = ''
@@ -159,7 +159,7 @@
           '');
         };
 
-        secrix = secrix.secrix self;
+        secrix = secrixApp;
 
         # Regenerate CI config: nix run .#gitlab-ci > .gitlab-ci.yml
         gitlab-ci = gitlab-ci.apps.${system}.gitlab-ci;
