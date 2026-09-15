@@ -80,9 +80,9 @@ in
         DATA="''${SCREEPS_DATA_DIR:-$(${pkgs.git}/bin/git rev-parse --show-toplevel)/.server-data}"
         # Identity for secrix decryption: SCREEPS_IDENTITY override,
         # else the conventional location of the USER-PROVIDED key —
-        # "identity" in the shared work dir (the VM's run-vm.sh
+        # "identity" in the shared vm-keys dir (the VM's run-vm.sh
         # WORKDIR share). No particular key is shipped or assumed.
-        IDENTITY="''${SCREEPS_IDENTITY:-''${WORKDIR:-''${HOME:-/root}/work}/identity}"
+        IDENTITY="''${SCREEPS_IDENTITY:-''${WORKDIR:-''${HOME:-/root}/vm-keys}/identity}"
 
         # Env override first, then secrix. The server runs fine with
         # no Steam Web API key at all: screepsmod-auth handles
@@ -209,7 +209,7 @@ in
         URL="''${SCREEPS_LOCAL_URL:-http://127.0.0.1:21025}"
         # Identity for secrix decryption: SCREEPS_IDENTITY override,
         # else the conventional location of the USER-PROVIDED key.
-        IDENTITY="''${SCREEPS_IDENTITY:-''${WORKDIR:-''${HOME:-/root}/work}/identity}"
+        IDENTITY="''${SCREEPS_IDENTITY:-''${WORKDIR:-''${HOME:-/root}/vm-keys}/identity}"
 
         if { [ -z "''${SCREEPS_LOCAL_EMAIL:-}" ] || [ -z "''${SCREEPS_LOCAL_PASSWORD:-}" ]; } \
            && [ -f secrets/SCREEPS_LOCAL_CREDS ]; then

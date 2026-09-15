@@ -45,7 +45,7 @@ testers.runNixOSTest {
 
     with subtest("dev login environment points at the shared identity"):
         machine.succeed(
-            "su - dev -c 'printenv SCREEPS_IDENTITY' | grep -qx /home/dev/work/identity"
+            "su - dev -c 'printenv SCREEPS_IDENTITY' | grep -qx /home/dev/vm-keys/identity"
         )
 
     machine.shutdown()
