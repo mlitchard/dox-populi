@@ -29,13 +29,13 @@ recipient so your private key can decrypt the file later:
 
 ```sh
 nix run .#secrix create secrets/SCREEPS_LOCAL_CREDS -- \
-  -r "$(cat ~/.ssh/id_ed25519.pub)"
+  -r "$(cat ~/vm-keys/identity.pub)"
 ```
 
 For `SCREEPS_LOCAL_CREDS` the content is one line, `username:password`.
 
 The encrypted file must be at `secrets/SCREEPS_LOCAL_CREDS` under the
-repo root — that is the path `nix run .#deploy-local` reads.
+repo root.
 
 ## Edit a secret
 
