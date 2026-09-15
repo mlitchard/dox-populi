@@ -40,6 +40,9 @@ nix run .#secrix create secrets/SCREEPS_LOCAL_CREDS -- \
 
 For `SCREEPS_LOCAL_CREDS` the content is one line, `username:password`.
 
+The encrypted file must be at `secrets/SCREEPS_LOCAL_CREDS` under the
+repo root — that is the path `nix run .#deploy-local` reads.
+
 ## Edit a secret
 
 `edit` decrypts the file with your private key (`-i`), opens it in your
