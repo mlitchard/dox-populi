@@ -21,15 +21,6 @@ writes. Your Screeps server runs the result. Fire up the client and watch it go.
 
 ---
 
-## Your encryption key
-
-Secrets in `secrets/` are age files managed with **secrix** and
-decrypted with your own SSH key. Before deploying, create a key and
-encrypt the secrets so your key can open them —
-[docs/SECRIX.md](docs/SECRIX.md) is the complete walkthrough.
-
----
-
 ## Quickstart — NixOS (or any Linux with nix + flakes)
 
 Prerequisites: nix with flakes enabled.
