@@ -9,7 +9,9 @@ specialists. dox-populi uses
 the accessibility of this space: you prompt the agent, the agent
 writes the spec, and the checker verifies it before code is generated.
 
-This exploration runs on a Screeps bot. Paradox provides a DSL whose
+This exploration happens primarily through building a system that delivers
+typechecked javascript, with decision logic generated from a
+consistency-checked spec, to a screeps server. Paradox provides a DSL whose
 specs are checked for internal consistency: the bot's decisions are
 written only as decision structure, a missed case comes back named,
 and the validated spec generates the typed decision logic. nix is the
