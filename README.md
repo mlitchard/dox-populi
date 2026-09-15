@@ -54,7 +54,7 @@ Prerequisites: nix with flakes enabled.
    nix run .#deploy-local            # reads secrets/SCREEPS_LOCAL_CREDS
    ```
 
-   The decrypting key is found at `~/vm-keys/identity`, or set
+   Place your decrypting key in `~/vm-keys/identity`, or set
    `SCREEPS_IDENTITY=/path/to/your/key`.
    See [docs/SECRIX.md](docs/SECRIX.md) for creating and editing that
    encrypted secret.
