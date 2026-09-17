@@ -2,7 +2,7 @@
 
 Secrets in `secrets/` are [age](https://github.com/C2SP/C2SP/blob/main/age.md)-encrypted
 files managed with **secrix**. Each is encrypted to one or more
-recipients (public keys) and decrypted with the matching private key.
+public keys and decrypted with the matching private key.
 The project's apps decrypt them with **your** key, so setup is two
 moves: create a key, then encrypt the secrets so your key can open
 them.
