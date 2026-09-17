@@ -77,6 +77,11 @@ apps:reset-local:
   script:
     - nix build .#apps.x86_64-linux.reset-local.program --no-link --print-build-logs 2>/dev/null || nix build --no-link --print-build-logs "$(nix eval --raw --impure --expr 'builtins.head (builtins.attrNames (builtins.getContext (builtins.getFlake (toString ./.)).apps.x86_64-linux.reset-local.program))')"
   stage: build
+apps:room-feed:
+  needs: []
+  script:
+    - nix build .#apps.x86_64-linux.room-feed.program --no-link --print-build-logs 2>/dev/null || nix build --no-link --print-build-logs "$(nix eval --raw --impure --expr 'builtins.head (builtins.attrNames (builtins.getContext (builtins.getFlake (toString ./.)).apps.x86_64-linux.room-feed.program))')"
+  stage: build
 apps:secrix:
   needs: []
   script:
