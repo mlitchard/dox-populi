@@ -1,6 +1,6 @@
 # Your encryption key
 
-Secrets in `secrets/` are [age](https://age-encryption.org)-encrypted
+Secrets in `secrets/` are [age](https://github.com/C2SP/C2SP/blob/main/age.md)-encrypted
 files managed with **secrix**. Each is encrypted to one or more
 recipients (public keys) and decrypted with the matching private key.
 The project's apps decrypt them with **your** key, so setup is two
