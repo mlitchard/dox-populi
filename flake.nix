@@ -70,6 +70,9 @@
       };
 
       roomFeed = pkgs.callPackage ./room-feed.nix { };
+
+      loginUtil = pkgs.callPackage ./utilities/login.nix { };
+      apiUtil = pkgs.callPackage ./utilities/api.nix { };
     in
     {
       nixosConfigurations = vm.nixosConfigurations;
@@ -156,6 +159,16 @@
         gitlab-ci = gitlab-ci.apps.${system}.gitlab-ci;
 
         secrix = secrixApp;
+
+        login = {
+          type = "app";
+          program = "${loginUtil}/bin/login.sh";
+        };
+
+        api = {
+          type = "app";
+          program = "${apiUtil}/bin/api.sh";
+        };
       };
     };
 }
