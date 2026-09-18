@@ -1,4 +1,4 @@
-// Mirrors tutorial-js/section1/role.harvester.js: one creep's harvest
+// Modeled after tutorial-js/section1/role.harvester.js: one creep's harvest
 // round trip between the room's source and Spawn1.
 
 const TRACE_LIMIT = 50;
