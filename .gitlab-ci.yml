@@ -4,6 +4,11 @@
 # DO NOT EDIT MANUALLY - regenerate with the command above
 # =============================================================================
 
+apps:api:
+  needs: []
+  script:
+    - nix build .#apps.x86_64-linux.api.program --no-link --print-build-logs 2>/dev/null || nix build --no-link --print-build-logs "$(nix eval --raw --impure --expr 'builtins.head (builtins.attrNames (builtins.getContext (builtins.getFlake (toString ./.)).apps.x86_64-linux.api.program))')"
+  stage: build
 apps:cli:
   needs:
     - packages:screeps-server
@@ -70,6 +75,11 @@ apps:lock-viewer:
   needs: []
   script:
     - nix build .#apps.x86_64-linux.lock-viewer.program --no-link --print-build-logs 2>/dev/null || nix build --no-link --print-build-logs "$(nix eval --raw --impure --expr 'builtins.head (builtins.attrNames (builtins.getContext (builtins.getFlake (toString ./.)).apps.x86_64-linux.lock-viewer.program))')"
+  stage: build
+apps:login:
+  needs: []
+  script:
+    - nix build .#apps.x86_64-linux.login.program --no-link --print-build-logs 2>/dev/null || nix build --no-link --print-build-logs "$(nix eval --raw --impure --expr 'builtins.head (builtins.attrNames (builtins.getContext (builtins.getFlake (toString ./.)).apps.x86_64-linux.login.program))')"
   stage: build
 apps:reset-local:
   needs:
