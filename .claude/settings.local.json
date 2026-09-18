@@ -37,7 +37,8 @@
       "Read(//home/mlitchard/gitlab/dox-populi-blog/**)",
       "Bash(nix shell *)",
       "Bash(curl -s http://localhost:8080/blog/dox-populi/tutorial-one/post.html)",
-      "Read(//home/mlitchard/gitlab/dox-populi-main-fixes/**)"
+      "Read(//home/mlitchard/gitlab/dox-populi-main-fixes/**)",
+      "Bash(grep -rln 'sign in *)"
     ]
   }
 }
