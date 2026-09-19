@@ -109,6 +109,8 @@ with [run-vm.sh](https://gitlab.com/dox-populi/screeps/-/raw/main/run-vm.sh) and
 3. **Boot the VM**
 
    ```sh
+   Install qemu and tmux if you don't have them. Then run:
+
    ./run-vm.sh
    ./run-vm.sh console        # watch; Ctrl-b d detaches
    ```
